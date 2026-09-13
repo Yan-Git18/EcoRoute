@@ -1,30 +1,54 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ecoroute/features/auth/data/datasources/auth_remote_datasource.dart';
+import 'package:ecoroute/features/auth/data/models/user_dto.dart';
+import 'package:ecoroute/features/auth/presentation/viewmodels/auth_viewmodel.dart';
+import 'package:ecoroute/features/auth/presentation/views/login_screen.dart';
 
-import 'package:ecoroute/main.dart';
+class FakeAuthRemoteDataSource implements AuthRemoteDataSource {
+  @override
+  Future<UserDto> signInWithEmail({required String email, required String password}) async {
+    return UserDto(id: '1', name: 'Test', email: email, role: 'citizen', createdAt: DateTime.now());
+  }
+
+  @override
+  Future<UserDto> signUpWithEmail({required String name, required String email, required String password, required String role, String? phoneNumber}) async {
+    return UserDto(id: '1', name: name, email: email, role: role, createdAt: DateTime.now());
+  }
+
+  @override
+  Future<void> signOut() async {}
+
+  @override
+  Future<UserDto?> getCurrentUser() async => null;
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {}
+
+  @override
+  Stream<UserDto?> authStateChanges() => Stream.value(null);
+}
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('Renderiza LoginScreen con logo de EcoRoute y campos requeridos', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRemoteDataSourceProvider.overrideWithValue(FakeAuthRemoteDataSource()),
+        ],
+        child: const MaterialApp(
+          home: LoginScreen(),
+        ),
+      ),
+    );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // Verificamos que se muestre el nombre de la app y el lema
+    expect(find.text('EcoRoute'), findsOneWidget);
+    expect(find.text('"Juntos por ciudades más limpias"'), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Verificamos que existan los campos de login
+    expect(find.byType(TextFormField), findsNWidgets(2));
+    expect(find.text('Iniciar Sesión'), findsOneWidget);
   });
 }
