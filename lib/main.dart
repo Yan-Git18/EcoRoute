@@ -4,15 +4,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 
+import 'firebase_options.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inicialización de Firebase protegida contra ausencia de credenciales en desarrollo
-  try {
-    await Firebase.initializeApp();
-  } catch (e) {
-    debugPrint('Aviso de inicialización Firebase (se configurará vía flutterfire configure): $e');
-  }
+  // Inicialización de Firebase con las credenciales del proyecto
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   runApp(
     const ProviderScope(

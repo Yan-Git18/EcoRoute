@@ -94,6 +94,14 @@ class FirebaseAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         message: _mapFirebaseAuthError(e.code),
         code: e.code,
       );
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied') {
+        throw const AuthException(
+          message: 'Faltan permisos en Cloud Firestore. Publica las Reglas de Seguridad en tu consola de Firebase.',
+          code: 'permission-denied',
+        );
+      }
+      throw AuthException(message: 'Error en Cloud Firestore: ${e.message ?? e.code}');
     } catch (e) {
       throw AuthException(message: 'Error inesperado al iniciar sesión: $e');
     }
@@ -132,12 +140,34 @@ class FirebaseAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       );
 
       // Guardar perfil en Cloud Firestore colección 'users'
-      await _firestore.collection('users').doc(user.uid).set(userDto.toMap());
+      try {
+        await _firestore.collection('users').doc(user.uid).set(userDto.toMap());
+      } on FirebaseException catch (e) {
+        if (e.code == 'permission-denied') {
+          // Eliminar el usuario recién creado en Auth para que no quede huérfano
+          // y el usuario pueda reintentar inmediatamente tras configurar las reglas
+          try {
+            await user.delete();
+          } catch (_) {}
+          throw const AuthException(
+            message: 'Faltan permisos en Cloud Firestore. Por favor configura las Reglas de Seguridad en tu consola de Firebase.',
+            code: 'permission-denied',
+          );
+        }
+        rethrow;
+      }
 
       return userDto;
     } on FirebaseAuthException catch (e) {
       throw AuthException(
         message: _mapFirebaseAuthError(e.code),
+        code: e.code,
+      );
+    } on FirebaseException catch (e) {
+      throw AuthException(
+        message: e.code == 'permission-denied'
+            ? 'Faltan permisos en Cloud Firestore. Por favor publica las Reglas de Seguridad en tu consola de Firebase.'
+            : 'Error en Cloud Firestore: ${e.message ?? e.code}',
         code: e.code,
       );
     } catch (e) {
@@ -162,7 +192,22 @@ class FirebaseAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       if (currentUser == null) return null;
 
       final doc = await _firestore.collection('users').doc(currentUser.uid).get();
-      if (!doc.exists || doc.data() == null) return null;
+      if (!doc.exists || doc.data() == null) {
+        // Fallback: Si el usuario existe en Firebase Auth pero su doc aún no existe en Firestore
+        final fallbackDto = UserDto(
+          id: currentUser.uid,
+          name: currentUser.displayName ?? (currentUser.email?.split('@').first ?? 'Usuario'),
+          email: currentUser.email ?? '',
+          role: 'citizen',
+          phoneNumber: currentUser.phoneNumber,
+          photoUrl: currentUser.photoURL,
+          createdAt: DateTime.now(),
+        );
+        try {
+          await _firestore.collection('users').doc(currentUser.uid).set(fallbackDto.toMap());
+        } catch (_) {}
+        return fallbackDto;
+      }
 
       return UserDto.fromMap(doc.data()!, doc.id);
     } catch (e) {
@@ -212,8 +257,14 @@ class FirebaseAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         return 'La contraseña es muy débil. Ingrese mínimo 6 caracteres';
       case 'user-disabled':
         return 'Esta cuenta ha sido inhabilitada por un administrador';
+      case 'operation-not-allowed':
+        return 'El proveedor de Correo/Contraseña no está habilitado en la consola de Firebase';
+      case 'too-many-requests':
+        return 'Demasiados intentos fallidos. Intente nuevamente en unos minutos';
       case 'network-request-failed':
         return 'Fallo de conexión a internet. Verifique su red';
+      case 'channel-error':
+        return 'Por favor complete todos los campos requeridos';
       default:
         return 'Ocurrió un error en el servicio de autenticación ($code)';
     }

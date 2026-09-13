@@ -39,14 +39,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   void _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
 
+    final phone = _phoneController.text.trim();
     final success = await ref
         .read(authViewModelProvider.notifier)
         .register(
           name: _nameController.text.trim(),
           email: _emailController.text.trim(),
           password: _passwordController.text,
-          phoneNumber: _phoneController.text.trim(),
+          phoneNumber: phone.isNotEmpty ? phone : null,
           role: UserRole.citizen,
         );
 
@@ -190,6 +192,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             ),
                             child: TextFormField(
                               controller: _nameController,
+                              textInputAction: TextInputAction.next,
+                              textCapitalization: TextCapitalization.words,
                               style: const TextStyle(
                                 fontSize: 15,
                                 color: AppColors.textPrimary,
@@ -198,10 +202,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                 hintText: 'Ej. Juan Pérez',
                                 icon: Icons.person_outline_rounded,
                               ),
-                              validator: (val) =>
-                                  val == null || val.trim().isEmpty
-                                  ? 'Ingrese su nombre y apellido'
-                                  : null,
+                              validator: (val) {
+                                if (val == null || val.trim().isEmpty) {
+                                  return 'Ingrese su nombre y apellido';
+                                }
+                                if (val.trim().length < 3) {
+                                  return 'El nombre debe tener al menos 3 caracteres';
+                                }
+                                return null;
+                              },
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -231,6 +240,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             child: TextFormField(
                               controller: _emailController,
                               keyboardType: TextInputType.emailAddress,
+                              textInputAction: TextInputAction.next,
                               style: const TextStyle(
                                 fontSize: 15,
                                 color: AppColors.textPrimary,
@@ -254,7 +264,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
                           // 3. Teléfono de contacto
                           const Text(
-                            'Teléfono de contacto',
+                            'Teléfono de contacto (opcional)',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
@@ -277,6 +287,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             child: TextFormField(
                               controller: _phoneController,
                               keyboardType: TextInputType.phone,
+                              textInputAction: TextInputAction.next,
                               style: const TextStyle(
                                 fontSize: 15,
                                 color: AppColors.textPrimary,
@@ -285,6 +296,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                 hintText: 'Ej. +51 987654321',
                                 icon: Icons.phone_outlined,
                               ),
+                              validator: (val) {
+                                if (val != null && val.trim().isNotEmpty && val.trim().length < 7) {
+                                  return 'Ingrese un número telefónico válido';
+                                }
+                                return null;
+                              },
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -314,6 +331,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             child: TextFormField(
                               controller: _passwordController,
                               obscureText: _obscurePassword,
+                              textInputAction: TextInputAction.next,
                               style: const TextStyle(
                                 fontSize: 15,
                                 color: AppColors.textPrimary,
@@ -368,6 +386,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             child: TextFormField(
                               controller: _confirmPasswordController,
                               obscureText: _obscureConfirmPassword,
+                              textInputAction: TextInputAction.done,
+                              onFieldSubmitted: (_) => _submit(),
                               style: const TextStyle(
                                 fontSize: 15,
                                 color: AppColors.textPrimary,

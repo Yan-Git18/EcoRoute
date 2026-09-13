@@ -7,6 +7,7 @@ import '../../domain/usecases/get_current_user_use_case.dart';
 import '../../domain/usecases/login_use_case.dart';
 import '../../domain/usecases/logout_use_case.dart';
 import '../../domain/usecases/register_use_case.dart';
+import '../../domain/usecases/send_password_reset_email_use_case.dart';
 import 'auth_state.dart';
 
 // --- Inyección de Dependencias con Riverpod ---
@@ -40,6 +41,11 @@ final getCurrentUserUseCaseProvider = Provider<GetCurrentUserUseCase>((ref) {
   return GetCurrentUserUseCase(repository);
 });
 
+final sendPasswordResetEmailUseCaseProvider = Provider<SendPasswordResetEmailUseCase>((ref) {
+  final repository = ref.watch(authRepositoryProvider);
+  return SendPasswordResetEmailUseCase(repository);
+});
+
 // --- ViewModel (MVVM) ---
 
 /// ViewModel para la gestión del flujo de autenticación y estado del usuario.
@@ -51,6 +57,7 @@ class AuthViewModel extends Notifier<AuthState> {
   late final RegisterUseCase _registerUseCase;
   late final LogoutUseCase _logoutUseCase;
   late final GetCurrentUserUseCase _getCurrentUserUseCase;
+  late final SendPasswordResetEmailUseCase _sendPasswordResetEmailUseCase;
 
   @override
   AuthState build() {
@@ -58,6 +65,7 @@ class AuthViewModel extends Notifier<AuthState> {
     _registerUseCase = ref.watch(registerUseCaseProvider);
     _logoutUseCase = ref.watch(logoutUseCaseProvider);
     _getCurrentUserUseCase = ref.watch(getCurrentUserUseCaseProvider);
+    _sendPasswordResetEmailUseCase = ref.watch(sendPasswordResetEmailUseCaseProvider);
 
     // Verificación inicial de sesión asíncrona
     Future.microtask(() => checkCurrentSession());
@@ -141,6 +149,27 @@ class AuthViewModel extends Notifier<AuthState> {
           user: user,
           clearError: true,
         );
+        return true;
+      },
+      onFailure: (failure) {
+        state = state.copyWith(
+          isLoading: false,
+          errorMessage: failure.message,
+        );
+        return false;
+      },
+    );
+  }
+
+  /// Envía correo para restablecer la contraseña
+  Future<bool> sendPasswordResetEmail(String email) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+
+    final result = await _sendPasswordResetEmailUseCase.call(email);
+
+    return result.fold(
+      onSuccess: (_) {
+        state = state.copyWith(isLoading: false, clearError: true);
         return true;
       },
       onFailure: (failure) {

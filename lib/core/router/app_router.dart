@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/admin/presentation/views/admin_dashboard_screen.dart';
 import '../../features/auth/domain/entities/user_entity.dart';
+import '../../features/auth/presentation/viewmodels/auth_state.dart';
 import '../../features/auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../features/auth/presentation/views/login_screen.dart';
 import '../../features/auth/presentation/views/register_screen.dart';
@@ -11,13 +12,38 @@ import '../../features/citizen/presentation/views/citizen_home_screen.dart';
 import '../../features/staff/presentation/views/staff_home_screen.dart';
 import 'route_names.dart';
 
+/// Notificador reactivo para GoRouter que escucha cambios de autenticación
+/// sin provocar la recreación continua del router.
+class RouterNotifier extends ChangeNotifier {
+  final Ref _ref;
+
+  RouterNotifier(this._ref) {
+    _ref.listen<AuthState>(
+      authViewModelProvider,
+      (previous, next) {
+        if (previous?.isAuthenticated != next.isAuthenticated ||
+            previous?.isInitialized != next.isInitialized ||
+            previous?.user?.role != next.user?.role) {
+          notifyListeners();
+        }
+      },
+    );
+  }
+}
+
+final routerNotifierProvider = Provider<RouterNotifier>((ref) {
+  return RouterNotifier(ref);
+});
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authViewModelProvider);
+  final notifier = ref.watch(routerNotifierProvider);
 
   return GoRouter(
     initialLocation: RouteNames.welcome,
+    refreshListenable: notifier,
     debugLogDiagnostics: false,
     redirect: (BuildContext context, GoRouterState state) {
+      final authState = ref.read(authViewModelProvider);
       final isAuthenticated = authState.isAuthenticated;
       final currentPath = state.uri.path;
       final isPublicRoute = currentPath == RouteNames.welcome ||

@@ -1,0 +1,22 @@
+{
+    "flutter": {
+        "platforms": {
+            "android": {
+                "default": {
+                    "projectId": "ecoroute-64e4c",
+                    "appId": "1:35712077085:android:642789c6dc02466e77a5f4",
+                    "fileOutput": "android/app/google-services.json"
+                }
+            },
+            "dart": {
+                "lib/firebase_options.dart": {
+                    "projectId": "ecoroute-64e4c",
+                    "configurations": {
+                        "android": "1:35712077085:android:642789c6dc02466e77a5f4",
+                        "web": "1:35712077085:web:b27a6ff926dc82f577a5f4"
+                    }
+                }
+            }
+        }
+    }
+}
