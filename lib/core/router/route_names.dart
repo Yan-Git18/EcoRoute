@@ -5,7 +5,8 @@
 class RouteNames {
   RouteNames._();
 
-  // Auth
+  // Auth & Onboarding
+  static const String welcome = '/welcome';
   static const String splash = '/';
   static const String login = '/login';
   static const String register = '/register';

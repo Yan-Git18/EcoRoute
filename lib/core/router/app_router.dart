@@ -6,6 +6,7 @@ import '../../features/auth/domain/entities/user_entity.dart';
 import '../../features/auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../features/auth/presentation/views/login_screen.dart';
 import '../../features/auth/presentation/views/register_screen.dart';
+import '../../features/auth/presentation/views/welcome_screen.dart';
 import '../../features/citizen/presentation/views/citizen_home_screen.dart';
 import '../../features/staff/presentation/views/staff_home_screen.dart';
 import 'route_names.dart';
@@ -14,19 +15,21 @@ final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authViewModelProvider);
 
   return GoRouter(
-    initialLocation: RouteNames.login,
+    initialLocation: RouteNames.welcome,
     debugLogDiagnostics: false,
     redirect: (BuildContext context, GoRouterState state) {
       final isAuthenticated = authState.isAuthenticated;
       final currentPath = state.uri.path;
-      final isAuthRoute = currentPath == RouteNames.login || currentPath == RouteNames.register;
+      final isPublicRoute = currentPath == RouteNames.welcome ||
+          currentPath == RouteNames.login ||
+          currentPath == RouteNames.register;
 
-      // 1. Si no está autenticado y no está en login/register, redirigir a Login
+      // 1. Si no está autenticado y no está en ruta pública, redirigir a Bienvenida
       if (!isAuthenticated) {
-        return isAuthRoute ? null : RouteNames.login;
+        return isPublicRoute ? null : RouteNames.welcome;
       }
 
-      // 2. Si está autenticado y está en Login o Register, redirigir según su Rol
+      // 2. Si está autenticado y está en ruta pública, redirigir según su Rol
       final role = authState.user?.role ?? UserRole.citizen;
       final defaultRolePath = switch (role) {
         UserRole.citizen => RouteNames.citizenHome,
@@ -34,7 +37,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         UserRole.admin => RouteNames.adminDashboard,
       };
 
-      if (isAuthRoute) {
+      if (isPublicRoute) {
         return defaultRolePath;
       }
 
@@ -52,6 +55,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      // Ruta de Bienvenida / Onboarding
+      GoRoute(
+        path: RouteNames.welcome,
+        builder: (context, state) => const WelcomeScreen(),
+      ),
+
       // Rutas de Autenticación
       GoRoute(
         path: RouteNames.login,

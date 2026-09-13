@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/constants/app_assets.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/entities/user_entity.dart';
 import '../viewmodels/auth_viewmodel.dart';
 
-/// Pantalla de inicio de sesión de EcoRoute.
-/// 
+/// Pantalla de inicio de sesión de EcoRoute con diseño limpio e ilustración de fondo.
+///
 /// Ubicación: `lib/features/auth/presentation/views/login_screen.dart`
 /// Capa: Presentation (Views)
 class LoginScreen extends ConsumerStatefulWidget {
@@ -22,6 +23,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _showDemoRoles = false;
 
   @override
   void dispose() {
@@ -32,24 +34,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   void _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    
-    final success = await ref.read(authViewModelProvider.notifier).login(
-      email: _emailController.text,
-      password: _passwordController.text,
-    );
 
-    if (success && mounted) {
-      // La redirección por rol es manejada automáticamente por GoRouter
-    }
+    await ref
+        .read(authViewModelProvider.notifier)
+        .login(
+          email: _emailController.text,
+          password: _passwordController.text,
+        );
   }
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authViewModelProvider);
+    final size = MediaQuery.of(context).size;
+    final topLogoSpacing = (size.height * 0.08).clamp(50.0, 80.0);
 
-    // Escuchar errores para mostrar SnackBar amigable
+    // Escuchar errores para notificar al usuario
     ref.listen(authViewModelProvider, (previous, next) {
-      if (next.errorMessage != null && next.errorMessage != previous?.errorMessage) {
+      if (next.errorMessage != null &&
+          next.errorMessage != previous?.errorMessage) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(next.errorMessage!),
@@ -61,254 +64,407 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Logo e Identidad Visual
-                  Center(
-                    child: Container(
-                      width: 90,
-                      height: 90,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [AppColors.primary, AppColors.forest],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+      backgroundColor: Colors.white,
+      body: Stack(
+        children: [
+          // 1. Imagen de Fondo a Pantalla Completa (Ilustration_login.jpeg)
+          Positioned.fill(
+            child: Image.asset(
+              AppAssets.loginIllustration,
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+              errorBuilder: (context, error, stackTrace) =>
+                  const SizedBox.shrink(),
+            ),
+          ),
+
+          // 2. Contenido interactivo con scroll para evitar desbordes con teclado
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(height: topLogoSpacing),
+
+                      // Logo EcoRoute Invertido para fondo claro (logo_invertido.webp)
+                      Center(
+                        child: Image.asset(
+                          AppAssets.logoInverted,
+                          height: 160,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Image.asset(
+                              AppAssets.logo,
+                              height: 160,
+                              fit: BoxFit.contain,
+                            );
+                          },
                         ),
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withAlpha(70),
-                            blurRadius: 20,
-                            offset: const Offset(0, 10),
+                      ),
+                      const SizedBox(height: 6),
+
+                      // Slogan oficial
+                      const Text(
+                        'Juntos por ciudades más limpias',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.forest,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 36),
+
+                      // Campo: Correo electrónico
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withAlpha(8),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: TextFormField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            color: AppColors.textPrimary,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Correo electrónico',
+                            hintStyle: const TextStyle(
+                              color: Color(0xFF94A3B8),
+                              fontSize: 14.5,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.mail_outline_rounded,
+                              color: Color(0xFF475569),
+                              size: 22,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFE2E8F0),
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFE2E8F0),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(
+                                color: AppColors.primary,
+                                width: 1.8,
+                              ),
+                            ),
+                            filled: true,
+                            fillColor: Colors.white,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 16,
+                            ),
+                          ),
+                          validator: (val) {
+                            if (val == null || val.trim().isEmpty) {
+                              return 'Por favor ingrese su correo';
+                            }
+                            if (!val.contains('@')) {
+                              return 'Ingrese un correo electrónico válido';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Campo: Contraseña
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withAlpha(8),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: TextFormField(
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            color: AppColors.textPrimary,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Contraseña',
+                            hintStyle: const TextStyle(
+                              color: Color(0xFF94A3B8),
+                              fontSize: 14.5,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.lock_outline_rounded,
+                              color: Color(0xFF475569),
+                              size: 22,
+                            ),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                                color: const Color(0xFF64748B),
+                                size: 22,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFE2E8F0),
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFE2E8F0),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(
+                                color: AppColors.primary,
+                                width: 1.8,
+                              ),
+                            ),
+                            filled: true,
+                            fillColor: Colors.white,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 16,
+                            ),
+                          ),
+                          validator: (val) {
+                            if (val == null || val.length < 6) {
+                              return 'La contraseña debe tener al menos 6 caracteres';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Enlace: ¿Olvidaste tu contraseña?
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () {},
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.primaryDark,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 4,
+                            ),
+                          ),
+                          child: const Text(
+                            '¿Olvidaste tu contraseña?',
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.primaryDark,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Botón: Iniciar sesión (Píldora verde esmeralda)
+                      SizedBox(
+                        height: 54,
+                        child: ElevatedButton(
+                          onPressed: authState.isLoading ? null : _submit,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            elevation: 2,
+                            shadowColor: AppColors.primary.withAlpha(90),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(28),
+                            ),
+                          ),
+                          child: authState.isLoading
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  'Iniciar sesión',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Fila con separadores: ¿No tienes cuenta? Regístrate
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Divider(
+                              color: const Color(0xFFCBD5E1).withAlpha(120),
+                              thickness: 1,
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12.0,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text(
+                                  '¿No tienes cuenta? ',
+                                  style: TextStyle(
+                                    fontSize: 13.5,
+                                    color: Color.fromARGB(255, 0, 0, 0),
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: () =>
+                                      context.push(RouteNames.register),
+                                  child: const Text(
+                                    'Regístrate',
+                                    style: TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.primaryDark,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: Divider(
+                              color: const Color(0xFFCBD5E1).withAlpha(120),
+                              thickness: 1,
+                            ),
                           ),
                         ],
                       ),
-                      child: const Icon(
-                        Icons.eco_rounded,
-                        size: 52,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'EcoRoute',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.forest,
-                        ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '"Juntos por ciudades más limpias"',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600,
-                          fontStyle: FontStyle.italic,
-                        ),
-                  ),
-                  const SizedBox(height: 36),
+                      const SizedBox(height: 18),
 
-                  // Campos de texto
-                  Text(
-                    'Correo electrónico',
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      hintText: 'ejemplo@ecoroute.app',
-                      prefixIcon: Icon(Icons.email_outlined, color: AppColors.primary),
-                    ),
-                    validator: (val) {
-                      if (val == null || val.trim().isEmpty) {
-                        return 'Por favor ingrese su correo';
-                      }
-                      if (!val.contains('@')) {
-                        return 'Ingrese un formato de correo válido';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 20),
-
-                  Text(
-                    'Contraseña',
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      hintText: '••••••••',
-                      prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.primary),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                          color: AppColors.textMuted,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
-                      ),
-                    ),
-                    validator: (val) {
-                      if (val == null || val.length < 6) {
-                        return 'La contraseña debe tener al menos 6 caracteres';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () {
-                        // Navegación a recuperar contraseña
-                      },
-                      child: const Text('¿Olvidaste tu contraseña?'),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Botón de Inicio de Sesión
-                  ElevatedButton(
-                    onPressed: authState.isLoading ? null : _submit,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    child: authState.isLoading
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text(
-                            'Iniciar Sesión',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      // Acceso de prueba rápida para desarrollador (discreto y plegable)
+                      Center(
+                        child: TextButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _showDemoRoles = !_showDemoRoles;
+                            });
+                          },
+                          icon: Icon(
+                            _showDemoRoles
+                                ? Icons.keyboard_arrow_up_rounded
+                                : Icons.flash_on_rounded,
+                            size: 16,
+                            color: AppColors.primaryDark.withAlpha(160),
                           ),
-                  ),
-                  const SizedBox(height: 18),
-
-                  // Botón para registro de nuevo ciudadano
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        '¿No tienes una cuenta? ',
-                        style: TextStyle(color: AppColors.textSecondary),
-                      ),
-                      GestureDetector(
-                        onTap: () => context.push(RouteNames.register),
-                        child: const Text(
-                          'Regístrate aquí',
-                          style: TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.bold,
+                          label: Text(
+                            _showDemoRoles
+                                ? 'Ocultar roles demo'
+                                : 'Roles de prueba demo',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.primaryDark.withAlpha(160),
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 32),
 
-                  // Selector de Acceso Rápido por Rol (Demostración y Pruebas en Vivo)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.primarySoft.withAlpha(80),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.primary.withAlpha(50)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.flash_on_rounded, size: 18, color: AppColors.primary),
-                            SizedBox(width: 6),
-                            Text(
-                              'Acceso Rápido Demo por Rol',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.forest,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
+                      if (_showDemoRoles) ...[
+                        const SizedBox(height: 8),
                         Wrap(
+                          alignment: WrapAlignment.center,
                           spacing: 8,
                           runSpacing: 8,
                           children: [
-                            _RoleChip(
+                            _DemoRoleChip(
                               label: 'Ciudadano',
-                              icon: Icons.person_outline,
                               color: AppColors.primary,
                               onTap: () {
-                                ref.read(authViewModelProvider.notifier).setDemoRole(UserRole.citizen);
+                                ref
+                                    .read(authViewModelProvider.notifier)
+                                    .setDemoRole(UserRole.citizen);
                               },
                             ),
-                            _RoleChip(
-                              label: 'Personal Limpieza',
-                              icon: Icons.cleaning_services_outlined,
+                            _DemoRoleChip(
+                              label: 'Personal',
                               color: AppColors.info,
                               onTap: () {
-                                ref.read(authViewModelProvider.notifier).setDemoRole(UserRole.staff);
+                                ref
+                                    .read(authViewModelProvider.notifier)
+                                    .setDemoRole(UserRole.staff);
                               },
                             ),
-                            _RoleChip(
-                              label: 'Administrador',
-                              icon: Icons.admin_panel_settings_outlined,
+                            _DemoRoleChip(
+                              label: 'Admin',
                               color: AppColors.forest,
                               onTap: () {
-                                ref.read(authViewModelProvider.notifier).setDemoRole(UserRole.admin);
+                                ref
+                                    .read(authViewModelProvider.notifier)
+                                    .setDemoRole(UserRole.admin);
                               },
                             ),
                           ],
                         ),
+                        const SizedBox(height: 16),
                       ],
-                    ),
+
+                      const SizedBox(height: 16),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
 
-class _RoleChip extends StatelessWidget {
+class _DemoRoleChip extends StatelessWidget {
   final String label;
-  final IconData icon;
   final Color color;
   final VoidCallback onTap;
 
-  const _RoleChip({
+  const _DemoRoleChip({
     required this.label,
-    required this.icon,
     required this.color,
     required this.onTap,
   });
@@ -319,26 +475,19 @@ class _RoleChip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: color.withAlpha(90)),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: color,
-              ),
-            ),
-          ],
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
         ),
       ),
     );
