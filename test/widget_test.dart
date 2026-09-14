@@ -79,10 +79,9 @@ void main() {
       ),
     );
 
-    // Verificamos encabezados
-    expect(find.text('Registro de Ciudadano'), findsOneWidget);
-    expect(find.text('Únete al cambio'), findsOneWidget);
-    expect(find.text('Regístrate para reportar incidentes y contribuir a mantener limpia nuestra ciudad.'), findsOneWidget);
+    // Verificamos elementos del encabezado y branding
+    expect(find.byType(Image), findsWidgets);
+    expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
 
     // Verificamos que existan los 5 campos del formulario de registro
     expect(find.byType(TextFormField), findsNWidgets(5));

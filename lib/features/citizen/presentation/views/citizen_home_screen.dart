@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
+import '../../domain/entities/report_entity.dart';
+import '../viewmodels/my_reports_viewmodel.dart';
+import '../widgets/citizen_bottom_nav_bar.dart';
 
 /// Pantalla principal (Dashboard) para el rol Ciudadano.
 /// 
@@ -16,6 +19,17 @@ class CitizenHomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authViewModelProvider);
     final user = authState.user;
+
+    final myReportsState = ref.watch(myReportsViewModelProvider);
+    final pendingCount = myReportsState.reports
+        .where((r) => r.status == ReportStatus.pending || r.status == ReportStatus.assigned)
+        .length;
+    final inProgressCount = myReportsState.reports
+        .where((r) => r.status == ReportStatus.inProgress)
+        .length;
+    final resolvedCount = myReportsState.reports
+        .where((r) => r.status == ReportStatus.resolved)
+        .length;
 
     return Scaffold(
       appBar: AppBar(
@@ -166,19 +180,19 @@ class CitizenHomeScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: const [
+                  children: [
                     _StatusIndicator(
-                      count: '0',
+                      count: '$pendingCount',
                       label: 'Pendientes',
                       color: AppColors.statusPending,
                     ),
                     _StatusIndicator(
-                      count: '0',
+                      count: '$inProgressCount',
                       label: 'En Proceso',
                       color: AppColors.statusInProgress,
                     ),
                     _StatusIndicator(
-                      count: '0',
+                      count: '$resolvedCount',
                       label: 'Resueltos',
                       color: AppColors.statusResolved,
                     ),
@@ -189,32 +203,7 @@ class CitizenHomeScreen extends ConsumerWidget {
           ],
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_rounded),
-            label: 'Inicio',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.add_box_rounded),
-            label: 'Reportar',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.map_rounded),
-            label: 'Mapa',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_rounded),
-            label: 'Perfil',
-          ),
-        ],
-        onTap: (index) {
-          if (index == 1) context.push(RouteNames.citizenCreateReport);
-          if (index == 2) context.push(RouteNames.citizenMap);
-          if (index == 3) context.push(RouteNames.citizenProfile);
-        },
-      ),
+      bottomNavigationBar: const CitizenBottomNavBar(currentIndex: 0),
     );
   }
 }

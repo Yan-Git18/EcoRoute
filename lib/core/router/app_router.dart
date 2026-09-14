@@ -8,7 +8,13 @@ import '../../features/auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../features/auth/presentation/views/login_screen.dart';
 import '../../features/auth/presentation/views/register_screen.dart';
 import '../../features/auth/presentation/views/welcome_screen.dart';
+import '../../features/citizen/domain/entities/report_entity.dart';
 import '../../features/citizen/presentation/views/citizen_home_screen.dart';
+import '../../features/citizen/presentation/views/citizen_map_screen.dart';
+import '../../features/citizen/presentation/views/citizen_profile_screen.dart';
+import '../../features/citizen/presentation/views/create_report_wizard_screen.dart';
+import '../../features/citizen/presentation/views/my_reports_screen.dart';
+import '../../features/citizen/presentation/views/report_detail_screen.dart';
 import '../../features/staff/presentation/views/staff_home_screen.dart';
 import 'route_names.dart';
 
@@ -101,6 +107,30 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.citizenHome,
         builder: (context, state) => const CitizenHomeScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.citizenCreateReport,
+        builder: (context, state) => const CreateReportWizardScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.citizenMyReports,
+        builder: (context, state) => const MyReportsScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.citizenReportDetail,
+        builder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          final extra = state.extra is ReportEntity ? state.extra as ReportEntity : null;
+          return ReportDetailScreen(reportId: id, initialReport: extra);
+        },
+      ),
+      GoRoute(
+        path: RouteNames.citizenMap,
+        builder: (context, state) => const CitizenMapScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.citizenProfile,
+        builder: (context, state) => const CitizenProfileScreen(),
       ),
 
       // Rutas Personal de Limpieza
