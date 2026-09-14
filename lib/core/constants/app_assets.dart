@@ -16,7 +16,7 @@ class AppAssets {
   static const String welcomeIllustration2 = '$_imagesPath/Ilustration_welcome_2.jpeg';
   static const String welcomeIllustration3 = '$_imagesPath/Ilustration_welcome_3.jpeg';
   static const String loginIllustration = '$_imagesPath/Ilustration_login.jpeg';
-  static const String registerIllustration = '$_imagesPath/Ilustration_register.jpeg';
+  static const String registerIllustration = '$_imagesPath/Ilustration_register.jpg';
 
   // Iconos personalizados
   static const String iconEco = '$_iconsPath/icon_eco.png';

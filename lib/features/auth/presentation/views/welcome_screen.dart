@@ -56,15 +56,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     super.dispose();
   }
 
-  void _onNextPressed() {
-    if (_currentPage < _slides.length - 1) {
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOut,
-      );
-    } else {
-      context.push(RouteNames.register);
-    }
+  void _onStartPressed() {
+    context.push(RouteNames.register);
   }
 
   @override
@@ -257,7 +250,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     width: double.infinity,
                     height: 54,
                     child: ElevatedButton(
-                      onPressed: _onNextPressed,
+                      onPressed: _onStartPressed,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
