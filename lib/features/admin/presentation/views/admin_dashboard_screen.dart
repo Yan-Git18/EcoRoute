@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/eco_notification_button.dart';
+import '../../../../core/widgets/eco_section_header.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 
-/// Pantalla del panel de control para el Administrador Municipal.
-/// 
-/// Ubicación: `lib/features/admin/presentation/views/admin_dashboard_screen.dart`
+/// Pantalla del panel de control para el Administrador
 /// Capa: Presentation (Administrador)
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
@@ -19,6 +19,14 @@ class AdminDashboardScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Administración Municipal'),
         actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: EcoNotificationButton(
+              onTap: () {},
+              hasUnread: false,
+              size: 40,
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Cerrar Sesión',
@@ -78,7 +86,7 @@ class AdminDashboardScreen extends ConsumerWidget {
             const SizedBox(height: 24),
 
             // Métricas Globales
-            Text('Resumen Municipal de Reportes', style: Theme.of(context).textTheme.titleLarge),
+            const EcoSectionHeader(title: 'Resumen Municipal de Reportes'),
             const SizedBox(height: 12),
             Row(
               children: const [
@@ -126,7 +134,7 @@ class AdminDashboardScreen extends ConsumerWidget {
             const SizedBox(height: 24),
 
             // Accesos de Gestión
-            Text('Módulos de Gestión', style: Theme.of(context).textTheme.titleLarge),
+            const EcoSectionHeader(title: 'Módulos de Gestión'),
             const SizedBox(height: 12),
             _AdminNavTile(
               title: 'Gestión y Asignación de Reportes',

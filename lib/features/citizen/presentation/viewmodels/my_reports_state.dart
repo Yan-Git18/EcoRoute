@@ -1,15 +1,7 @@
+import '../../../../core/enums/report_filter.dart';
 import '../../domain/entities/report_entity.dart';
 
-/// Filtros disponibles para la lista de "Mis reportes".
-enum ReportFilter {
-  all('Todos'),
-  pending('Pendientes'),
-  inProgress('En proceso'),
-  resolved('Resueltos');
-
-  final String label;
-  const ReportFilter(this.label);
-}
+export '../../../../core/enums/report_filter.dart';
 
 /// Estado inmutable de la pantalla "Mis reportes".
 ///
