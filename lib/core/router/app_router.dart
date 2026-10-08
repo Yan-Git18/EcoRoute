@@ -61,27 +61,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         return isPublicRoute ? null : RouteNames.welcome;
       }
 
-      // 2. Si está autenticado y está en ruta pública, redirigir según su Rol
+      // 2. Si está autenticado y está en ruta pública, redirigir a su ruta por defecto (Principio OCP)
       final role = authState.user?.role ?? UserRole.citizen;
-      final defaultRolePath = switch (role) {
-        UserRole.citizen => RouteNames.citizenHome,
-        UserRole.staff => RouteNames.staffHome,
-        UserRole.admin => RouteNames.adminDashboard,
-      };
 
       if (isPublicRoute) {
-        return defaultRolePath;
+        return role.defaultRoute;
       }
 
-      // 3. Protección de rutas por Rol (RBAC)
-      if (role == UserRole.citizen && (currentPath.startsWith('/staff') || currentPath.startsWith('/admin'))) {
-        return RouteNames.citizenHome;
-      }
-      if (role == UserRole.staff && (currentPath.startsWith('/citizen') || currentPath.startsWith('/admin'))) {
-        return RouteNames.staffHome;
-      }
-      if (role == UserRole.admin && (currentPath.startsWith('/citizen') || currentPath.startsWith('/staff'))) {
-        return RouteNames.adminDashboard;
+      // 3. Protección de rutas por Rol mediante política extensible (RBAC - Principio OCP)
+      if (!role.isRoutePermitted(currentPath)) {
+        return role.defaultRoute;
       }
 
       return null;

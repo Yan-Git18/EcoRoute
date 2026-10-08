@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 /// Prioridad de atención para un reporte de residuos.
 enum ReportPriority {
   low('Baja'),
@@ -30,6 +32,44 @@ enum ReportPriority {
         return 'medium';
       case ReportPriority.low:
         return 'low';
+    }
+  }
+}
+
+/// Extensión de atributos visuales para ReportPriority (Principio OCP)
+extension ReportPriorityX on ReportPriority {
+  String get displayLabel => label;
+
+  Color get color {
+    switch (this) {
+      case ReportPriority.high:
+        return const Color(0xFFDC2626);
+      case ReportPriority.medium:
+        return const Color(0xFFD97706);
+      case ReportPriority.low:
+        return const Color(0xFF16A34A);
+    }
+  }
+
+  Color get backgroundColor {
+    switch (this) {
+      case ReportPriority.high:
+        return const Color(0xFFFEE2E2);
+      case ReportPriority.medium:
+        return const Color(0xFFFEF3C7);
+      case ReportPriority.low:
+        return const Color(0xFFDCFCE7);
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case ReportPriority.high:
+        return Icons.warning_amber_rounded;
+      case ReportPriority.medium:
+        return Icons.error_outline_rounded;
+      case ReportPriority.low:
+        return Icons.info_outline_rounded;
     }
   }
 }
@@ -79,6 +119,85 @@ enum ReportStatus {
         return 'resolved';
       case ReportStatus.cancelled:
         return 'cancelled';
+    }
+  }
+}
+
+/// Extensión de atributos visuales y ciclo de vida para ReportStatus (Principio OCP).
+/// Permite agregar nuevos estados sin modificar los widgets de presentación.
+extension ReportStatusX on ReportStatus {
+  String get displayLabel {
+    switch (this) {
+      case ReportStatus.pending:
+        return 'En revisión';
+      case ReportStatus.assigned:
+        return 'Asignado';
+      case ReportStatus.inProgress:
+        return 'En proceso';
+      case ReportStatus.resolved:
+        return 'Resuelto';
+      case ReportStatus.cancelled:
+        return 'Cancelado';
+    }
+  }
+
+  Color get backgroundColor {
+    switch (this) {
+      case ReportStatus.pending:
+        return const Color(0xFFE0F2FE);
+      case ReportStatus.assigned:
+        return const Color(0xFFEDE9FE);
+      case ReportStatus.inProgress:
+        return const Color(0xFFDBEAFE);
+      case ReportStatus.resolved:
+        return const Color(0xFFDCFCE7);
+      case ReportStatus.cancelled:
+        return const Color(0xFFFEE2E2);
+    }
+  }
+
+  Color get color {
+    switch (this) {
+      case ReportStatus.pending:
+        return const Color(0xFF0369A1);
+      case ReportStatus.assigned:
+        return const Color(0xFF6D28D9);
+      case ReportStatus.inProgress:
+        return const Color(0xFF1D4ED8);
+      case ReportStatus.resolved:
+        return const Color(0xFF15803D);
+      case ReportStatus.cancelled:
+        return const Color(0xFFB91C1C);
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case ReportStatus.pending:
+        return Icons.schedule_rounded;
+      case ReportStatus.assigned:
+        return Icons.assignment_ind_rounded;
+      case ReportStatus.inProgress:
+        return Icons.info_outline_rounded;
+      case ReportStatus.resolved:
+        return Icons.check_circle_outline_rounded;
+      case ReportStatus.cancelled:
+        return Icons.cancel_outlined;
+    }
+  }
+
+  int get stepOrder {
+    switch (this) {
+      case ReportStatus.pending:
+        return 1;
+      case ReportStatus.assigned:
+        return 2;
+      case ReportStatus.inProgress:
+        return 3;
+      case ReportStatus.resolved:
+        return 4;
+      case ReportStatus.cancelled:
+        return 0;
     }
   }
 }

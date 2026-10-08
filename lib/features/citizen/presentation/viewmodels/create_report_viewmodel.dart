@@ -1,19 +1,19 @@
 import 'dart:math';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geocoding/geocoding.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../../core/services/location_service.dart';
+import '../../../../core/services/media_picker_service.dart';
+import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
+import '../../data/datasources/category_remote_datasource.dart';
 import '../../data/datasources/report_remote_datasource.dart';
+import '../../data/datasources/report_storage_datasource.dart';
 import '../../data/repositories/report_repository_impl.dart';
 import '../../domain/entities/report_category_entity.dart';
 import '../../domain/entities/report_entity.dart';
 import '../../domain/repositories/report_repository.dart';
 import '../../domain/usecases/create_report_use_case.dart';
 import '../../domain/usecases/get_report_categories_use_case.dart';
-import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import 'create_report_state.dart';
 
 // --- Inyección de Dependencias con Riverpod ---
@@ -22,9 +22,24 @@ final reportRemoteDataSourceProvider = Provider<ReportRemoteDataSource>((ref) {
   return FirebaseReportRemoteDataSourceImpl();
 });
 
+final categoryRemoteDataSourceProvider = Provider<CategoryRemoteDataSource>((ref) {
+  return FirebaseCategoryRemoteDataSourceImpl();
+});
+
+final reportStorageDataSourceProvider = Provider<ReportStorageDataSource>((ref) {
+  return FirebaseReportStorageDataSourceImpl();
+});
+
 final reportRepositoryProvider = Provider<ReportRepository>((ref) {
-  final dataSource = ref.watch(reportRemoteDataSourceProvider);
-  return ReportRepositoryImpl(dataSource);
+  final remoteDataSource = ref.watch(reportRemoteDataSourceProvider);
+  final categoryDataSource = ref.watch(categoryRemoteDataSourceProvider);
+  final storageDataSource = ref.watch(reportStorageDataSourceProvider);
+
+  return ReportRepositoryImpl(
+    remoteDataSource: remoteDataSource,
+    categoryDataSource: categoryDataSource,
+    storageDataSource: storageDataSource,
+  );
 });
 
 final getReportCategoriesUseCaseProvider = Provider<GetReportCategoriesUseCase>((ref) {
@@ -37,29 +52,30 @@ final createReportUseCaseProvider = Provider<CreateReportUseCase>((ref) {
   return CreateReportUseCase(repository);
 });
 
-final imagePickerProvider = Provider<ImagePicker>((ref) {
-  return ImagePicker();
-});
-
 final createReportViewModelProvider =
     NotifierProvider<CreateReportViewModel, CreateReportState>(CreateReportViewModel.new);
 
 // --- ViewModel (MVVM) ---
 
-/// ViewModel para gestionar el Wizard de Creación de Reportes en 5 pasos.
+/// ViewModel para gestionar la interfaz y estado del Wizard de Creación de Reportes en 5 pasos.
+///
+/// Principio SRP: Responsabilidad exclusiva de gestionar el estado de la UI del Wizard.
+/// Delega la geolocalización a [LocationService] y la captura multimedia a [MediaPickerService].
 ///
 /// Ubicación: `lib/features/citizen/presentation/viewmodels/create_report_viewmodel.dart`
 /// Capa: Presentation (ViewModel)
 class CreateReportViewModel extends Notifier<CreateReportState> {
   late final GetReportCategoriesUseCase _getCategoriesUseCase;
   late final CreateReportUseCase _createReportUseCase;
-  late final ImagePicker _imagePicker;
+  late final LocationService _locationService;
+  late final MediaPickerService _mediaPickerService;
 
   @override
   CreateReportState build() {
     _getCategoriesUseCase = ref.watch(getReportCategoriesUseCaseProvider);
     _createReportUseCase = ref.watch(createReportUseCaseProvider);
-    _imagePicker = ref.watch(imagePickerProvider);
+    _locationService = ref.watch(locationServiceProvider);
+    _mediaPickerService = ref.watch(mediaPickerServiceProvider);
 
     // Cargar catálogo de categorías y obtener ubicación inicial
     Future.microtask(() {
@@ -103,34 +119,25 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
 
   /// Captura de imagen desde Cámara (Paso 2)
   Future<void> pickImageFromCamera() async {
-    await _pickImage(ImageSource.camera);
+    final result = await _mediaPickerService.pickImageFromCamera();
+    _handleMediaResult(result);
   }
 
   /// Selección de imagen desde Galería (Paso 2)
   Future<void> pickImageFromGallery() async {
-    await _pickImage(ImageSource.gallery);
+    final result = await _mediaPickerService.pickImageFromGallery();
+    _handleMediaResult(result);
   }
 
-  Future<void> _pickImage(ImageSource source) async {
-    try {
-      final picked = await _imagePicker.pickImage(
-        source: source,
-        imageQuality: 80,
-        maxWidth: 1200,
-      );
-
-      if (picked != null) {
-        final bytes = await picked.readAsBytes();
-        state = state.copyWith(
-          imageFile: picked,
-          imageBytes: bytes,
-          clearError: true,
-        );
-      }
-    } catch (e) {
+  void _handleMediaResult(MediaPickResult result) {
+    if (result.hasImage) {
       state = state.copyWith(
-        errorMessage: 'No se pudo acceder a la imagen seleccionada: $e',
+        imageFile: result.file,
+        imageBytes: result.bytes,
+        clearError: true,
       );
+    } else if (result.errorMessage != null) {
+      state = state.copyWith(errorMessage: result.errorMessage);
     }
   }
 
@@ -143,48 +150,15 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
   Future<void> getCurrentLocation() async {
     state = state.copyWith(isLocating: true, clearError: true);
 
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        state = state.copyWith(
-          isLocating: false,
-          address: 'Av. Las Palmeras 412, Centro',
-          errorMessage: 'Los servicios de ubicación están desactivados en el dispositivo.',
-        );
-        return;
-      }
+    final result = await _locationService.getCurrentPosition();
 
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          state = state.copyWith(
-            isLocating: false,
-            address: 'Av. Las Palmeras 412, Centro',
-          );
-          return;
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        state = state.copyWith(
-          isLocating: false,
-          address: 'Av. Las Palmeras 412, Centro',
-        );
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-      );
-
-      await updateCoordinates(position.latitude, position.longitude);
-    } catch (e) {
-      state = state.copyWith(
-        isLocating: false,
-        address: 'Av. Las Palmeras 412, Centro',
-      );
-    }
+    state = state.copyWith(
+      latitude: result.latitude,
+      longitude: result.longitude,
+      address: result.address ?? 'Av. Las Palmeras 412, Centro',
+      isLocating: false,
+      errorMessage: result.errorMessage,
+    );
   }
 
   /// Actualiza coordenadas y busca dirección vía geocoding
@@ -195,32 +169,12 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
       isLocating: true,
     );
 
-    String resolvedAddress = 'Ubicación seleccionada (${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)})';
-
-    try {
-      if (!kIsWeb) {
-        final geocoding = Geocoding();
-        final placemarks = await geocoding.placemarkFromCoordinates(lat, lng);
-        if (placemarks.isNotEmpty) {
-          final p = placemarks.first;
-          final street = p.street ?? p.name ?? '';
-          final subLocality = p.subLocality ?? p.locality ?? '';
-          if (street.isNotEmpty) {
-            resolvedAddress = '$street${subLocality.isNotEmpty ? ', $subLocality' : ''}';
-          }
-        }
-      } else {
-        resolvedAddress = 'Av. Las Palmeras 412, Centro';
-      }
-    } catch (_) {
-      // Fallback amigable si la geocodificación no responde
-      resolvedAddress = 'Av. Las Palmeras 412, Centro';
-    }
+    final address = await _locationService.getAddressFromCoordinates(lat, lng);
 
     state = state.copyWith(
       latitude: lat,
       longitude: lng,
-      address: resolvedAddress,
+      address: address,
       isLocating: false,
     );
   }
@@ -289,7 +243,6 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
 
   /// Genera un código de reporte aleatorio y no repetible para rastreo único
   String _generateReportNumber() {
-    // Generación de 6 dígitos aleatorios con alta entropía para rastreo único de incidencias
     final randomPart = 100000 + Random().nextInt(900000);
     return '#$randomPart';
   }
@@ -347,7 +300,6 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
         return true;
       },
       onFailure: (failure) {
-        // En caso de modo desarrollo / sin conexión a Firebase, permitir avanzar para una experiencia visual completa
         state = state.copyWith(
           isSubmitting: false,
           createdReportNumber: reportNumber,

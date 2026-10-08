@@ -4,26 +4,38 @@ import '../../../../core/utils/result.dart';
 import '../../domain/entities/report_category_entity.dart';
 import '../../domain/entities/report_entity.dart';
 import '../../domain/repositories/report_repository.dart';
+import '../datasources/category_remote_datasource.dart';
 import '../datasources/report_remote_datasource.dart';
+import '../datasources/report_storage_datasource.dart';
 import '../models/report_dto.dart';
 
 /// Implementación concreta de ReportRepository en la capa de datos.
+///
+/// Principio SRP: Integra los data sources especializados para cumplir el contrato de ReportRepository.
 ///
 /// Ubicación: `lib/features/citizen/data/repositories/report_repository_impl.dart`
 /// Capa: Data (Repositories)
 class ReportRepositoryImpl implements ReportRepository {
   final ReportRemoteDataSource _remoteDataSource;
+  final CategoryRemoteDataSource _categoryDataSource;
+  final ReportStorageDataSource _storageDataSource;
 
   /// Caché en memoria para garantizar que los reportes creados aparezcan de inmediato
   /// incluso ante latencia de sincronización en Firestore o permisos offline
   static final List<ReportEntity> _sessionCache = [];
 
-  const ReportRepositoryImpl(this._remoteDataSource);
+  ReportRepositoryImpl({
+    ReportRemoteDataSource? remoteDataSource,
+    CategoryRemoteDataSource? categoryDataSource,
+    ReportStorageDataSource? storageDataSource,
+  })  : _remoteDataSource = remoteDataSource ?? FirebaseReportRemoteDataSourceImpl(),
+        _categoryDataSource = categoryDataSource ?? FirebaseCategoryRemoteDataSourceImpl(),
+        _storageDataSource = storageDataSource ?? FirebaseReportStorageDataSourceImpl();
 
   @override
   Future<Result<List<ReportCategoryEntity>>> getCategories() async {
     try {
-      final dtos = await _remoteDataSource.getCategories();
+      final dtos = await _categoryDataSource.getCategories();
       return Success(dtos.map((dto) => dto.toEntity()).toList());
     } on ServerException catch (e) {
       return FailureResult(ServerFailure(message: e.message, code: e.code));
@@ -40,11 +52,11 @@ class ReportRepositoryImpl implements ReportRepository {
   }) async {
     List<String> finalImageUrls = List.from(report.imageUrls);
 
-    // Si se proporcionó una fotografía, intentar subirla a Firebase Storage
+    // Si se proporcionó una fotografía, intentar subirla a través del Storage DataSource
     if (imageBytes != null && imageBytes.isNotEmpty) {
       final fileName = imageFileName ?? 'evidence_${report.id}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       try {
-        final uploadedUrl = await _remoteDataSource.uploadReportImage(
+        final uploadedUrl = await _storageDataSource.uploadReportImage(
           imageBytes: imageBytes,
           fileName: fileName,
         );

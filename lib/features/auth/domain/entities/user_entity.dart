@@ -1,3 +1,5 @@
+import '../../../../core/router/route_names.dart';
+
 /// Rol del usuario en EcoRoute
 enum UserRole {
   citizen,
@@ -39,6 +41,47 @@ enum UserRole {
       case UserRole.admin:
         return 'Administrador Municipal';
     }
+  }
+}
+
+/// Extensión de políticas de enrutamiento por Rol (Principio OCP).
+///
+/// Permite extender el sistema agregando nuevos roles con sus propias rutas
+/// sin modificar la lógica interna del enrutador central.
+extension UserRoleRoutePolicy on UserRole {
+  /// Ruta principal por defecto asociada al rol
+  String get defaultRoute {
+    switch (this) {
+      case UserRole.citizen:
+        return RouteNames.citizenHome;
+      case UserRole.staff:
+        return RouteNames.staffHome;
+      case UserRole.admin:
+        return RouteNames.adminDashboard;
+    }
+  }
+
+  /// Prefijos de rutas permitidas para este rol
+  List<String> get allowedPrefixes {
+    switch (this) {
+      case UserRole.citizen:
+        return ['/citizen'];
+      case UserRole.staff:
+        return ['/staff'];
+      case UserRole.admin:
+        return ['/admin'];
+    }
+  }
+
+  /// Determina si una ruta está autorizada para el rol actual
+  bool isRoutePermitted(String currentPath) {
+    final isRoleProtected = currentPath.startsWith('/citizen') ||
+        currentPath.startsWith('/staff') ||
+        currentPath.startsWith('/admin');
+
+    if (!isRoleProtected) return true;
+
+    return allowedPrefixes.any((prefix) => currentPath.startsWith(prefix));
   }
 }
 
