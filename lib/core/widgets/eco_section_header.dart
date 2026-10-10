@@ -20,16 +20,20 @@ class EcoSectionHeader extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 19,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF0F172A),
-            letterSpacing: -0.3,
+        Expanded(
+          child: Text(
+            title,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF0F172A),
+              letterSpacing: -0.3,
+            ),
           ),
         ),
-        if (actionText != null && onActionTap != null)
+        if (actionText != null && onActionTap != null) ...[
+          const SizedBox(width: 8),
           InkWell(
             borderRadius: BorderRadius.circular(8),
             onTap: onActionTap,
@@ -56,6 +60,7 @@ class EcoSectionHeader extends StatelessWidget {
               ),
             ),
           ),
+        ],
       ],
     );
   }

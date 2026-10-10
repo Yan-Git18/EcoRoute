@@ -91,7 +91,6 @@ enum ReportStatus {
       case 'asignado':
         return ReportStatus.assigned;
       case 'in_progress':
-      case 'in行為':
       case 'en proceso':
         return ReportStatus.inProgress;
       case 'resolved':
@@ -225,6 +224,10 @@ class ReportEntity {
   final List<String> imageUrls;
   final DateTime createdAt;
   final DateTime? updatedAt;
+  final String? assignedToTeamId;
+  final String? assignedToTeamName;
+  final String? assignedStaffName;
+  final String? assignedVehicle;
 
   const ReportEntity({
     required this.id,
@@ -245,5 +248,59 @@ class ReportEntity {
     required this.imageUrls,
     required this.createdAt,
     this.updatedAt,
+    this.assignedToTeamId,
+    this.assignedToTeamName,
+    this.assignedStaffName,
+    this.assignedVehicle,
   });
+
+  ReportEntity copyWith({
+    String? id,
+    String? reportNumber,
+    String? citizenId,
+    String? citizenName,
+    String? citizenPhone,
+    String? categoryId,
+    String? categoryName,
+    String? categoryIcon,
+    String? description,
+    ReportPriority? priority,
+    ReportStatus? status,
+    double? latitude,
+    double? longitude,
+    String? address,
+    String? reference,
+    List<String>? imageUrls,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    String? assignedToTeamId,
+    String? assignedToTeamName,
+    String? assignedStaffName,
+    String? assignedVehicle,
+  }) {
+    return ReportEntity(
+      id: id ?? this.id,
+      reportNumber: reportNumber ?? this.reportNumber,
+      citizenId: citizenId ?? this.citizenId,
+      citizenName: citizenName ?? this.citizenName,
+      citizenPhone: citizenPhone ?? this.citizenPhone,
+      categoryId: categoryId ?? this.categoryId,
+      categoryName: categoryName ?? this.categoryName,
+      categoryIcon: categoryIcon ?? this.categoryIcon,
+      description: description ?? this.description,
+      priority: priority ?? this.priority,
+      status: status ?? this.status,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      address: address ?? this.address,
+      reference: reference ?? this.reference,
+      imageUrls: imageUrls ?? this.imageUrls,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      assignedToTeamId: assignedToTeamId ?? this.assignedToTeamId,
+      assignedToTeamName: assignedToTeamName ?? this.assignedToTeamName,
+      assignedStaffName: assignedStaffName ?? this.assignedStaffName,
+      assignedVehicle: assignedVehicle ?? this.assignedVehicle,
+    );
+  }
 }
