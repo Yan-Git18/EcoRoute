@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ecoroute/core/utils/result.dart';
+import 'package:ecoroute/core/widgets/eco_logo_badge.dart';
 import 'package:ecoroute/features/auth/domain/entities/user_entity.dart';
 import 'package:ecoroute/features/auth/presentation/viewmodels/auth_state.dart';
 import 'package:ecoroute/features/auth/presentation/viewmodels/auth_viewmodel.dart';
@@ -97,9 +98,10 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    // 1. Cabecera y AppBar
+    // 1. Cabecera y AppBar limpia sin menú hamburguesa duplicado
     expect(find.text('Panel de Operaciones'), findsOneWidget);
-    expect(find.byIcon(Icons.menu_rounded), findsOneWidget);
+    expect(find.byType(EcoLogoBadge), findsOneWidget);
+    expect(find.byIcon(Icons.menu_rounded), findsNothing);
     expect(find.byIcon(Icons.notifications_none_rounded), findsOneWidget);
 
     // 2. Tarjeta del personal y estado de turno

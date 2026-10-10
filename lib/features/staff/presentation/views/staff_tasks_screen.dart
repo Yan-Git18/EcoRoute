@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/enums/report_filter.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../domain/entities/staff_task_entity.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
@@ -147,10 +146,6 @@ class _StaffTasksScreenState extends ConsumerState<StaffTasksScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authViewModelProvider);
-    final user = authState.user;
-    final staffName = user?.name ?? 'Mario Limpieza';
-
     final staffState = ref.watch(staffHomeViewModelProvider);
     final viewModel = ref.read(staffHomeViewModelProvider.notifier);
 
@@ -416,7 +411,7 @@ class _StaffTasksScreenState extends ConsumerState<StaffTasksScreen> {
           } else if (index == 2) {
             // Ya en tareas
           } else if (index == 3) {
-            _showProfileModal(context, ref, staffName, user?.email);
+            context.push(RouteNames.staffProfile);
           }
         },
       ),
@@ -435,54 +430,6 @@ class _StaffTasksScreenState extends ConsumerState<StaffTasksScreen> {
         ),
       );
     }
-  }
-
-  void _showProfileModal(BuildContext context, WidgetRef ref, String name, String? email) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const CircleAvatar(
-                  radius: 30,
-                  backgroundColor: Color(0xFFDCFCE7),
-                  child: Icon(Icons.person_rounded, size: 36, color: Color(0xFF047857)),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  name,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                if (email != null) Text(email, style: const TextStyle(color: Color(0xFF64748B))),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      ref.read(authViewModelProvider.notifier).logout();
-                    },
-                    icon: const Icon(Icons.logout_rounded, color: AppColors.error),
-                    label: const Text('Cerrar Sesión', style: TextStyle(color: AppColors.error)),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.error),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 }
 

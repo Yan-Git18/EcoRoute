@@ -16,6 +16,7 @@ import '../../features/citizen/presentation/views/create_report_wizard_screen.da
 import '../../features/citizen/presentation/views/my_reports_screen.dart';
 import '../../features/citizen/presentation/views/report_detail_screen.dart';
 import '../../features/staff/presentation/views/staff_home_screen.dart';
+import '../../features/staff/presentation/views/staff_profile_screen.dart';
 import '../../features/staff/presentation/views/staff_route_map_screen.dart';
 import '../../features/staff/presentation/views/staff_tasks_screen.dart';
 import 'route_names.dart';
@@ -136,6 +137,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.staffTasks,
         builder: (context, state) => const StaffTasksScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.staffProfile,
+        builder: (context, state) => const StaffProfileScreen(),
       ),
 
       // Rutas Administrador Municipal

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/enums/report_filter.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/eco_logo_badge.dart';
 import '../../../../core/widgets/eco_notification_button.dart';
 import '../../../../core/widgets/eco_section_header.dart';
 import '../../../../core/widgets/eco_status_summary_card.dart';
@@ -13,7 +14,6 @@ import '../../domain/entities/staff_task_entity.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
 import '../widgets/staff_bottom_nav_bar.dart';
 import '../widgets/staff_complete_task_sheet.dart';
-import '../widgets/staff_drawer.dart';
 import '../widgets/staff_shift_status_card.dart';
 import '../widgets/staff_shift_status_modal.dart';
 import '../widgets/staff_task_item_card.dart';
@@ -185,30 +185,30 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      drawer: StaffDrawer(staffName: staffName, email: user?.email),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        titleSpacing: 0,
-        leading: Builder(
-          builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_rounded, color: Color(0xFF0F172A), size: 26),
-            onPressed: () => Scaffold.of(ctx).openDrawer(),
-          ),
-        ),
-        title: const Text(
-          'Panel de Operaciones',
-          style: TextStyle(
-            color: Color(0xFF0F172A),
-            fontSize: 20,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.4,
-          ),
+        automaticallyImplyLeading: false,
+        titleSpacing: 20,
+        title: Row(
+          children: const [
+            EcoLogoBadge(size: 38, iconSize: 22),
+            SizedBox(width: 12),
+            Text(
+              'Panel de Operaciones',
+              style: TextStyle(
+                color: Color(0xFF0F172A),
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.4,
+              ),
+            ),
+          ],
         ),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 18),
+            padding: const EdgeInsets.only(right: 20),
             child: EcoNotificationButton(
               onTap: () => _showNotificationsModal(context, pendingCount, inProgressCount),
             ),
@@ -372,7 +372,7 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
           } else if (index == 2) {
             context.push(RouteNames.staffTasks);
           } else if (index == 3) {
-            _showProfileModal(context, ref, staffName, user?.email);
+            context.push(RouteNames.staffProfile);
           }
         },
       ),
@@ -481,54 +481,6 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
                         ),
                       ),
                     ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showProfileModal(BuildContext context, WidgetRef ref, String name, String? email) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const CircleAvatar(
-                  radius: 30,
-                  backgroundColor: Color(0xFFDCFCE7),
-                  child: Icon(Icons.person_rounded, size: 36, color: Color(0xFF047857)),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  name,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                if (email != null) Text(email, style: const TextStyle(color: Color(0xFF64748B))),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      ref.read(authViewModelProvider.notifier).logout();
-                    },
-                    icon: const Icon(Icons.logout_rounded, color: AppColors.error),
-                    label: const Text('Cerrar Sesión', style: TextStyle(color: AppColors.error)),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.error),
-                    ),
                   ),
                 ),
               ],
