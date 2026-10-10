@@ -46,22 +46,10 @@ class AdminBottomNavBar extends ConsumerWidget {
         context.push(RouteNames.adminReports);
         break;
       case 2:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Monitoreo en Mapa Urbano en Tiempo Real (Fase 2).'),
-            behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        context.push(RouteNames.adminLiveMap);
         break;
       case 3:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Gestión de Cuadrillas y Flota Municipal (Fase 3).'),
-            behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        context.push(RouteNames.adminTeams);
         break;
     }
   }

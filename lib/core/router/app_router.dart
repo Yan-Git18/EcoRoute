@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/admin/presentation/views/admin_crews_screen.dart';
 import '../../features/admin/presentation/views/admin_dashboard_screen.dart';
+import '../../features/admin/presentation/views/admin_live_map_screen.dart';
 import '../../features/admin/presentation/views/admin_reports_screen.dart';
 import '../../features/auth/domain/entities/user_entity.dart';
 import '../../features/auth/presentation/viewmodels/auth_state.dart';
@@ -152,6 +154,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.adminReports,
         builder: (context, state) => const AdminReportsScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.adminLiveMap,
+        builder: (context, state) => const AdminLiveMapScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.adminTeams,
+        builder: (context, state) => const AdminCrewsScreen(),
       ),
     ],
   );

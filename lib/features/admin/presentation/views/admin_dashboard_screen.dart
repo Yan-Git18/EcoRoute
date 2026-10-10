@@ -159,32 +159,18 @@ class AdminDashboardScreen extends ConsumerWidget {
               const SizedBox(height: 10),
               _AdminNavTile(
                 title: 'Monitoreo en Mapa en Tiempo Real',
-                subtitle: 'Ver incidencias por zona geográfica y cuadrillas (Fase 2)',
+                subtitle: 'Supervisión de incidencias y cuadrillas en la ciudad',
                 icon: Icons.map_rounded,
                 color: AppColors.info,
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Monitoreo en Mapa Urbano se habilitará en la Fase 2.'),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                },
+                onTap: () => context.push(RouteNames.adminLiveMap),
               ),
               const SizedBox(height: 10),
               _AdminNavTile(
                 title: 'Gestión de Cuadrillas y Flota',
-                subtitle: 'Disponibilidad de operarios y camiones (Fase 3)',
+                subtitle: 'Disponibilidad de operarios, camiones y dotaciones',
                 icon: Icons.local_shipping_rounded,
                 color: AppColors.warning,
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Gestión de Cuadrillas y Flota se habilitará en la Fase 3.'),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                },
+                onTap: () => context.push(RouteNames.adminTeams),
               ),
 
               // Sección rápida de incidencias pendientes

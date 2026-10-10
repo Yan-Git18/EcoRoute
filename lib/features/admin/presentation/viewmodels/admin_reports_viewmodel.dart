@@ -123,6 +123,26 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
     }
   }
 
+  Future<void> updateCrew({
+    required String crewId,
+    MunicipalCrewStatus? status,
+    String? zone,
+    bool? isAvailable,
+  }) async {
+    final updatedCrews = state.crews.map((c) {
+      if (c.id == crewId) {
+        return c.copyWith(
+          status: status ?? c.status,
+          zone: zone ?? c.zone,
+          isAvailable: isAvailable ?? c.isAvailable,
+        );
+      }
+      return c;
+    }).toList();
+
+    state = state.copyWith(crews: updatedCrews);
+  }
+
   Future<void> refresh() async {
     await loadReports();
   }
