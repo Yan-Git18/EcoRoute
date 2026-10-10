@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Permisos requeridos para Firebase, Google Maps, GPS y Evidencia Fotográfica -->
+    <!-- Permisos requeridos para Firebase, GPS y Evidencia Fotográfica -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>

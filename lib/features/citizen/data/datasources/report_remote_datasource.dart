@@ -10,6 +10,7 @@ abstract class ReportRemoteDataSource {
   Future<ReportDto> createReport(ReportDto report);
   Future<List<ReportDto>> getMyReports(String citizenId);
   Future<ReportDto> getReportById(String reportId);
+  Future<List<ReportDto>> getAllReports();
 }
 
 /// Implementación concreta de ReportRemoteDataSource con Cloud Firestore.
@@ -100,6 +101,22 @@ class FirebaseReportRemoteDataSourceImpl implements ReportRemoteDataSource {
       return ReportDto.fromMap(doc.data()!, doc.id);
     } catch (e) {
       throw ServerException(message: 'Error al consultar el reporte: $e');
+    }
+  }
+
+  @override
+  Future<List<ReportDto>> getAllReports() async {
+    if (!_isFirebaseReady && _customFirestore == null) return [];
+
+    try {
+      final snapshot = await _firestore.collection('reports').get();
+      final list = snapshot.docs
+          .map((doc) => ReportDto.fromMap(doc.data(), doc.id))
+          .toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    } catch (e) {
+      throw ServerException(message: 'Error al consultar reportes comunitarios: $e');
     }
   }
 }

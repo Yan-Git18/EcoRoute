@@ -152,4 +152,152 @@ class ReportRepositoryImpl implements ReportRepository {
       return FailureResult(ServerFailure(message: 'Error al consultar reporte: $e'));
     }
   }
+
+  @override
+  Future<Result<List<ReportEntity>>> getAllReports() async {
+    final Map<String, ReportEntity> combined = {};
+
+    // 1. Incorporar reportes de la sesión actual
+    for (final r in _sessionCache) {
+      combined[r.id] = r;
+    }
+
+    // 2. Consultar reportes en Cloud Firestore
+    try {
+      final dtos = await _remoteDataSource.getAllReports();
+      for (final dto in dtos) {
+        final entity = dto.toDomain();
+        combined[entity.id] = entity;
+      }
+    } catch (_) {}
+
+    // 3. Si la lista está vacía (modo inicial / offline), suministrar semillas comunitarias
+    if (combined.isEmpty) {
+      final seedReports = _getCommunitySeedReports();
+      for (final seed in seedReports) {
+        combined[seed.id] = seed;
+      }
+    }
+
+    final list = combined.values.toList();
+    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return Success(list);
+  }
+
+  /// Semillas de demostración urbana para el mapa y reportes cercanos en caso de base de datos vacía.
+  static List<ReportEntity> _getCommunitySeedReports() {
+    final now = DateTime.now();
+    return [
+      ReportEntity(
+        id: 'seed-rep-1',
+        reportNumber: '#REP-1024',
+        citizenId: 'seed_user_1',
+        citizenName: 'María Mendoza',
+        citizenPhone: '987654321',
+        categoryId: 'waste_accumulation',
+        categoryName: 'Acumulación de basura',
+        categoryIcon: 'delete_outline_rounded',
+        description: 'Montículo de bolsas plásticas y desechos orgánicos en la acera.',
+        priority: ReportPriority.high,
+        status: ReportStatus.pending,
+        latitude: -12.0478,
+        longitude: -77.0415,
+        address: 'Av. Abancay 450, Centro Histórico',
+        reference: 'Frente al Ministerio Público',
+        imageUrls: const [],
+        createdAt: now.subtract(const Duration(hours: 2)),
+      ),
+      ReportEntity(
+        id: 'seed-rep-2',
+        reportNumber: '#REP-2058',
+        citizenId: 'seed_user_2',
+        citizenName: 'Luis Ramos',
+        citizenPhone: '912345678',
+        categoryId: 'full_bin',
+        categoryName: 'Contenedor lleno',
+        categoryIcon: 'delete_sweep_rounded',
+        description: 'Contenedor metálico desbordado de residuos comerciales.',
+        priority: ReportPriority.medium,
+        status: ReportStatus.inProgress,
+        latitude: -12.0452,
+        longitude: -77.0435,
+        address: 'Jr. de la Unión 810',
+        reference: 'Cerca a la Plaza San Martín',
+        imageUrls: const [],
+        createdAt: now.subtract(const Duration(hours: 5)),
+      ),
+      ReportEntity(
+        id: 'seed-rep-3',
+        reportNumber: '#REP-3192',
+        citizenId: 'seed_user_3',
+        citizenName: 'Carla Quispe',
+        categoryId: 'waste_public_road',
+        categoryName: 'Residuos en vía pública',
+        categoryIcon: 'cleaning_services_rounded',
+        description: 'Desechos dispersos en la berma central tras el comercio ambulatorio.',
+        priority: ReportPriority.low,
+        status: ReportStatus.resolved,
+        latitude: -12.0440,
+        longitude: -77.0450,
+        address: 'Av. Tacna 320',
+        reference: 'Cruce con Jr. Conde de Superunda',
+        imageUrls: const [],
+        createdAt: now.subtract(const Duration(hours: 18)),
+      ),
+      ReportEntity(
+        id: 'seed-rep-4',
+        reportNumber: '#REP-4401',
+        citizenId: 'seed_user_4',
+        citizenName: 'Jorge Alarcón',
+        categoryId: 'damaged_container',
+        categoryName: 'Contenedor dañado',
+        categoryIcon: 'restore_from_trash_rounded',
+        description: 'Tacho municipal con la base rota y tapa desprendida.',
+        priority: ReportPriority.medium,
+        status: ReportStatus.pending,
+        latitude: -12.0485,
+        longitude: -77.0440,
+        address: 'Jr. Carabaya 530',
+        reference: 'A media cuadra de la Plaza Mayor',
+        imageUrls: const [],
+        createdAt: now.subtract(const Duration(hours: 8)),
+      ),
+      ReportEntity(
+        id: 'seed-rep-5',
+        reportNumber: '#REP-5520',
+        citizenId: 'seed_user_5',
+        citizenName: 'Elena Torres',
+        categoryId: 'damaged_recycling_point',
+        categoryName: 'Punto de reciclaje deteriorado',
+        categoryIcon: 'recycling_rounded',
+        description: 'Estación de reciclaje con letrero caído y residuos no segregados.',
+        priority: ReportPriority.low,
+        status: ReportStatus.inProgress,
+        latitude: -12.0520,
+        longitude: -77.0380,
+        address: 'Parque Universitario',
+        reference: 'Costado de la Casona de San Marcos',
+        imageUrls: const [],
+        createdAt: now.subtract(const Duration(days: 1)),
+      ),
+      ReportEntity(
+        id: 'seed-rep-6',
+        reportNumber: '#REP-6635',
+        citizenId: 'seed_user_6',
+        citizenName: 'Pedro Salazar',
+        categoryId: 'waste_accumulation',
+        categoryName: 'Acumulación de basura',
+        categoryIcon: 'delete_outline_rounded',
+        description: 'Residuos de poda y maleza acumulados en la esquina.',
+        priority: ReportPriority.high,
+        status: ReportStatus.resolved,
+        latitude: -12.0490,
+        longitude: -77.0400,
+        address: 'Jr. Cusco 280',
+        reference: 'Esquina con Jr. Azángaro',
+        imageUrls: const [],
+        createdAt: now.subtract(const Duration(days: 2)),
+      ),
+    ];
+  }
 }

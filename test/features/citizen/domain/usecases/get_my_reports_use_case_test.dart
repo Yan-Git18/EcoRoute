@@ -32,6 +32,11 @@ class FakeReportRepository implements ReportRepository {
     final match = reportsToReturn.firstWhere((r) => r.id == reportId);
     return Success(match);
   }
+
+  @override
+  Future<Result<List<ReportEntity>>> getAllReports() async {
+    return Success(reportsToReturn);
+  }
 }
 
 void main() {

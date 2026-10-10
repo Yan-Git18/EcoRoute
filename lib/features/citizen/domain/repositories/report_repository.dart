@@ -22,4 +22,7 @@ abstract class ReportRepository {
 
   /// Obtiene el detalle de un reporte por su ID.
   Future<Result<ReportEntity>> getReportById(String reportId);
+
+  /// Obtiene todos los reportes comunitarios públicos para el mapa y vista de cercanos.
+  Future<Result<List<ReportEntity>>> getAllReports();
 }

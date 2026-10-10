@@ -34,6 +34,11 @@ class FakeReportRepository implements ReportRepository {
     if (lastCreatedReport != null) return Success(lastCreatedReport!);
     return const FailureResult(ServerFailure(message: 'No encontrado'));
   }
+
+  @override
+  Future<Result<List<ReportEntity>>> getAllReports() async {
+    return Success(lastCreatedReport != null ? [lastCreatedReport!] : []);
+  }
 }
 
 void main() {

@@ -51,6 +51,11 @@ class MockReportRepository implements ReportRepository {
     final match = reports.firstWhere((r) => r.id == reportId);
     return Success(match);
   }
+
+  @override
+  Future<Result<List<ReportEntity>>> getAllReports() async {
+    return Success(reports);
+  }
 }
 
 final testCarlosUser = UserEntity(
