@@ -16,6 +16,8 @@ import '../../features/citizen/presentation/views/create_report_wizard_screen.da
 import '../../features/citizen/presentation/views/my_reports_screen.dart';
 import '../../features/citizen/presentation/views/report_detail_screen.dart';
 import '../../features/staff/presentation/views/staff_home_screen.dart';
+import '../../features/staff/presentation/views/staff_route_map_screen.dart';
+import '../../features/staff/presentation/views/staff_tasks_screen.dart';
 import 'route_names.dart';
 
 /// Notificador reactivo para GoRouter que escucha cambios de autenticación
@@ -126,6 +128,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.staffHome,
         builder: (context, state) => const StaffHomeScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.staffRouteMap,
+        builder: (context, state) => const StaffRouteMapScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.staffTasks,
+        builder: (context, state) => const StaffTasksScreen(),
       ),
 
       // Rutas Administrador Municipal

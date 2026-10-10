@@ -177,6 +177,10 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
     state = state.copyWith(selectedFilter: filter);
   }
 
+  void setSearchQuery(String query) {
+    state = state.copyWith(searchQuery: query);
+  }
+
   Future<void> refresh() async {
     await loadTasks();
   }

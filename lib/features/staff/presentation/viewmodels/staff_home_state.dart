@@ -8,11 +8,14 @@ class StaffHomeState {
   final String? errorMessage;
   final ReportFilter selectedFilter;
 
+  final String searchQuery;
+
   const StaffHomeState({
     this.tasks = const [],
     this.isLoading = false,
     this.errorMessage,
     this.selectedFilter = ReportFilter.all,
+    this.searchQuery = '',
   });
 
   int get pendingCount => tasks.where((t) => t.isPending).length;
@@ -20,16 +23,32 @@ class StaffHomeState {
   int get resolvedCount => tasks.where((t) => t.isResolved).length;
 
   List<StaffTaskEntity> get filteredTasks {
+    var list = tasks;
     switch (selectedFilter) {
       case ReportFilter.pending:
-        return tasks.where((t) => t.isPending).toList();
+        list = list.where((t) => t.isPending).toList();
+        break;
       case ReportFilter.inProgress:
-        return tasks.where((t) => t.isInProgress).toList();
+        list = list.where((t) => t.isInProgress).toList();
+        break;
       case ReportFilter.resolved:
-        return tasks.where((t) => t.isResolved).toList();
+        list = list.where((t) => t.isResolved).toList();
+        break;
       case ReportFilter.all:
-        return tasks;
+        break;
     }
+
+    if (searchQuery.trim().isNotEmpty) {
+      final q = searchQuery.trim().toLowerCase();
+      list = list.where((t) =>
+        t.reportNumber.toLowerCase().contains(q) ||
+        t.categoryName.toLowerCase().contains(q) ||
+        t.address.toLowerCase().contains(q) ||
+        t.description.toLowerCase().contains(q)
+      ).toList();
+    }
+
+    return list;
   }
 
   StaffHomeState copyWith({
@@ -38,12 +57,14 @@ class StaffHomeState {
     String? errorMessage,
     bool clearError = false,
     ReportFilter? selectedFilter,
+    String? searchQuery,
   }) {
     return StaffHomeState(
       tasks: tasks ?? this.tasks,
       isLoading: isLoading ?? this.isLoading,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       selectedFilter: selectedFilter ?? this.selectedFilter,
+      searchQuery: searchQuery ?? this.searchQuery,
     );
   }
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/enums/report_filter.dart';
+import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/eco_notification_button.dart';
 import '../../../../core/widgets/eco_section_header.dart';
@@ -27,7 +29,7 @@ class StaffHomeScreen extends ConsumerStatefulWidget {
 
 class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
   String _shiftStatus = 'En turno';
-  int _currentNavIndex = 2; // 'Tareas' activo según diseño
+  final int _currentNavIndex = 0; // 'Inicio' activo en la pantalla principal
 
   // Tareas de demostración para visualización inicial si la base de datos está vacía
   static final List<StaffTaskEntity> _defaultDemoTasks = [
@@ -239,7 +241,7 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
               EcoSectionHeader(
                 title: 'Mis tareas',
                 actionText: 'Ver todas',
-                onActionTap: () => viewModel.setFilter(ReportFilter.all),
+                onActionTap: () => context.push(RouteNames.staffTasks),
               ),
               const SizedBox(height: 12),
               EcoStatusSummaryCard(
@@ -363,13 +365,12 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
       bottomNavigationBar: StaffBottomNavBar(
         currentIndex: _currentNavIndex,
         onTabSelected: (index) {
-          setState(() => _currentNavIndex = index);
           if (index == 0) {
             viewModel.setFilter(ReportFilter.all);
           } else if (index == 1) {
-            _showRouteMapModal(context);
+            context.push(RouteNames.staffRouteMap);
           } else if (index == 2) {
-            viewModel.setFilter(ReportFilter.all);
+            context.push(RouteNames.staffTasks);
           } else if (index == 3) {
             _showProfileModal(context, ref, staffName, user?.email);
           }
@@ -480,48 +481,6 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
                         ),
                       ),
                     ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showRouteMapModal(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.map_rounded, color: Color(0xFF0A5835), size: 48),
-                const SizedBox(height: 12),
-                const Text(
-                  'Mapa de Rutas de Cuadrilla',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Visualización optimizada de paradas para la jornada activa.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Color(0xFF64748B)),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Entendido'),
                   ),
                 ),
               ],

@@ -24,6 +24,18 @@ class StaffTaskItemCard extends StatelessWidget {
     final infoColumn = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (task.reportNumber.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 3),
+            child: Text(
+              task.reportNumber,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF047857),
+              ),
+            ),
+          ),
         Text(
           task.categoryName,
           style: const TextStyle(

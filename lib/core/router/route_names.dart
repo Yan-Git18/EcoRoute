@@ -22,6 +22,7 @@ class RouteNames {
 
   // Personal de Limpieza / Recolección
   static const String staffHome = '/staff';
+  static const String staffTasks = '/staff/tasks';
   static const String staffTaskDetail = '/staff/task/:id';
   static const String staffRouteMap = '/staff/route';
   static const String staffEvidence = '/staff/evidence/:id';
