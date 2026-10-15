@@ -113,6 +113,11 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.people_alt_rounded, color: Color(0xFF0A5835)),
+            tooltip: 'Gestión de Personal',
+            onPressed: () => context.push(RouteNames.adminStaff),
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Color(0xFF475569)),
             tooltip: 'Actualizar cuadrillas',
             onPressed: () => viewModel.refresh(),

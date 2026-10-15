@@ -37,4 +37,5 @@ class RouteNames {
   static const String adminRoutePlanner = '/admin/route-planner';
   static const String adminMetrics = '/admin/metrics';
   static const String adminTeams = '/admin/teams';
+  static const String adminStaff = '/admin/staff';
 }

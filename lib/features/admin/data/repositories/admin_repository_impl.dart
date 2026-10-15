@@ -1,6 +1,7 @@
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/utils/result.dart';
+import '../../../auth/domain/entities/user_entity.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../domain/entities/municipal_crew_entity.dart';
 import '../../domain/repositories/admin_repository.dart';
@@ -122,6 +123,44 @@ class AdminRepositoryImpl implements AdminRepository {
       return FailureResult(const ServerFailure(message: 'Reporte no encontrado'));
     } catch (e) {
       return FailureResult(ServerFailure(message: 'Error al actualizar prioridad: $e'));
+    }
+  }
+
+  @override
+  Future<Result<List<UserEntity>>> getStaffMembers() async {
+    try {
+      final list = await _remoteDataSource.getStaffMembers();
+      return Success(list);
+    } catch (e) {
+      return FailureResult(ServerFailure(message: 'Error al consultar personal: $e'));
+    }
+  }
+
+  @override
+  Future<Result<UserEntity?>> searchUserByExactEmail(String email) async {
+    try {
+      final user = await _remoteDataSource.searchUserByExactEmail(email);
+      return Success(user);
+    } catch (e) {
+      return FailureResult(ServerFailure(message: 'Error al buscar usuario: $e'));
+    }
+  }
+
+  @override
+  Future<Result<void>> updateUserRole({
+    required String userId,
+    required UserRole newRole,
+    String? teamId,
+  }) async {
+    try {
+      await _remoteDataSource.updateUserRole(
+        userId: userId,
+        newRole: newRole,
+        teamId: teamId,
+      );
+      return const Success(null);
+    } catch (e) {
+      return FailureResult(ServerFailure(message: 'Error al actualizar rol: $e'));
     }
   }
 

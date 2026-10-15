@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../../../../core/errors/exceptions.dart';
+import '../../../auth/data/models/user_dto.dart';
+import '../../../auth/domain/entities/user_entity.dart';
 import '../../../citizen/data/models/report_dto.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../domain/entities/municipal_crew_entity.dart';
@@ -20,6 +22,20 @@ abstract class AdminRemoteDataSource {
   Future<void> updateReportPriority({
     required String reportId,
     required ReportPriority priority,
+  });
+
+  /// Obtiene únicamente los usuarios con rol de personal (staff).
+  /// Protege la privacidad evitando consultar cuentas ciudadanas.
+  Future<List<UserEntity>> getStaffMembers();
+
+  /// Búsqueda estricta por correo exacto para no filtrar correos de ciudadanos.
+  Future<UserEntity?> searchUserByExactEmail(String email);
+
+  /// Asigna o revierte el rol de un usuario en Cloud Firestore.
+  Future<void> updateUserRole({
+    required String userId,
+    required UserRole newRole,
+    String? teamId,
   });
 }
 
@@ -189,6 +205,80 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       });
     } catch (e) {
       throw ServerException(message: 'Error al actualizar prioridad: $e');
+    }
+  }
+
+  @override
+  Future<List<UserEntity>> getStaffMembers() async {
+    if (!_isFirebaseReady && _customFirestore == null) return [];
+
+    try {
+      // Solo consulta usuarios cuyo rol sea 'staff'. Privacidad garantizada.
+      final querySnapshot = await _firestore
+          .collection('users')
+          .where('role', isEqualTo: 'staff')
+          .get();
+
+      final list = querySnapshot.docs
+          .map((doc) => UserDto.fromMap(doc.data(), doc.id).toDomain())
+          .toList();
+
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    } catch (e) {
+      throw ServerException(message: 'Error al obtener personal de limpieza: $e');
+    }
+  }
+
+  @override
+  Future<UserEntity?> searchUserByExactEmail(String email) async {
+    if (!_isFirebaseReady && _customFirestore == null) return null;
+
+    final normalized = email.trim().toLowerCase();
+    if (normalized.isEmpty) return null;
+
+    try {
+      // Búsqueda estricta por igualdad exacta: NO expone ni lista a otros ciudadanos
+      final querySnapshot = await _firestore
+          .collection('users')
+          .where('email', isEqualTo: normalized)
+          .limit(1)
+          .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        return null;
+      }
+
+      final doc = querySnapshot.docs.first;
+      return UserDto.fromMap(doc.data(), doc.id).toDomain();
+    } catch (e) {
+      throw ServerException(message: 'Error al buscar usuario por correo: $e');
+    }
+  }
+
+  @override
+  Future<void> updateUserRole({
+    required String userId,
+    required UserRole newRole,
+    String? teamId,
+  }) async {
+    if (!_isFirebaseReady && _customFirestore == null) return;
+
+    try {
+      final updateData = <String, dynamic>{
+        'role': newRole.toDbString(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (teamId != null && teamId.isNotEmpty) {
+        updateData['teamId'] = teamId;
+      } else if (newRole == UserRole.citizen) {
+        updateData['teamId'] = FieldValue.delete();
+      }
+
+      await _firestore.collection('users').doc(userId).update(updateData);
+    } catch (e) {
+      throw ServerException(message: 'Error al actualizar rol del usuario: $e');
     }
   }
 }

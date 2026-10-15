@@ -172,6 +172,14 @@ class AdminDashboardScreen extends ConsumerWidget {
                 color: AppColors.warning,
                 onTap: () => context.push(RouteNames.adminTeams),
               ),
+              const SizedBox(height: 10),
+              _AdminNavTile(
+                title: 'Gestión de Personal y Trabajadores',
+                subtitle: 'Búsqueda privada y asignación de rol a personal municipal',
+                icon: Icons.badge_rounded,
+                color: const Color(0xFF0D9488),
+                onTap: () => context.push(RouteNames.adminStaff),
+              ),
 
               // Sección rápida de incidencias pendientes
               if (pendingReports.isNotEmpty) ...[

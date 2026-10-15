@@ -57,6 +57,19 @@ class MockAdminRepository implements AdminRepository {
   }) async {
     throw UnimplementedError();
   }
+
+  @override
+  Future<Result<List<UserEntity>>> getStaffMembers() async => const Success([]);
+
+  @override
+  Future<Result<UserEntity?>> searchUserByExactEmail(String email) async => const Success(null);
+
+  @override
+  Future<Result<void>> updateUserRole({
+    required String userId,
+    required UserRole newRole,
+    String? teamId,
+  }) async => const Success(null);
 }
 
 final testAdminUser = UserEntity(

@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_assets.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../domain/entities/user_entity.dart';
 import '../viewmodels/auth_viewmodel.dart';
 
 /// Pantalla de inicio de sesión de EcoRoute con diseño limpio e ilustración de fondo.
@@ -23,7 +22,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
-  bool _showDemoRoles = false;
 
   @override
   void dispose() {
@@ -647,76 +645,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 18),
-
-                      // Acceso de prueba rápida para desarrollador (discreto y plegable)
-                      Center(
-                        child: TextButton.icon(
-                          onPressed: () {
-                            setState(() {
-                              _showDemoRoles = !_showDemoRoles;
-                            });
-                          },
-                          icon: Icon(
-                            _showDemoRoles
-                                ? Icons.keyboard_arrow_up_rounded
-                                : Icons.flash_on_rounded,
-                            size: 16,
-                            color: AppColors.primaryDark.withAlpha(160),
-                          ),
-                          label: Text(
-                            _showDemoRoles
-                                ? 'Ocultar roles demo'
-                                : 'Roles de prueba demo',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.primaryDark.withAlpha(160),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      if (_showDemoRoles) ...[
-                        const SizedBox(height: 8),
-                        Wrap(
-                          alignment: WrapAlignment.center,
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            _DemoRoleChip(
-                              label: 'Ciudadano',
-                              color: AppColors.primary,
-                              onTap: () {
-                                ref
-                                    .read(authViewModelProvider.notifier)
-                                    .setDemoRole(UserRole.citizen);
-                              },
-                            ),
-                            _DemoRoleChip(
-                              label: 'Personal',
-                              color: AppColors.info,
-                              onTap: () {
-                                ref
-                                    .read(authViewModelProvider.notifier)
-                                    .setDemoRole(UserRole.staff);
-                              },
-                            ),
-                            _DemoRoleChip(
-                              label: 'Admin',
-                              color: AppColors.forest,
-                              onTap: () {
-                                ref
-                                    .read(authViewModelProvider.notifier)
-                                    .setDemoRole(UserRole.admin);
-                              },
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
                     ],
                   ),
                 ),
@@ -724,42 +653,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _DemoRoleChip extends StatelessWidget {
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _DemoRoleChip({
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withAlpha(90)),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11.5,
-            fontWeight: FontWeight.w600,
-            color: color,
-          ),
-        ),
       ),
     );
   }

@@ -1,4 +1,5 @@
 import '../../../../core/utils/result.dart';
+import '../../../auth/domain/entities/user_entity.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../entities/municipal_crew_entity.dart';
 
@@ -30,4 +31,18 @@ abstract class AdminRepository {
     required String reportId,
     required ReportPriority priority,
   });
+
+  /// Obtiene únicamente los usuarios con rol de personal (staff).
+  Future<Result<List<UserEntity>>> getStaffMembers();
+
+  /// Búsqueda estricta por correo exacto para no listar ni filtrar cuentas de ciudadanos.
+  Future<Result<UserEntity?>> searchUserByExactEmail(String email);
+
+  /// Asigna o revierte el rol de un usuario en el sistema.
+  Future<Result<void>> updateUserRole({
+    required String userId,
+    required UserRole newRole,
+    String? teamId,
+  });
 }
+
