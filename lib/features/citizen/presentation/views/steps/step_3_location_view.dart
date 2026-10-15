@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' hide Path;
+import '../../../../../core/constants/geo_constants.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../viewmodels/create_report_state.dart';
 import '../../viewmodels/create_report_viewmodel.dart';
@@ -75,7 +76,7 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
   void _zoomIn() {
     if (!_isFlutterTest && _isMapReady) {
       final zoom = _mapController.camera.zoom;
-      if (zoom < 18.5) {
+      if (zoom < AppGeoConstants.maxZoom) {
         _mapController.move(_mapController.camera.center, zoom + 1.0);
       }
     }
@@ -84,7 +85,7 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
   void _zoomOut() {
     if (!_isFlutterTest && _isMapReady) {
       final zoom = _mapController.camera.zoom;
-      if (zoom > 4.0) {
+      if (zoom > AppGeoConstants.minZoom) {
         _mapController.move(_mapController.camera.center, zoom - 1.0);
       }
     }
@@ -151,7 +152,7 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Confirma la dirección exacta donde se localiza el problema para guiar a la cuadrilla.',
+            'Confirma la dirección exacta donde se localiza el problema para guiar al personal.',
             style: TextStyle(
               fontSize: 13.5,
               color: Color(0xFF64748B),
@@ -251,13 +252,13 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
                         : _buildOpenStreetMap(state, viewModel),
                   ),
 
-                  // Chip superior con instrucciones de uso interactivo
+                  // Chip superior con delimitación de cobertura Cajamarca
                   Positioned(
                     top: 12,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0F172A).withAlpha(205),
+                        color: const Color(0xFF0F172A).withAlpha(210),
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: const [
                           BoxShadow(
@@ -270,10 +271,10 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: const [
-                          Icon(Icons.touch_app_rounded, color: Colors.white, size: 14),
+                          Icon(Icons.location_city_rounded, color: Color(0xFF34D399), size: 14),
                           SizedBox(width: 6),
                           Text(
-                            'Toca o arrastra el PIN al lugar exacto',
+                            'Cajamarca • Toca o arrastra el PIN',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 11.5,
@@ -378,8 +379,37 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
             ),
           ),
 
+          // Advertencia si la ubicación está fuera del área urbana de Cajamarca
+          if (!state.isLocationInsideCajamarca) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFECACA)),
+              ),
+              child: Row(
+                children: const [
+                  Icon(Icons.warning_amber_rounded, size: 18, color: Color(0xFFDC2626)),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Ubicación fuera del área de servicio. EcoRoute actualmente solo opera en Cajamarca.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFB91C1C),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           // Indicador de distancia relativa si el PIN difiere de la ubicación actual
-          if (distanceText != null) ...[
+          if (distanceText != null && state.isLocationInsideCajamarca) ...[
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -528,9 +558,10 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
       mapController: _mapController,
       options: MapOptions(
         initialCenter: LatLng(state.latitude, state.longitude),
-        initialZoom: 15.5,
-        minZoom: 3.0,
-        maxZoom: 19.0,
+        initialZoom: AppGeoConstants.defaultZoom,
+        minZoom: AppGeoConstants.minZoom,
+        maxZoom: AppGeoConstants.maxZoom,
+        cameraConstraint: AppGeoConstants.cameraConstraint,
         interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
         onMapReady: () {
           setState(() {
@@ -684,7 +715,10 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapUp: (details) {
-        viewModel.updateCoordinates(-12.0480, -77.0430);
+        viewModel.updateCoordinates(
+          AppGeoConstants.cajamarcaCenterLat,
+          AppGeoConstants.cajamarcaCenterLng,
+        );
       },
       child: Stack(
         alignment: Alignment.center,

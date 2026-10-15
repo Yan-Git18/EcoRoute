@@ -49,22 +49,42 @@ class ReportRepositoryImpl implements ReportRepository {
     required ReportEntity report,
     List<int>? imageBytes,
     String? imageFileName,
+    List<List<int>>? multipleImageBytes,
+    List<String>? localImagePaths,
   }) async {
     List<String> finalImageUrls = List.from(report.imageUrls);
 
-    // Si se proporcionó una fotografía, intentar subirla a través del Storage DataSource
-    if (imageBytes != null && imageBytes.isNotEmpty) {
-      final fileName = imageFileName ?? 'evidence_${report.id}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    // Determinar la lista de bytes de imágenes a procesar
+    final List<List<int>> bytesToUpload = [];
+    if (multipleImageBytes != null && multipleImageBytes.isNotEmpty) {
+      bytesToUpload.addAll(multipleImageBytes);
+    } else if (imageBytes != null && imageBytes.isNotEmpty) {
+      bytesToUpload.add(imageBytes);
+    }
+
+    // Subir cada imagen a Firebase Storage o utilizar respaldo local si falla/offline
+    for (int i = 0; i < bytesToUpload.length; i++) {
+      final bytes = bytesToUpload[i];
+      final fileName = 'evidence_${report.id}_$i.jpg';
+      String? uploadedUrl;
       try {
-        final uploadedUrl = await _storageDataSource.uploadReportImage(
-          imageBytes: imageBytes,
+        uploadedUrl = await _storageDataSource.uploadReportImage(
+          imageBytes: bytes,
           fileName: fileName,
         );
-        if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
-          finalImageUrls.add(uploadedUrl);
-        }
       } catch (_) {
-        // En caso de error en Storage, continuar para registrar el reporte sin bloquear al usuario
+        // En caso de fallo en Storage, se gestiona el fallback local a continuación
+      }
+
+      if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+        finalImageUrls.add(uploadedUrl);
+      } else if (localImagePaths != null && i < localImagePaths.length) {
+        // Respaldo de contingencia: Guardar la ruta local para que la evidencia
+        // sea visible de inmediato en la app aunque Firebase Storage esté offline
+        final localPath = localImagePaths[i];
+        if (localPath.isNotEmpty) {
+          finalImageUrls.add(localPath);
+        }
       }
     }
 
@@ -182,6 +202,44 @@ class ReportRepositoryImpl implements ReportRepository {
     final list = combined.values.toList();
     list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return Success(list);
+  }
+
+  @override
+  Future<Result<ReportEntity>> cancelReport({required String reportId, String? reason}) async {
+    ReportEntity? updatedEntity;
+
+    // 1. Actualizar en caché de sesión para reflejo inmediato
+    final index = _sessionCache.indexWhere((r) => r.id == reportId);
+    if (index != -1) {
+      final old = _sessionCache[index];
+      updatedEntity = old.copyWith(
+        status: ReportStatus.cancelled,
+        updatedAt: DateTime.now(),
+      );
+      _sessionCache[index] = updatedEntity;
+    }
+
+    // 2. Persistir en Cloud Firestore
+    try {
+      await _remoteDataSource.cancelReport(reportId: reportId, reason: reason);
+      if (updatedEntity == null) {
+        final dto = await _remoteDataSource.getReportById(reportId);
+        updatedEntity = dto.toDomain();
+        _sessionCache.removeWhere((r) => r.id == updatedEntity!.id);
+        _sessionCache.insert(0, updatedEntity);
+      }
+      return Success(updatedEntity);
+    } on ServerException catch (e) {
+      if (updatedEntity != null) {
+        return Success(updatedEntity);
+      }
+      return FailureResult(ServerFailure(message: e.message, code: e.code));
+    } catch (e) {
+      if (updatedEntity != null) {
+        return Success(updatedEntity);
+      }
+      return FailureResult(ServerFailure(message: 'Error al cancelar reporte: $e'));
+    }
   }
 
   /// Semillas de demostración urbana para el mapa y reportes cercanos en caso de base de datos vacía.

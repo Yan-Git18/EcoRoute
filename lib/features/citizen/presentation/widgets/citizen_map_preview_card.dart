@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -124,11 +125,7 @@ class CitizenMapPreviewCard extends StatelessWidget {
                     height: 60,
                     color: const Color(0xFFF8FAFC),
                     child: hasImage
-                        ? Image.network(
-                            report.imageUrls.first,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _buildFallbackThumbnail(),
-                          )
+                        ? _buildThumbnail(report.imageUrls.first)
                         : _buildFallbackThumbnail(),
                   ),
                 ),
@@ -214,6 +211,26 @@ class CitizenMapPreviewCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildThumbnail(String url) {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return Image.network(
+        url,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _buildFallbackThumbnail(),
+      );
+    } else {
+      final file = File(url);
+      if (file.existsSync()) {
+        return Image.file(
+          file,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildFallbackThumbnail(),
+        );
+      }
+      return _buildFallbackThumbnail();
+    }
   }
 
   Widget _buildFallbackThumbnail() {

@@ -67,7 +67,7 @@ class _AdminAssignCrewModalState extends State<AdminAssignCrewModal> {
         ? widget.crews.first
         : const MunicipalCrewEntity(
             id: 'crew-default',
-            name: 'Cuadrilla General',
+            name: 'Personal General',
             zone: 'Sector Central',
             leadStaffName: 'Mario Limpieza',
             vehicleCode: 'Camión #04',
@@ -127,7 +127,7 @@ class _AdminAssignCrewModalState extends State<AdminAssignCrewModal> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Despacho de Cuadrilla',
+                      'Despacho de Personal',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
@@ -190,9 +190,9 @@ class _AdminAssignCrewModalState extends State<AdminAssignCrewModal> {
             ),
             const SizedBox(height: 18),
 
-            // 1. Selector de Cuadrilla Municipal
+            // 1. Selector de Personal Municipal
             const Text(
-              'Seleccionar Cuadrilla de Campo:',
+              'Seleccionar Personal de Campo:',
               style: TextStyle(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w700,
@@ -360,7 +360,7 @@ class _AdminAssignCrewModalState extends State<AdminAssignCrewModal> {
                       )
                     : const Icon(Icons.send_rounded, size: 18),
                 label: Text(
-                  _isSubmitting ? 'Despachando...' : 'Confirmar Despacho a Cuadrilla',
+                  _isSubmitting ? 'Despachando...' : 'Confirmar Despacho a Personal',
                   style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                 ),
                 style: ElevatedButton.styleFrom(

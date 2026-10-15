@@ -111,7 +111,7 @@ void main() {
 
     // 4. Asignación Operativa
     expect(find.text('Asignación Operativa'), findsOneWidget);
-    expect(find.text('Cuadrilla Asignada'), findsOneWidget);
+    expect(find.text('Personal Asignado'), findsOneWidget);
     expect(find.text('Cuadrilla Zona Norte (Turno Diurno)'), findsOneWidget);
     expect(find.text('Unidad Vehicular'), findsOneWidget);
     expect(find.text('Camión Recolector #04 • Placa ECR-882'), findsOneWidget);

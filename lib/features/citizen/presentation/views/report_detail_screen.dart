@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -65,6 +66,84 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
     }
   }
 
+  Future<void> _handleCancelReport() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.cancel_outlined, color: Color(0xFFDC2626), size: 26),
+            SizedBox(width: 10),
+            Text('Cancelar reporte', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          ],
+        ),
+        content: const Text(
+          '¿Estás seguro de cancelar este reporte? Si el problema ya fue solucionado o fue reportado por error, puedes cancelarlo. Esta acción no se puede deshacer.',
+          style: TextStyle(fontSize: 14, color: Color(0xFF475569), height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Volver', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Sí, cancelar reporte', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted && _report != null) {
+      setState(() => _isLoading = true);
+      final cancelUseCase = ref.read(cancelReportUseCaseProvider);
+      final result = await cancelUseCase(reportId: _report!.id);
+
+      if (mounted) {
+        result.fold(
+          onSuccess: (updatedReport) {
+            setState(() {
+              _report = updatedReport;
+              _isLoading = false;
+            });
+            // Recargar listado en segundo plano
+            ref.read(myReportsViewModelProvider.notifier).loadReports();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Row(
+                  children: [
+                    Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                    SizedBox(width: 10),
+                    Text('El reporte ha sido cancelado con éxito.'),
+                  ],
+                ),
+                backgroundColor: const Color(0xFF475569),
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            );
+          },
+          onFailure: (failure) {
+            setState(() => _isLoading = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(failure.message),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          },
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -116,7 +195,10 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
                 )
               : _report == null
                   ? const SizedBox.shrink()
-                  : _ReportDetailBody(report: _report!),
+                  : _ReportDetailBody(
+                      report: _report!,
+                      onCancelReport: _handleCancelReport,
+                    ),
     );
   }
 }
@@ -125,8 +207,12 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
 /// Principio SRP: Distribuye cada sección en componentes especializados y reutilizables.
 class _ReportDetailBody extends StatelessWidget {
   final ReportEntity report;
+  final VoidCallback onCancelReport;
 
-  const _ReportDetailBody({required this.report});
+  const _ReportDetailBody({
+    required this.report,
+    required this.onCancelReport,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -149,41 +235,366 @@ class _ReportDetailBody extends StatelessWidget {
 
           // 4. Tarjeta historial de estados (Timeline de auditoría)
           _ReportTimelineCard(report: report),
+          const SizedBox(height: 20),
+
+          // 5. Botón de Cancelar Reporte para el ciudadano (solo en estado pendiente)
+          if (report.status == ReportStatus.pending) ...[
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: OutlinedButton.icon(
+                onPressed: onCancelReport,
+                icon: const Icon(Icons.cancel_outlined, size: 20, color: Color(0xFFDC2626)),
+                label: const Text(
+                  'Cancelar reporte',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFDC2626),
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFFCA5A5), width: 1.3),
+                  backgroundColor: const Color(0xFFFEF2F2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+          ] else if (report.status == ReportStatus.cancelled) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, color: Color(0xFF64748B), size: 22),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Este reporte fue cancelado y no requiere atención por parte del personal municipal.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-/// Tarjeta de imagen superior con bordes redondeados y soporte para estado vacío con marco punteado.
-class _ReportPhotoCard extends StatelessWidget {
+/// Tarjeta de imagen superior con bordes redondeados, soporte para URLs remotas y archivos locales,
+/// carrusel interactivo para múltiples fotografías y visor a pantalla completa con zoom.
+class _ReportPhotoCard extends StatefulWidget {
   final List<String> imageUrls;
 
   const _ReportPhotoCard({required this.imageUrls});
 
   @override
+  State<_ReportPhotoCard> createState() => _ReportPhotoCardState();
+}
+
+class _ReportPhotoCardState extends State<_ReportPhotoCard> {
+  int _currentIndex = 0;
+
+  Widget _buildSingleImage(String url) {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return Image.network(
+        url,
+        width: double.infinity,
+        height: double.infinity,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return const Center(
+            child: SizedBox(
+              width: 26,
+              height: 26,
+              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) => const _EmptyPhotoPlaceholder(),
+      );
+    } else {
+      final file = File(url);
+      if (file.existsSync()) {
+        return Image.file(
+          file,
+          width: double.infinity,
+          height: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => const _EmptyPhotoPlaceholder(),
+        );
+      }
+      return const _EmptyPhotoPlaceholder();
+    }
+  }
+
+  void _openFullScreenViewer(BuildContext context, List<String> images, int initialIndex) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _FullScreenImageViewer(
+          imageUrls: images,
+          initialIndex: initialIndex,
+        ),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final hasImage = imageUrls.isNotEmpty;
+    final validImages = widget.imageUrls.where((url) => url.trim().isNotEmpty).toList();
+
+    if (validImages.isEmpty) {
+      return Container(
+        height: 180,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const ClipRRect(
+          borderRadius: BorderRadius.all(Radius.circular(20)),
+          child: _EmptyPhotoPlaceholder(),
+        ),
+      );
+    }
+
+    if (validImages.length == 1) {
+      return Container(
+        height: 200,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0C0F172A),
+              blurRadius: 14,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _buildSingleImage(validImages.first),
+              Positioned(
+                bottom: 12,
+                right: 12,
+                child: Material(
+                  color: Colors.black.withAlpha(160),
+                  borderRadius: BorderRadius.circular(16),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () => _openFullScreenViewer(context, validImages, 0),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
+                          SizedBox(width: 4),
+                          Text(
+                            'Ampliar',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Container(
-      height: 175,
+      height: 215,
       width: double.infinity,
       decoration: BoxDecoration(
         color: const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0C0F172A),
+            blurRadius: 14,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
-        child: hasImage
-            ? Image.network(
-                imageUrls.first,
-                width: double.infinity,
-                height: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
-                    const _EmptyPhotoPlaceholder(),
-              )
-            : const _EmptyPhotoPlaceholder(),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            PageView.builder(
+              itemCount: validImages.length,
+              onPageChanged: (index) {
+                setState(() => _currentIndex = index);
+              },
+              itemBuilder: (context, index) {
+                return GestureDetector(
+                  onTap: () => _openFullScreenViewer(context, validImages, index),
+                  child: _buildSingleImage(validImages[index]),
+                );
+              },
+            ),
+            Positioned(
+              bottom: 12,
+              left: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.black.withAlpha(160),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  '${_currentIndex + 1} de ${validImages.length} fotos',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 12,
+              right: 12,
+              child: Material(
+                color: Colors.black.withAlpha(160),
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => _openFullScreenViewer(context, validImages, _currentIndex),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
+                        SizedBox(width: 4),
+                        Text(
+                          'Ampliar',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Visor a pantalla completa interactivo con soporte para pellizco para hacer zoom (Pinch-to-zoom).
+class _FullScreenImageViewer extends StatefulWidget {
+  final List<String> imageUrls;
+  final int initialIndex;
+
+  const _FullScreenImageViewer({required this.imageUrls, this.initialIndex = 0});
+
+  @override
+  State<_FullScreenImageViewer> createState() => _FullScreenImageViewerState();
+}
+
+class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
+  late PageController _pageController;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Widget _buildImage(String url) {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return InteractiveViewer(
+        maxScale: 4.0,
+        child: Image.network(
+          url,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => const Center(
+            child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 48),
+          ),
+        ),
+      );
+    } else {
+      final file = File(url);
+      if (file.existsSync()) {
+        return InteractiveViewer(
+          maxScale: 4.0,
+          child: Image.file(
+            file,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const Center(
+              child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 48),
+            ),
+          ),
+        );
+      }
+      return const Center(
+        child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 48),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text(
+          'Foto ${_currentIndex + 1} de ${widget.imageUrls.length}',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        centerTitle: true,
+      ),
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: widget.imageUrls.length,
+        onPageChanged: (i) => setState(() => _currentIndex = i),
+        itemBuilder: (ctx, i) => Center(child: _buildImage(widget.imageUrls[i])),
       ),
     );
   }

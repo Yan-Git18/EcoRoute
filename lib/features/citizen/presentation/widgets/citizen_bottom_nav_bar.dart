@@ -29,8 +29,9 @@ class CitizenBottomNavBar extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
+        minimum: const EdgeInsets.only(bottom: 12),
         child: SizedBox(
-          height: 64,
+          height: 66,
           child: Row(
             children: [
               // 0: Inicio
@@ -65,7 +66,7 @@ class CitizenBottomNavBar extends StatelessWidget {
                 ),
               ),
 
-              // 2: Reportar (Botón central destacado)
+              // 2: Reportar (Botón central destacado elevado)
               Expanded(
                 child: InkWell(
                   onTap: () => context.push(RouteNames.citizenCreateReport),
@@ -74,33 +75,41 @@ class CitizenBottomNavBar extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: activeGreen,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: activeGreen.withAlpha(80),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
+                      Transform.translate(
+                        offset: const Offset(0, -4),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: activeGreen,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: activeGreen.withAlpha(80),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.add_rounded,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            const Text(
+                              'Reportar',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: inactiveColor,
+                              ),
                             ),
                           ],
-                        ),
-                        child: const Icon(
-                          Icons.add_rounded,
-                          color: Colors.white,
-                          size: 26,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      const Text(
-                        'Reportar',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: inactiveColor,
                         ),
                       ),
                     ],

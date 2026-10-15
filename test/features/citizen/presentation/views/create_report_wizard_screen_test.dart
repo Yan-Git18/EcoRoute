@@ -7,29 +7,30 @@ import 'package:ecoroute/features/citizen/domain/entities/report_category_entity
 import 'package:ecoroute/features/citizen/domain/entities/report_entity.dart';
 import 'package:ecoroute/features/citizen/domain/repositories/report_repository.dart';
 import 'package:ecoroute/features/citizen/presentation/viewmodels/create_report_viewmodel.dart';
+import 'package:ecoroute/core/constants/geo_constants.dart';
 import 'package:ecoroute/features/citizen/presentation/views/create_report_wizard_screen.dart';
 
 class MockWizardLocationService implements LocationService {
   @override
   Future<LocationDataResult> getCurrentPosition() async {
     return const LocationDataResult(
-      latitude: -12.046374,
-      longitude: -77.042793,
-      address: 'Av. Las Palmeras 412, Centro',
+      latitude: AppGeoConstants.cajamarcaCenterLat,
+      longitude: AppGeoConstants.cajamarcaCenterLng,
+      address: AppGeoConstants.defaultAddress,
     );
   }
 
   @override
   Future<String> getAddressFromCoordinates(double lat, double lng) async {
-    return 'Av. Las Palmeras 412, Centro';
+    return AppGeoConstants.defaultAddress;
   }
 
   @override
   Future<LocationDataResult?> getCoordinatesFromAddress(String address) async {
     return const LocationDataResult(
-      latitude: -12.046374,
-      longitude: -77.042793,
-      address: 'Av. Las Palmeras 412, Centro',
+      latitude: AppGeoConstants.cajamarcaCenterLat,
+      longitude: AppGeoConstants.cajamarcaCenterLng,
+      address: AppGeoConstants.defaultAddress,
     );
   }
 }
@@ -45,6 +46,8 @@ class MockWizardReportRepository implements ReportRepository {
     required ReportEntity report,
     List<int>? imageBytes,
     String? imageFileName,
+    List<List<int>>? multipleImageBytes,
+    List<String>? localImagePaths,
   }) async {
     return Success(report);
   }
@@ -62,6 +65,11 @@ class MockWizardReportRepository implements ReportRepository {
   @override
   Future<Result<List<ReportEntity>>> getAllReports() async {
     return const Success([]);
+  }
+
+  @override
+  Future<Result<ReportEntity>> cancelReport({required String reportId, String? reason}) async {
+    throw UnimplementedError();
   }
 }
 
@@ -163,7 +171,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Verificamos controles del mapa interactivo
-    expect(find.text('Toca o arrastra el PIN al lugar exacto'), findsOneWidget);
+    expect(find.text('Cajamarca • Toca o arrastra el PIN'), findsOneWidget);
     expect(find.text('Punto del incidente'), findsOneWidget);
     expect(find.byIcon(Icons.location_on_rounded), findsWidgets);
     expect(find.byTooltip('Acercar mapa'), findsOneWidget);
@@ -172,13 +180,13 @@ void main() {
 
     // Escribir en el buscador de dirección
     final searchInput = find.byType(TextField).first;
-    await tester.enterText(searchInput, 'Av. Las Palmeras 412, Centro');
+    await tester.enterText(searchInput, AppGeoConstants.defaultAddress);
     await tester.pumpAndSettle();
 
     // Presionar el icono de búsqueda
     await tester.tap(find.byTooltip('Buscar en el mapa'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Av. Las Palmeras 412, Centro'), findsOneWidget);
+    expect(find.text(AppGeoConstants.defaultAddress), findsOneWidget);
   });
 }

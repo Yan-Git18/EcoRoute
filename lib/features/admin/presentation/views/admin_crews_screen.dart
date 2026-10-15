@@ -93,7 +93,7 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Cuadrillas y Flota Municipal',
+              'Personal y Flota Municipal',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
@@ -119,7 +119,7 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Color(0xFF475569)),
-            tooltip: 'Actualizar cuadrillas',
+            tooltip: 'Actualizar personal',
             onPressed: () => viewModel.refresh(),
           ),
           const SizedBox(width: 4),
@@ -180,7 +180,7 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
                   controller: _searchController,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
-                    hintText: 'Buscar por cuadrilla, placa, líder o zona...',
+                    hintText: 'Buscar por personal, placa, líder o zona...',
                     hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
                     prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF64748B)),
                     suffixIcon: _searchController.text.isNotEmpty
@@ -247,7 +247,7 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
           ),
           const Divider(height: 1, color: Color(0xFFE2E8F0)),
 
-          // 2. Lista de Cuadrillas
+          // 2. Lista de Personal
           Expanded(
             child: filteredCrews.isEmpty
                 ? Center(
@@ -266,7 +266,7 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
                           ),
                           const SizedBox(height: 14),
                           const Text(
-                            'No se encontraron cuadrillas',
+                            'No se encontró personal',
                             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
                           ),
                           const SizedBox(height: 6),

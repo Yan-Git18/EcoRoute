@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../domain/usecases/cancel_report_use_case.dart';
 import '../../domain/usecases/get_my_reports_use_case.dart';
 import '../../domain/usecases/get_report_by_id_use_case.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
@@ -15,6 +16,11 @@ final getMyReportsUseCaseProvider = Provider<GetMyReportsUseCase>((ref) {
 final getReportByIdUseCaseProvider = Provider<GetReportByIdUseCase>((ref) {
   final repository = ref.watch(reportRepositoryProvider);
   return GetReportByIdUseCase(repository);
+});
+
+final cancelReportUseCaseProvider = Provider<CancelReportUseCase>((ref) {
+  final repository = ref.watch(reportRepositoryProvider);
+  return CancelReportUseCase(repository);
 });
 
 final myReportsViewModelProvider =

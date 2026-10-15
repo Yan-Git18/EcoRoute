@@ -120,4 +120,103 @@ void main() {
     expect(find.text('15 oct. 2026 - 3:54 a. m.'), findsOneWidget);
     expect(find.text('15 oct. 2026 - 5:09 a. m.'), findsOneWidget);
   });
+
+  testWidgets('Muestra botón Cancelar reporte en estado pendiente y abre diálogo de confirmación', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final pendingReport = ReportEntity(
+      id: 'rep-pending',
+      reportNumber: '#0105',
+      citizenId: 'user-test',
+      citizenName: 'Vecino',
+      categoryId: 'waste_accumulation',
+      categoryName: 'Acumulación de basura',
+      categoryIcon: 'delete_outline_rounded',
+      description: 'Reporte pendiente de atención.',
+      priority: ReportPriority.medium,
+      status: ReportStatus.pending,
+      latitude: -7.15,
+      longitude: -78.51,
+      address: 'Jr. Comercio 123, Cajamarca',
+      imageUrls: const [],
+      createdAt: DateTime.now(),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: ReportDetailScreen(
+            reportId: pendingReport.id,
+            initialReport: pendingReport,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verificamos que el botón Cancelar reporte está visible
+    final cancelBtn = find.text('Cancelar reporte');
+    expect(cancelBtn, findsOneWidget);
+
+    // Tocamos el botón para abrir el diálogo
+    await tester.tap(cancelBtn);
+    await tester.pumpAndSettle();
+
+    // Verificamos diálogo de confirmación
+    expect(find.text('Cancelar reporte'), findsWidgets);
+    expect(find.text('Volver'), findsOneWidget);
+    expect(find.text('Sí, cancelar reporte'), findsOneWidget);
+  });
+
+  testWidgets('Muestra badge Cancelado y tarjeta informativa si el reporte está cancelado, sin botón cancelar', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final cancelledReport = ReportEntity(
+      id: 'rep-cancelled',
+      reportNumber: '#0106',
+      citizenId: 'user-test',
+      citizenName: 'Vecino',
+      categoryId: 'waste_accumulation',
+      categoryName: 'Acumulación de basura',
+      categoryIcon: 'delete_outline_rounded',
+      description: 'Reporte cancelado por el ciudadano.',
+      priority: ReportPriority.low,
+      status: ReportStatus.cancelled,
+      latitude: -7.15,
+      longitude: -78.51,
+      address: 'Jr. Comercio 123, Cajamarca',
+      imageUrls: const [],
+      createdAt: DateTime.now(),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: ReportDetailScreen(
+            reportId: cancelledReport.id,
+            initialReport: cancelledReport,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verificamos que no existe botón de cancelar
+    expect(find.text('Cancelar reporte'), findsNothing);
+
+    // Verificamos badge Cancelado
+    expect(find.text('Cancelado'), findsWidgets);
+
+    // Verificamos tarjeta informativa
+    expect(
+      find.text('Este reporte fue cancelado y no requiere atención por parte del personal municipal.'),
+      findsOneWidget,
+    );
+  });
 }

@@ -119,10 +119,10 @@ class AdminBottomNavBar extends ConsumerWidget {
                 ),
               ),
 
-              // 3: Cuadrillas
+              // 3: Personal
               Expanded(
                 child: _AdminNavTab(
-                  label: 'Cuadrillas',
+                  label: 'Personal',
                   icon: currentIndex == 3
                       ? Icons.local_shipping_rounded
                       : Icons.local_shipping_outlined,

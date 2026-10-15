@@ -283,7 +283,7 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
                           Text(
                             activeTasks.isEmpty
                                 ? 'Todas las paradas han sido atendidas.'
-                                : 'Ruta activa optimizada para tu cuadrilla.',
+                                : 'Ruta activa optimizada para tu personal.',
                             style: const TextStyle(
                               fontSize: 11.5,
                               color: Color(0xFF64748B),

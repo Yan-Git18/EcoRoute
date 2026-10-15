@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../../core/constants/geo_constants.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/services/media_picker_service.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
@@ -119,21 +120,36 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
 
   /// Captura de imagen desde Cámara (Paso 2)
   Future<void> pickImageFromCamera() async {
-    final result = await _mediaPickerService.pickImageFromCamera();
-    _handleMediaResult(result);
-  }
-
-  /// Selección de imagen desde Galería (Paso 2)
-  Future<void> pickImageFromGallery() async {
-    final result = await _mediaPickerService.pickImageFromGallery();
-    _handleMediaResult(result);
-  }
-
-  void _handleMediaResult(MediaPickResult result) {
-    if (result.hasImage) {
+    if (state.imagesCount >= CreateReportState.maxImages) {
       state = state.copyWith(
-        imageFile: result.file,
-        imageBytes: result.bytes,
+        errorMessage: 'Has alcanzado el límite máximo de ${CreateReportState.maxImages} fotografías.',
+      );
+      return;
+    }
+    final result = await _mediaPickerService.pickImageFromCamera();
+    _handleSingleMediaResult(result);
+  }
+
+  /// Selección de imágenes desde Galería (Paso 2)
+  Future<void> pickImageFromGallery() async {
+    final remaining = CreateReportState.maxImages - state.imagesCount;
+    if (remaining <= 0) {
+      state = state.copyWith(
+        errorMessage: 'Has alcanzado el límite máximo de ${CreateReportState.maxImages} fotografías.',
+      );
+      return;
+    }
+    final results = await _mediaPickerService.pickMultipleImagesFromGallery(limit: remaining);
+    _handleMultipleMediaResults(results);
+  }
+
+  void _handleSingleMediaResult(MediaPickResult result) {
+    if (result.hasImage) {
+      final updatedFiles = List.of(state.imageFiles)..add(result.file!);
+      final updatedBytes = List.of(state.imageBytesList)..add(result.bytes!);
+      state = state.copyWith(
+        imageFiles: updatedFiles,
+        imageBytesList: updatedBytes,
         clearError: true,
       );
     } else if (result.errorMessage != null) {
@@ -141,7 +157,42 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
     }
   }
 
-  /// Eliminar la fotografía adjunta
+  void _handleMultipleMediaResults(List<MediaPickResult> results) {
+    final updatedFiles = List.of(state.imageFiles);
+    final updatedBytes = List.of(state.imageBytesList);
+    String? error;
+
+    for (final r in results) {
+      if (r.hasImage && updatedFiles.length < CreateReportState.maxImages) {
+        updatedFiles.add(r.file!);
+        updatedBytes.add(r.bytes!);
+      } else if (r.errorMessage != null) {
+        error = r.errorMessage;
+      }
+    }
+
+    state = state.copyWith(
+      imageFiles: updatedFiles,
+      imageBytesList: updatedBytes,
+      errorMessage: error,
+      clearError: error == null,
+    );
+  }
+
+  /// Eliminar fotografía en un índice específico
+  void removeImageAt(int index) {
+    if (index >= 0 && index < state.imagesCount) {
+      final updatedFiles = List.of(state.imageFiles)..removeAt(index);
+      final updatedBytes = List.of(state.imageBytesList)..removeAt(index);
+      state = state.copyWith(
+        imageFiles: updatedFiles,
+        imageBytesList: updatedBytes,
+        clearError: true,
+      );
+    }
+  }
+
+  /// Eliminar todas las fotografías adjuntas
   void removeImage() {
     state = state.copyWith(clearImage: true);
   }
@@ -151,24 +202,50 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
     state = state.copyWith(isLocating: true, clearError: true);
 
     final result = await _locationService.getCurrentPosition();
+    final isInside = AppGeoConstants.isInsideCajamarca(result.latitude, result.longitude);
 
-    state = state.copyWith(
-      latitude: result.latitude,
-      longitude: result.longitude,
-      userLatitude: result.latitude,
-      userLongitude: result.longitude,
-      address: result.address ?? 'Av. Las Palmeras 412, Centro',
-      isLocating: false,
-      errorMessage: result.errorMessage,
-    );
+    if (isInside) {
+      state = state.copyWith(
+        latitude: result.latitude,
+        longitude: result.longitude,
+        userLatitude: result.latitude,
+        userLongitude: result.longitude,
+        address: result.address ?? AppGeoConstants.defaultAddress,
+        isLocating: false,
+        errorMessage: result.errorMessage,
+      );
+    } else {
+      // El usuario está fuera del radio de Cajamarca: se registra su GPS de referencia
+      // pero el PIN del reporte se posiciona en el centro de Cajamarca para evitar reportes en otras ciudades/países
+      state = state.copyWith(
+        latitude: AppGeoConstants.cajamarcaCenterLat,
+        longitude: AppGeoConstants.cajamarcaCenterLng,
+        userLatitude: result.latitude,
+        userLongitude: result.longitude,
+        address: AppGeoConstants.defaultAddress,
+        isLocating: false,
+        errorMessage: 'Tu GPS indica que estás fuera de Cajamarca. Por favor ubica el PIN en la zona de Cajamarca donde ocurrió la incidencia.',
+      );
+    }
   }
 
   /// Actualiza coordenadas del incidente y busca dirección vía geocoding inverso
   Future<void> updateCoordinates(double lat, double lng) async {
+    final isInside = AppGeoConstants.isInsideCajamarca(lat, lng);
+    if (!isInside) {
+      state = state.copyWith(
+        latitude: lat,
+        longitude: lng,
+        errorMessage: 'El punto seleccionado está fuera del área de servicio de Cajamarca.',
+      );
+      return;
+    }
+
     state = state.copyWith(
       latitude: lat,
       longitude: lng,
       isLocating: true,
+      clearError: true,
     );
 
     final address = await _locationService.getAddressFromCoordinates(lat, lng);
@@ -181,13 +258,21 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
     );
   }
 
-  /// Busca una dirección por texto y ubica el pin en sus coordenadas
+  /// Busca una dirección por texto y ubica el pin en sus coordenadas dentro de Cajamarca
   Future<bool> searchAndSetAddress(String query) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return false;
     state = state.copyWith(isLocating: true, clearError: true);
     final result = await _locationService.getCoordinatesFromAddress(trimmed);
     if (result != null) {
+      if (!AppGeoConstants.isInsideCajamarca(result.latitude, result.longitude)) {
+        state = state.copyWith(
+          isLocating: false,
+          errorMessage: 'La dirección "$trimmed" se encuentra fuera del área urbana de Cajamarca.',
+        );
+        return false;
+      }
+
       state = state.copyWith(
         latitude: result.latitude,
         longitude: result.longitude,
@@ -198,7 +283,7 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
     } else {
       state = state.copyWith(
         isLocating: false,
-        errorMessage: 'No se encontró la dirección "$trimmed".',
+        errorMessage: 'No se encontró la dirección "$trimmed" en Cajamarca.',
       );
       return false;
     }
@@ -230,9 +315,15 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
     }
 
     if (state.currentStep == 3 && !state.canAdvanceFromStep3) {
-      state = state.copyWith(
-        errorMessage: 'Por favor, especifica una dirección o ubicación válida.',
-      );
+      if (!state.isLocationInsideCajamarca) {
+        state = state.copyWith(
+          errorMessage: 'EcoRoute solo opera en Cajamarca. Por favor ubica el PIN dentro de la ciudad.',
+        );
+      } else {
+        state = state.copyWith(
+          errorMessage: 'Por favor, especifica una dirección o ubicación válida.',
+        );
+      }
       return;
     }
 
@@ -312,7 +403,9 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
     final result = await _createReportUseCase(
       report: report,
       imageBytes: state.imageBytes,
-      imageFileName: 'evidence_$reportId.jpg',
+      imageFileName: 'evidence_${reportId}_0.jpg',
+      multipleImageBytes: state.imageBytesList,
+      localImagePaths: state.imageFiles.map((f) => f.path).toList(),
     );
 
     return result.fold(

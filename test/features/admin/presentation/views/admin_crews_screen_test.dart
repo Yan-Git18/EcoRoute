@@ -137,7 +137,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // 1. Título y encabezado
-    expect(find.text('Cuadrillas y Flota Municipal'), findsOneWidget);
+    expect(find.text('Personal y Flota Municipal'), findsOneWidget);
     expect(find.textContaining('unidades registradas'), findsOneWidget);
 
     // 2. Métricas de flota
@@ -155,7 +155,7 @@ void main() {
 
     // 4. Barra inferior de navegación
     expect(find.byType(AdminBottomNavBar), findsOneWidget);
-    expect(find.text('Cuadrillas'), findsOneWidget);
+    expect(find.text('Personal'), findsOneWidget);
   });
 
   testWidgets('Filtra cuadrillas al escribir en el buscador de AdminCrewsScreen', (tester) async {

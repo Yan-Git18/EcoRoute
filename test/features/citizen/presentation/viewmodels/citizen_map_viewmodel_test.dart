@@ -47,6 +47,8 @@ class FakeReportRepository implements ReportRepository {
     required ReportEntity report,
     List<int>? imageBytes,
     String? imageFileName,
+    List<List<int>>? multipleImageBytes,
+    List<String>? localImagePaths,
   }) async {
     return Success(report);
   }
@@ -64,6 +66,11 @@ class FakeReportRepository implements ReportRepository {
   @override
   Future<Result<List<ReportEntity>>> getAllReports() async {
     return Success(reports);
+  }
+
+  @override
+  Future<Result<ReportEntity>> cancelReport({required String reportId, String? reason}) async {
+    return Success(reports.first.copyWith(status: ReportStatus.cancelled));
   }
 }
 

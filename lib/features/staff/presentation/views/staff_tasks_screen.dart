@@ -219,7 +219,7 @@ class _StaffTasksScreenState extends ConsumerState<StaffTasksScreen> {
               ),
             ),
             Text(
-              '${sortedList.length} incidencias asignadas a tu cuadrilla',
+              '${sortedList.length} incidencias asignadas a tu personal',
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
@@ -546,7 +546,7 @@ class _EmptyTasksListView extends StatelessWidget {
             Text(
               hasQuery
                   ? 'Intenta con otros términos como dirección o folio.'
-                  : 'Tu cuadrilla no tiene incidencias ${filter.label.toLowerCase()} en este momento.',
+                  : 'Tu personal no tiene incidencias ${filter.label.toLowerCase()} en este momento.',
               style: const TextStyle(
                 fontSize: 13,
                 color: Color(0xFF64748B),

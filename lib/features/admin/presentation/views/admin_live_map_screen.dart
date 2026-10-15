@@ -20,7 +20,7 @@ enum AdminMapFilter {
   all('Todas'),
   urgent('Urgentes'),
   pending('Pendientes'),
-  crews('Cuadrillas');
+  crews('Personal');
 
   final String label;
   const AdminMapFilter(this.label);
@@ -137,7 +137,7 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
               ),
             ),
             Text(
-              '${reports.length} incidencias • ${crews.length} cuadrillas en calle',
+              '${reports.length} incidencias • ${crews.length} personal en calle',
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
@@ -205,7 +205,7 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
                   ),
                   const SizedBox(width: 8),
                   _MapFilterChip(
-                    label: 'Cuadrillas (${crews.length})',
+                    label: 'Personal (${crews.length})',
                     isSelected: _activeFilter == AdminMapFilter.crews,
                     color: const Color(0xFF047857),
                     icon: Icons.local_shipping_rounded,
@@ -240,7 +240,7 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
                     _LegendItem(color: Color(0xFFDC2626), label: 'Urgente / Alta'),
                     _LegendItem(color: Color(0xFFD97706), label: 'Media Prioridad'),
                     _LegendItem(color: Color(0xFF059669), label: 'Baja Prioridad'),
-                    _LegendItem(color: Color(0xFF0A5835), label: 'Cuadrilla Activa (Camión)'),
+                    _LegendItem(color: Color(0xFF0A5835), label: 'Personal Activo (Camión)'),
                   ],
                 ),
               ),

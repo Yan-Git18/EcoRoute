@@ -55,7 +55,7 @@ class Step1CategoryView extends ConsumerWidget {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Selecciona la categoría adecuada para que la cuadrilla municipal correcta sea asignada.',
+            'Selecciona la categoría adecuada para que el personal municipal correcto sea asignado.',
             style: TextStyle(
               fontSize: 13.5,
               color: Color(0xFF64748B),

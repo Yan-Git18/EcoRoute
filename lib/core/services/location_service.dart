@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../constants/geo_constants.dart';
+
 /// Resultado encuadronado de una operación de ubicación GPS.
 class LocationDataResult {
   final double latitude;
@@ -31,9 +33,9 @@ abstract class LocationService {
 
 /// Implementación concreta de LocationService con Geolocator y Geocoding.
 class GeolocatorLocationServiceImpl implements LocationService {
-  static const double _fallbackLat = -12.046374; // Coordenadas por defecto (Lima/Centro)
-  static const double _fallbackLng = -77.042793;
-  static const String _defaultFallbackAddress = 'Av. Las Palmeras 412, Centro';
+  static const double _fallbackLat = AppGeoConstants.cajamarcaCenterLat;
+  static const double _fallbackLng = AppGeoConstants.cajamarcaCenterLng;
+  static const String _defaultFallbackAddress = AppGeoConstants.defaultAddress;
 
   @override
   Future<LocationDataResult> getCurrentPosition() async {
@@ -127,7 +129,10 @@ class GeolocatorLocationServiceImpl implements LocationService {
     try {
       if (!kIsWeb) {
         final geocoding = Geocoding();
-        final locations = await geocoding.locationFromAddress(trimmed);
+        final query = trimmed.toLowerCase().contains('cajamarca')
+            ? trimmed
+            : '$trimmed, Cajamarca, Perú';
+        final locations = await geocoding.locationFromAddress(query);
         if (locations.isNotEmpty) {
           final loc = locations.first;
           final resolvedAddress = await getAddressFromCoordinates(loc.latitude, loc.longitude);

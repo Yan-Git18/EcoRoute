@@ -472,7 +472,7 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Tienes $pending tareas pendientes y $inProgress en proceso asignadas a tu cuadrilla.',
+                          'Tienes $pending tareas pendientes y $inProgress en proceso asignadas a tu personal.',
                           style: const TextStyle(
                             fontSize: 13.5,
                             color: Color(0xFF334155),

@@ -11,6 +11,7 @@ abstract class ReportRemoteDataSource {
   Future<List<ReportDto>> getMyReports(String citizenId);
   Future<ReportDto> getReportById(String reportId);
   Future<List<ReportDto>> getAllReports();
+  Future<void> cancelReport({required String reportId, String? reason});
 }
 
 /// Implementación concreta de ReportRemoteDataSource con Cloud Firestore.
@@ -117,6 +118,32 @@ class FirebaseReportRemoteDataSourceImpl implements ReportRemoteDataSource {
       return list;
     } catch (e) {
       throw ServerException(message: 'Error al consultar reportes comunitarios: $e');
+    }
+  }
+
+  @override
+  Future<void> cancelReport({required String reportId, String? reason}) async {
+    if (!_isFirebaseReady && _customFirestore == null) return;
+
+    try {
+      final docRef = _firestore.collection('reports').doc(reportId);
+      await docRef.update({
+        'status': 'cancelled',
+        'cancellationReason': reason ?? 'Cancelado por el ciudadano',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      try {
+        await docRef.collection('history').add({
+          'previousStatus': 'pending',
+          'newStatus': 'cancelled',
+          'changedByUserRole': 'citizen',
+          'comment': reason ?? 'Reporte cancelado por el ciudadano.',
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
+    } catch (e) {
+      throw ServerException(message: 'Error al cancelar el reporte: $e');
     }
   }
 }

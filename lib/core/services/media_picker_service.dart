@@ -23,6 +23,7 @@ class MediaPickResult {
 abstract class MediaPickerService {
   Future<MediaPickResult> pickImageFromCamera({int quality = 80, double maxWidth = 1200});
   Future<MediaPickResult> pickImageFromGallery({int quality = 80, double maxWidth = 1200});
+  Future<List<MediaPickResult>> pickMultipleImagesFromGallery({int quality = 80, double maxWidth = 1200, int? limit});
 }
 
 /// Implementación concreta de MediaPickerService con ImagePicker.
@@ -39,6 +40,34 @@ class ImagePickerMediaServiceImpl implements MediaPickerService {
   @override
   Future<MediaPickResult> pickImageFromGallery({int quality = 80, double maxWidth = 1200}) async {
     return _pickImage(ImageSource.gallery, quality: quality, maxWidth: maxWidth);
+  }
+
+  @override
+  Future<List<MediaPickResult>> pickMultipleImagesFromGallery({
+    int quality = 80,
+    double maxWidth = 1200,
+    int? limit,
+  }) async {
+    try {
+      final pickedList = await _picker.pickMultiImage(
+        imageQuality: quality,
+        maxWidth: maxWidth,
+        limit: limit,
+      );
+
+      final results = <MediaPickResult>[];
+      for (final picked in pickedList) {
+        final bytes = await picked.readAsBytes();
+        results.add(MediaPickResult(file: picked, bytes: bytes));
+      }
+      return results;
+    } catch (e) {
+      return [
+        MediaPickResult(
+          errorMessage: 'No se pudo acceder a las imágenes seleccionadas: $e',
+        )
+      ];
+    }
   }
 
   Future<MediaPickResult> _pickImage(

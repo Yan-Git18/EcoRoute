@@ -194,12 +194,12 @@ void main() {
     expect(find.text('#REP-1024'), findsOneWidget);
     expect(find.text('Acumulación de basura'), findsOneWidget);
     expect(find.text('Av. Abancay 450'), findsOneWidget);
-    expect(find.text('Despachar Cuadrilla'), findsOneWidget);
+    expect(find.text('Despachar Personal'), findsOneWidget);
 
     expect(find.text('#REP-2058'), findsOneWidget);
     expect(find.text('Contenedor lleno'), findsOneWidget);
     expect(find.text('Jr. de la Unión 810'), findsOneWidget);
-    expect(find.text('Reasignar Cuadrilla'), findsOneWidget);
+    expect(find.text('Reasignar Personal'), findsOneWidget);
   });
 
   testWidgets('Abre modal de despacho y asigna cuadrilla a un reporte pendiente', (tester) async {
@@ -221,18 +221,18 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    // Tap en Despachar Cuadrilla
-    final dispatchButton = find.text('Despachar Cuadrilla');
+    // Tap en Despachar Personal
+    final dispatchButton = find.text('Despachar Personal');
     expect(dispatchButton, findsOneWidget);
     await tester.tap(dispatchButton);
     await tester.pumpAndSettle();
 
     // Debe abrir el modal
-    expect(find.text('Despacho de Cuadrilla'), findsOneWidget);
-    expect(find.text('Confirmar Despacho a Cuadrilla'), findsOneWidget);
+    expect(find.text('Despacho de Personal'), findsOneWidget);
+    expect(find.text('Confirmar Despacho a Personal'), findsOneWidget);
 
     // Confirmar despacho
-    await tester.tap(find.text('Confirmar Despacho a Cuadrilla'));
+    await tester.tap(find.text('Confirmar Despacho a Personal'));
     await tester.pumpAndSettle();
 
     expect(mockRepo.assignCalled, isTrue);

@@ -150,7 +150,7 @@ class AdminDashboardScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               _AdminNavTile(
                 title: 'Gestión y Asignación de Reportes',
-                subtitle: 'Revisar, clasificar y asignar a cuadrillas',
+                subtitle: 'Revisar, clasificar y asignar a personal',
                 icon: Icons.rule_folder_rounded,
                 color: AppColors.primary,
                 badgeText: adminReportsState.pendingCount > 0 ? '${adminReportsState.pendingCount} por atender' : null,
@@ -159,14 +159,14 @@ class AdminDashboardScreen extends ConsumerWidget {
               const SizedBox(height: 10),
               _AdminNavTile(
                 title: 'Monitoreo en Mapa en Tiempo Real',
-                subtitle: 'Supervisión de incidencias y cuadrillas en la ciudad',
+                subtitle: 'Supervisión de incidencias y personal en la ciudad',
                 icon: Icons.map_rounded,
                 color: AppColors.info,
                 onTap: () => context.push(RouteNames.adminLiveMap),
               ),
               const SizedBox(height: 10),
               _AdminNavTile(
-                title: 'Gestión de Cuadrillas y Flota',
+                title: 'Gestión de Personal y Flota',
                 subtitle: 'Disponibilidad de operarios, camiones y dotaciones',
                 icon: Icons.local_shipping_rounded,
                 color: AppColors.warning,

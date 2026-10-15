@@ -73,19 +73,21 @@ class ReportTimeline extends StatelessWidget {
       ),
     );
 
-    // Evento 3: En atención / Cuadrilla en camino
+    // Evento 3: En atención / Personal en camino
     final isInProgressOrResolved = report.status == ReportStatus.inProgress ||
         report.status == ReportStatus.resolved;
 
-    events.add(
-      TimelineEvent(
-        title: 'En proceso',
-        subtitle: 'cuadrilla de limpieza asignada',
-        time: _formatDateTime(report.createdAt.add(const Duration(hours: 2))),
-        isCompleted: isInProgressOrResolved,
-        isCurrent: report.status == ReportStatus.inProgress,
-      ),
-    );
+    if (report.status != ReportStatus.cancelled) {
+      events.add(
+        TimelineEvent(
+          title: 'En proceso',
+          subtitle: 'personal de limpieza asignado',
+          time: _formatDateTime(report.createdAt.add(const Duration(hours: 2))),
+          isCompleted: isInProgressOrResolved,
+          isCurrent: report.status == ReportStatus.inProgress,
+        ),
+      );
+    }
 
     // Evento 4: Resuelto
     if (report.status == ReportStatus.resolved) {
@@ -94,6 +96,16 @@ class ReportTimeline extends StatelessWidget {
           title: 'Resuelto',
           subtitle: 'limpieza completada con evidencia',
           time: _formatDateTime(report.updatedAt ?? report.createdAt.add(const Duration(hours: 4))),
+          isCompleted: true,
+          isCurrent: true,
+        ),
+      );
+    } else if (report.status == ReportStatus.cancelled) {
+      events.add(
+        TimelineEvent(
+          title: 'Cancelado',
+          subtitle: 'reporte cancelado por el ciudadano',
+          time: _formatDateTime(report.updatedAt ?? DateTime.now()),
           isCompleted: true,
           isCurrent: true,
         ),

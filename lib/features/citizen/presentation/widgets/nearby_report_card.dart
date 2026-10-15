@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/entities/report_entity.dart';
@@ -28,6 +29,26 @@ class NearbyReportCard extends StatelessWidget {
     ];
     final monthName = months[date.month - 1];
     return '${date.day} $monthName ${date.year}';
+  }
+
+  Widget _buildThumbnail(String url) {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return Image.network(
+        url,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const _ThumbnailPlaceholder(),
+      );
+    } else {
+      final file = File(url);
+      if (file.existsSync()) {
+        return Image.file(
+          file,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const _ThumbnailPlaceholder(),
+        );
+      }
+      return const _ThumbnailPlaceholder();
+    }
   }
 
   @override
@@ -119,11 +140,7 @@ class NearbyReportCard extends StatelessWidget {
                         height: 72,
                         color: const Color(0xFFF1F5F9),
                         child: hasImage
-                            ? Image.network(
-                                report.imageUrls.first,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const _ThumbnailPlaceholder(),
-                              )
+                            ? _buildThumbnail(report.imageUrls.first)
                             : const _ThumbnailPlaceholder(),
                       ),
                     ),

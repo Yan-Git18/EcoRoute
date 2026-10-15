@@ -16,6 +16,8 @@ class CreateReportUseCase {
     required ReportEntity report,
     List<int>? imageBytes,
     String? imageFileName,
+    List<List<int>>? multipleImageBytes,
+    List<String>? localImagePaths,
   }) async {
     // Validaciones de reglas de negocio
     if (report.categoryId.trim().isEmpty) {
@@ -42,6 +44,8 @@ class CreateReportUseCase {
       report: report,
       imageBytes: imageBytes,
       imageFileName: imageFileName,
+      multipleImageBytes: multipleImageBytes,
+      localImagePaths: localImagePaths,
     );
   }
 }

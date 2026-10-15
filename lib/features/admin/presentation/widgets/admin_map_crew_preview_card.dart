@@ -111,7 +111,7 @@ class AdminMapCrewPreviewCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'Jefe de Cuadrilla: ${crew.leadStaffName}',
+                      'Responsable: ${crew.leadStaffName}',
                       style: const TextStyle(fontSize: 12.5, color: Color(0xFF334155)),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

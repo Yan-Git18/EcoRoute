@@ -272,7 +272,7 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
                   _InfoTile(
                     icon: Icons.groups_rounded,
                     iconColor: const Color(0xFF047857),
-                    title: 'Cuadrilla Asignada',
+                    title: 'Personal Asignado',
                     subtitle: 'Cuadrilla Zona Norte (Turno Diurno)',
                   ),
                   const Divider(height: 1, indent: 56, endIndent: 16, color: Color(0xFFF1F5F9)),

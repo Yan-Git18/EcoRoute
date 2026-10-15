@@ -183,7 +183,7 @@ class AdminReportCard extends StatelessWidget {
                       ? ElevatedButton.icon(
                           onPressed: onAssign,
                           icon: const Icon(Icons.assignment_ind_rounded, size: 17),
-                          label: const Text('Despachar Cuadrilla'),
+                          label: const Text('Despachar Personal'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF0A5835),
                             foregroundColor: Colors.white,
@@ -196,7 +196,7 @@ class AdminReportCard extends StatelessWidget {
                       : OutlinedButton.icon(
                           onPressed: isResolved ? null : onAssign,
                           icon: const Icon(Icons.swap_horiz_rounded, size: 17),
-                          label: Text(isResolved ? 'Incidencia Resuelta' : 'Reasignar Cuadrilla'),
+                          label: Text(isResolved ? 'Incidencia Resuelta' : 'Reasignar Personal'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: isResolved ? const Color(0xFF10B981) : const Color(0xFF0A5835),
                             side: BorderSide(

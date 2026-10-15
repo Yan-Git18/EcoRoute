@@ -169,14 +169,14 @@ void main() {
     expect(find.text('Todos (2)'), findsOneWidget);
     expect(find.text('Urgentes (1)'), findsOneWidget);
     expect(find.text('Pendientes (1)'), findsOneWidget);
-    expect(find.text('Cuadrillas (1)'), findsOneWidget);
+    expect(find.text('Personal (1)'), findsOneWidget);
 
     // 3. Menú inferior con tab activo
     expect(find.byType(AdminBottomNavBar), findsOneWidget);
     expect(find.text('Mapa'), findsOneWidget);
     expect(find.text('Inicio'), findsOneWidget);
     expect(find.text('Reportes'), findsOneWidget);
-    expect(find.text('Cuadrillas'), findsOneWidget);
+    expect(find.text('Personal'), findsOneWidget);
   });
 
   testWidgets('Permite alternar filtros y seleccionar reporte para ver tarjeta emergente',
