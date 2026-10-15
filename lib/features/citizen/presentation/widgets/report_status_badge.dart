@@ -11,20 +11,24 @@ import '../../domain/entities/report_entity.dart';
 class ReportStatusBadge extends StatelessWidget {
   final ReportStatus status;
   final bool showIcon;
+  final EdgeInsetsGeometry? padding;
+  final double borderRadius;
 
   const ReportStatusBadge({
     super.key,
     required this.status,
     this.showIcon = false,
+    this.padding,
+    this.borderRadius = 20.0,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: padding ?? const EdgeInsets.symmetric(horizontal: 12, vertical: 5.5),
       decoration: BoxDecoration(
         color: status.backgroundColor,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(borderRadius),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -36,8 +40,8 @@ class ReportStatusBadge extends StatelessWidget {
           Text(
             status.displayLabel,
             style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
               color: status.color,
             ),
           ),

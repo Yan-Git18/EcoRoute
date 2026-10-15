@@ -33,10 +33,11 @@ class ReportTimeline extends StatelessWidget {
 
   String _formatDateTime(DateTime date) {
     const months = [
-      'sep.', 'oct.', 'nov.', 'dic.', 'ene.', 'feb.',
-      'mar.', 'abr.', 'may.', 'jun.', 'jul.', 'ago.'
+      '',
+      'ene.', 'feb.', 'mar.', 'abr.', 'may.', 'jun.',
+      'jul.', 'ago.', 'sep.', 'oct.', 'nov.', 'dic.'
     ];
-    final monthName = months[(date.month + 3) % 12];
+    final monthName = months[date.month];
     final hour = date.hour > 12 ? date.hour - 12 : (date.hour == 0 ? 12 : date.hour);
     final minute = date.minute.toString().padLeft(2, '0');
     final period = date.hour >= 12 ? 'p. m.' : 'a. m.';
@@ -115,32 +116,22 @@ class ReportTimeline extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Columna del nodo y conector
+              // Columna del nodo y conector vertical
               SizedBox(
-                width: 24,
+                width: 18,
                 child: Column(
                   children: [
-                    Container(
-                      width: 16,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: event.isCompleted
-                            ? AppColors.primary
-                            : const Color(0xFFCBD5E1),
-                        border: Border.all(
-                          color: event.isCurrent ? AppColors.primary : Colors.white,
-                          width: event.isCurrent ? 3 : 2,
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2.0),
+                      child: Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: event.isCompleted
+                              ? AppColors.primary
+                              : const Color(0xFFCBD5E1),
                         ),
-                        boxShadow: event.isCurrent
-                            ? [
-                                BoxShadow(
-                                  color: AppColors.primary.withAlpha(80),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
-                                )
-                              ]
-                            : null,
                       ),
                     ),
                     if (!isLast)
@@ -148,59 +139,50 @@ class ReportTimeline extends StatelessWidget {
                         child: Container(
                           width: 2,
                           color: event.isCompleted
-                              ? AppColors.primary.withAlpha(150)
+                              ? AppColors.primary
                               : const Color(0xFFE2E8F0),
                         ),
                       ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
 
-              // Contenido del evento
+              // Contenido textual del evento
               Expanded(
                 child: Padding(
-                  padding: EdgeInsets.only(bottom: isLast ? 0 : 20.0),
-                  child: Row(
+                  padding: EdgeInsets.only(bottom: isLast ? 0 : 26.0),
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      Text(
+                        event.time,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          color: Color(0xFF94A3B8),
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      RichText(
+                        text: TextSpan(
+                          text: event.title,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: event.isCompleted ? FontWeight.w700 : FontWeight.w500,
+                            color: event.isCompleted
+                                ? AppColors.primary
+                                : const Color(0xFF64748B),
+                          ),
                           children: [
-                            Text(
-                              event.time,
-                              style: const TextStyle(
-                                fontSize: 11.5,
-                                color: Color(0xFF94A3B8),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            RichText(
-                              text: TextSpan(
-                                text: '${event.title} ',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: event.isCompleted
-                                      ? (event.title == 'En proceso'
-                                          ? const Color(0xFF1D4ED8)
-                                          : AppColors.forest)
-                                      : const Color(0xFF94A3B8),
+                            if (event.subtitle.isNotEmpty)
+                              TextSpan(
+                                text: ' ${event.subtitle}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w400,
+                                  color: Color(0xFF64748B),
                                 ),
-                                children: [
-                                  TextSpan(
-                                    text: event.subtitle,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w400,
-                                      color: Color(0xFF64748B),
-                                    ),
-                                  ),
-                                ],
                               ),
-                            ),
                           ],
                         ),
                       ),

@@ -59,4 +59,65 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('Renderiza ReportDetailScreen con los elementos exactos del diseño mockup', (WidgetTester tester) async {
+    final mockupReport = ReportEntity(
+      id: 'rep-mockup',
+      reportNumber: '920049',
+      citizenId: 'user-mockup',
+      citizenName: 'Hernán',
+      categoryId: 'waste_accumulation',
+      categoryName: 'Acumulación de basura',
+      categoryIcon: 'delete_outline_rounded',
+      description: 'Acumulación considerable de residuos sólidos en la vía pública obstaculizando el paso.',
+      priority: ReportPriority.medium,
+      status: ReportStatus.pending,
+      latitude: -12.046,
+      longitude: -77.042,
+      address: 'Rafael Narvaez 278',
+      reference: 'hgfghfhgfjfgjfhgh',
+      imageUrls: const [],
+      createdAt: DateTime(2026, 10, 15, 3, 9),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: ReportDetailScreen(
+            reportId: mockupReport.id,
+            initialReport: mockupReport,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 1. Tarjeta de fotografía vacía
+    expect(find.text('Sin fotografía adjunta'), findsOneWidget);
+    expect(find.byIcon(Icons.image_outlined), findsOneWidget);
+
+    // 2. Tarjeta resumen: ID con prefijo '#', badge, categoría, dirección y referencia
+    expect(find.text('#920049'), findsOneWidget);
+    expect(find.text('En revisión'), findsWidgets); // En badge y en tarjeta de detalles
+    expect(find.text('Acumulación de basura'), findsOneWidget);
+    expect(find.text('Rafael Narvaez 278'), findsOneWidget);
+    expect(find.text('Ref: hgfghfhgfjfgjfhgh'), findsOneWidget);
+
+    // 3. Tarjeta de detalles: Descripción y Fecha de reporte
+    expect(find.text('Descripción'), findsOneWidget);
+    expect(find.text(mockupReport.description), findsOneWidget);
+    expect(find.text('Fecha de reporte'), findsOneWidget);
+    expect(find.text('15 oct. 2026 - 3:09 a. m.'), findsWidgets);
+
+    // 4. Métricas en 2 columnas: Prioridad "Media" y Estado "En revisión"
+    expect(find.text('Prioridad'), findsOneWidget);
+    expect(find.text('Media'), findsOneWidget);
+    expect(find.text('Estado'), findsOneWidget);
+    expect(find.byIcon(Icons.wb_sunny_rounded), findsOneWidget);
+
+    // 5. Historial de estados (Timeline)
+    expect(find.text('Historial de estados'), findsOneWidget);
+    expect(find.text('15 oct. 2026 - 3:54 a. m.'), findsOneWidget);
+    expect(find.text('15 oct. 2026 - 5:09 a. m.'), findsOneWidget);
+  });
 }
