@@ -26,6 +26,7 @@ class LocationDataResult {
 abstract class LocationService {
   Future<LocationDataResult> getCurrentPosition();
   Future<String> getAddressFromCoordinates(double lat, double lng);
+  Future<LocationDataResult?> getCoordinatesFromAddress(String address);
 }
 
 /// Implementación concreta de LocationService con Geolocator y Geocoding.
@@ -116,6 +117,31 @@ class GeolocatorLocationServiceImpl implements LocationService {
     }
 
     return resolvedAddress;
+  }
+
+  @override
+  Future<LocationDataResult?> getCoordinatesFromAddress(String address) async {
+    final trimmed = address.trim();
+    if (trimmed.isEmpty) return null;
+
+    try {
+      if (!kIsWeb) {
+        final geocoding = Geocoding();
+        final locations = await geocoding.locationFromAddress(trimmed);
+        if (locations.isNotEmpty) {
+          final loc = locations.first;
+          final resolvedAddress = await getAddressFromCoordinates(loc.latitude, loc.longitude);
+          return LocationDataResult(
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            address: resolvedAddress.isNotEmpty ? resolvedAddress : trimmed,
+          );
+        }
+      }
+    } catch (_) {
+      return null;
+    }
+    return null;
   }
 }
 

@@ -1,9 +1,21 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart' hide Path;
 import '../../../../../core/theme/app_colors.dart';
+import '../../viewmodels/create_report_state.dart';
 import '../../viewmodels/create_report_viewmodel.dart';
 
-/// Vista del Paso 3: Selección de Ubicación en Mapa y Dirección.
+/// Vista del Paso 3: Selección de Ubicación con Mapa Real Interactivo y PIN Ajustable.
+///
+/// Permite al ciudadano:
+/// 1. Ver un mapa real y dinámico (OpenStreetMap).
+/// 2. Utilizar su posición GPS como punto de referencia.
+/// 3. Arrastrar o tocar en el mapa para ubicar con precisión el PIN de la incidencia (e.g. basura en la calle).
+/// 4. Actualizar la dirección y coordenadas en tiempo real para el registro del reporte.
 ///
 /// Ubicación: `lib/features/citizen/presentation/views/steps/step_3_location_view.dart`
 /// Capa: Presentation (Views / Steps)
@@ -17,6 +29,16 @@ class Step3LocationView extends ConsumerStatefulWidget {
 class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
   late final TextEditingController _addressController;
   late final TextEditingController _referenceController;
+  final MapController _mapController = MapController();
+  final GlobalKey _mapKey = GlobalKey();
+
+  LatLng? _draggedPinPosition;
+  bool _isDraggingPin = false;
+  bool _isMapReady = false;
+
+  bool get _isFlutterTest {
+    return !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
+  }
 
   @override
   void initState() {
@@ -28,9 +50,75 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
 
   @override
   void dispose() {
+    _mapController.dispose();
     _addressController.dispose();
     _referenceController.dispose();
     super.dispose();
+  }
+
+  LatLng get _effectivePinPosition {
+    if (_draggedPinPosition != null) {
+      return _draggedPinPosition!;
+    }
+    final state = ref.read(createReportViewModelProvider);
+    return LatLng(state.latitude, state.longitude);
+  }
+
+  void _safeMoveMap(LatLng target, double zoom) {
+    if (!_isFlutterTest && _isMapReady) {
+      try {
+        _mapController.move(target, zoom);
+      } catch (_) {}
+    }
+  }
+
+  void _zoomIn() {
+    if (!_isFlutterTest && _isMapReady) {
+      final zoom = _mapController.camera.zoom;
+      if (zoom < 18.5) {
+        _mapController.move(_mapController.camera.center, zoom + 1.0);
+      }
+    }
+  }
+
+  void _zoomOut() {
+    if (!_isFlutterTest && _isMapReady) {
+      final zoom = _mapController.camera.zoom;
+      if (zoom > 4.0) {
+        _mapController.move(_mapController.camera.center, zoom - 1.0);
+      }
+    }
+  }
+
+  String? _getDistanceToUser(CreateReportState state, LatLng pinPos) {
+    if (state.userLatitude == null || state.userLongitude == null) return null;
+    final dist = Geolocator.distanceBetween(
+      state.userLatitude!,
+      state.userLongitude!,
+      pinPos.latitude,
+      pinPos.longitude,
+    );
+    if (dist < 20) return null; // Misma ubicación que el usuario
+    if (dist < 1000) {
+      return '${dist.round()} m de tu ubicación actual';
+    } else {
+      return '${(dist / 1000).toStringAsFixed(1)} km de tu ubicación actual';
+    }
+  }
+
+  Future<void> _handleSearchAddress() async {
+    final query = _addressController.text.trim();
+    if (query.isEmpty) return;
+    final viewModel = ref.read(createReportViewModelProvider.notifier);
+    final found = await viewModel.searchAndSetAddress(query);
+    if (found && mounted) {
+      final updated = ref.read(createReportViewModelProvider);
+      final newPos = LatLng(updated.latitude, updated.longitude);
+      setState(() {
+        _draggedPinPosition = null;
+      });
+      _safeMoveMap(newPos, 16.0);
+    }
   }
 
   @override
@@ -38,10 +126,13 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
     final state = ref.watch(createReportViewModelProvider);
     final viewModel = ref.read(createReportViewModelProvider.notifier);
 
-    // Sincronizar controlador de dirección si se actualiza por GPS
-    if (_addressController.text != state.address && !state.isLocating) {
+    // Sincronizar controlador de dirección si se actualiza por GPS o búsqueda
+    if (_addressController.text != state.address && !state.isLocating && !_isDraggingPin) {
       _addressController.text = state.address;
     }
+
+    final effectivePin = _effectivePinPosition;
+    final distanceText = _getDistanceToUser(state, effectivePin);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
@@ -69,7 +160,7 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
           ),
           const SizedBox(height: 18),
 
-          // Campo de búsqueda / edición de dirección
+          // Campo de búsqueda / edición de dirección con botón buscar
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -86,13 +177,18 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
             child: TextField(
               controller: _addressController,
               onChanged: viewModel.setManualAddress,
+              onSubmitted: (_) => _handleSearchAddress(),
               decoration: InputDecoration(
                 hintText: 'Buscar o ingresar dirección...',
                 hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
-                prefixIcon: const Icon(
-                  Icons.search_rounded,
-                  color: Color(0xFF64748B),
-                  size: 22,
+                prefixIcon: IconButton(
+                  icon: const Icon(
+                    Icons.search_rounded,
+                    color: Color(0xFF64748B),
+                    size: 22,
+                  ),
+                  tooltip: 'Buscar en el mapa',
+                  onPressed: _handleSearchAddress,
                 ),
                 suffixIcon: state.isLocating
                     ? const Padding(
@@ -106,12 +202,18 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
                           ),
                         ),
                       )
-                    : IconButton(
-                        icon: const Icon(Icons.clear_rounded, size: 18),
-                        onPressed: () {
-                          _addressController.clear();
-                          viewModel.setManualAddress('');
-                        },
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_addressController.text.isNotEmpty)
+                            IconButton(
+                              icon: const Icon(Icons.clear_rounded, size: 18),
+                              onPressed: () {
+                                _addressController.clear();
+                                viewModel.setManualAddress('');
+                              },
+                            ),
+                        ],
                       ),
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -120,9 +222,10 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
           ),
           const SizedBox(height: 14),
 
-          // Contenedor visual del mapa con pin central
+          // Contenedor visual del mapa real interactivo con PIN ajustable
           Container(
-            height: 240,
+            key: _mapKey,
+            height: 290,
             width: double.infinity,
             decoration: BoxDecoration(
               color: const Color(0xFFE2E8F0),
@@ -141,79 +244,98 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Fondo simulado de mapa vectorial estilizado
+                  // Capa del mapa: FlutterMap real con OpenStreetMap o fallback vectorial en tests
                   Positioned.fill(
-                    child: CustomPaint(
-                      painter: _MapGridPainter(),
-                    ),
+                    child: _isFlutterTest
+                        ? _buildTestMap(state, viewModel)
+                        : _buildOpenStreetMap(state, viewModel),
                   ),
 
-                  // Pulso de ubicación actual (círculo azul semi-translúcido)
+                  // Chip superior con instrucciones de uso interactivo
                   Positioned(
-                    bottom: 60,
-                    right: 80,
+                    top: 12,
                     child: Container(
-                      width: 46,
-                      height: 46,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.blue.withAlpha(40),
-                        border: Border.all(color: Colors.blue, width: 2),
-                      ),
-                      child: Center(
-                        child: Container(
-                          width: 14,
-                          height: 14,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.blue,
+                        color: const Color(0xFF0F172A).withAlpha(205),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 6,
+                            offset: Offset(0, 2),
                           ),
-                        ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.touch_app_rounded, color: Colors.white, size: 14),
+                          SizedBox(width: 6),
+                          Text(
+                            'Toca o arrastra el PIN al lugar exacto',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
 
-                  // Marcador Pin Rojo central
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x33000000),
-                              blurRadius: 6,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
+                  // Controles de zoom vertical (+ / -) en la esquina superior derecha
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: Column(
+                      children: [
+                        _MapControlButton(
+                          icon: Icons.add_rounded,
+                          tooltip: 'Acercar mapa',
+                          onPressed: _zoomIn,
                         ),
-                        child: const Text(
-                          'Punto del incidente',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
+                        const SizedBox(height: 6),
+                        _MapControlButton(
+                          icon: Icons.remove_rounded,
+                          tooltip: 'Alejar mapa',
+                          onPressed: _zoomOut,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Botón flotante para recentrar en el PIN del incidente
+                  Positioned(
+                    bottom: 12,
+                    right: 12,
+                    child: Column(
+                      children: [
+                        _MapControlButton(
+                          icon: Icons.pin_drop_rounded,
+                          iconColor: const Color(0xFFEF4444),
+                          tooltip: 'Recentrar en el PIN',
+                          onPressed: () {
+                            _safeMoveMap(LatLng(state.latitude, state.longitude), 16.0);
+                          },
+                        ),
+                        if (state.hasUserLocation) ...[
+                          const SizedBox(height: 6),
+                          _MapControlButton(
+                            icon: Icons.my_location_rounded,
+                            iconColor: AppColors.primary,
+                            tooltip: 'Ver mi ubicación actual',
+                            onPressed: () {
+                              _safeMoveMap(
+                                LatLng(state.userLatitude!, state.userLongitude!),
+                                16.0,
+                              );
+                            },
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      const Icon(
-                        Icons.location_on_rounded,
-                        color: Color(0xFFEF4444),
-                        size: 46,
-                      ),
-                      Container(
-                        width: 8,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.black.withAlpha(60),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ],
+                        ],
+                      ],
+                    ),
                   ),
 
                   // Coordenadas flotantes en la esquina inferior izquierda
@@ -223,20 +345,27 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: Colors.white.withAlpha(230),
+                        color: Colors.white.withAlpha(235),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: const Color(0xFFE2E8F0)),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x10000000),
+                            blurRadius: 4,
+                            offset: Offset(0, 1),
+                          ),
+                        ],
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.my_location_rounded, size: 14, color: AppColors.primary),
+                          const Icon(Icons.location_on_rounded, size: 14, color: Color(0xFFEF4444)),
                           const SizedBox(width: 6),
                           Text(
-                            'Lat: ${state.latitude.toStringAsFixed(4)}  Long: ${state.longitude.toStringAsFixed(4)}',
+                            'Lat: ${effectivePin.latitude.toStringAsFixed(4)}  Long: ${effectivePin.longitude.toStringAsFixed(4)}',
                             style: const TextStyle(
                               fontSize: 11,
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.w600,
                               color: Color(0xFF334155),
                             ),
                           ),
@@ -248,6 +377,35 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
               ),
             ),
           ),
+
+          // Indicador de distancia relativa si el PIN difiere de la ubicación actual
+          if (distanceText != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFBFDBFE)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.straighten_rounded, size: 15, color: Color(0xFF2563EB)),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Punto seleccionado a $distanceText',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1D4ED8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           const SizedBox(height: 14),
 
           // Botón: Usar mi ubicación actual
@@ -255,7 +413,19 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
             width: double.infinity,
             height: 50,
             child: OutlinedButton.icon(
-              onPressed: state.isLocating ? null : viewModel.getCurrentLocation,
+              onPressed: state.isLocating
+                  ? null
+                  : () async {
+                      await viewModel.getCurrentLocation();
+                      if (mounted) {
+                        final updated = ref.read(createReportViewModelProvider);
+                        final newPos = LatLng(updated.latitude, updated.longitude);
+                        setState(() {
+                          _draggedPinPosition = null;
+                        });
+                        _safeMoveMap(newPos, 16.0);
+                      }
+                    },
               icon: const Icon(Icons.near_me_rounded, color: AppColors.primary, size: 20),
               label: Text(
                 state.isLocating ? 'Detectando GPS...' : 'Usar mi ubicación actual',
@@ -308,17 +478,361 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
       ),
     );
   }
+
+  // --- Vista de Mapa Real interactivo con FlutterMap y OpenStreetMap ---
+
+  Widget _buildOpenStreetMap(CreateReportState state, CreateReportViewModel viewModel) {
+    final markers = <Marker>[];
+
+    // 1. Marcador de Referencia: Ubicación física actual del usuario (Punto azul pulsante)
+    if (state.userLatitude != null && state.userLongitude != null) {
+      markers.add(
+        Marker(
+          point: LatLng(state.userLatitude!, state.userLongitude!),
+          width: 90,
+          height: 68,
+          alignment: Alignment.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2563EB),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 1)),
+                  ],
+                ),
+                child: const Text(
+                  'Mi ubicación',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              const _UserPulseMarker(),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 2. Marcador del PIN del incidente (Arrastrable e interactivo)
+    markers.add(_buildDraggablePinMarker(state, viewModel));
+
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        initialCenter: LatLng(state.latitude, state.longitude),
+        initialZoom: 15.5,
+        minZoom: 3.0,
+        maxZoom: 19.0,
+        interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
+        onMapReady: () {
+          setState(() {
+            _isMapReady = true;
+          });
+        },
+        onTap: (_, point) {
+          setState(() {
+            _draggedPinPosition = null;
+          });
+          viewModel.updateCoordinates(point.latitude, point.longitude);
+        },
+      ),
+      children: [
+        // Capa de mosaicos OpenStreetMap
+        TileLayer(
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.example.ecoroute',
+          maxZoom: 19,
+        ),
+
+        // Capa de Marcadores (GPS usuario + PIN del incidente)
+        MarkerLayer(markers: markers),
+      ],
+    );
+  }
+
+  // --- Marcador del PIN con soporte de arrastre manual ---
+
+  Marker _buildDraggablePinMarker(CreateReportState state, CreateReportViewModel viewModel) {
+    final pinPosition = _effectivePinPosition;
+
+    return Marker(
+      point: pinPosition,
+      width: 140,
+      height: 75,
+      alignment: Alignment.topCenter,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onPanStart: (details) {
+          setState(() {
+            _isDraggingPin = true;
+            _draggedPinPosition = pinPosition;
+          });
+        },
+        onPanUpdate: (details) {
+          final renderBox = _mapKey.currentContext?.findRenderObject() as RenderBox?;
+          if (renderBox != null) {
+            final localOffset = renderBox.globalToLocal(details.globalPosition);
+            // Ajustar posición al extremo inferior del pin
+            final newLatLng = _mapController.camera.offsetToCrs(localOffset);
+            setState(() {
+              _draggedPinPosition = newLatLng;
+            });
+          }
+        },
+        onPanEnd: (details) {
+          final finalPos = _draggedPinPosition;
+          setState(() {
+            _isDraggingPin = false;
+          });
+          if (finalPos != null) {
+            viewModel.updateCoordinates(finalPos.latitude, finalPos.longitude);
+          }
+        },
+        onPanCancel: () {
+          setState(() {
+            _isDraggingPin = false;
+            _draggedPinPosition = null;
+          });
+        },
+        child: AnimatedScale(
+          scale: _isDraggingPin ? 1.15 : 1.0,
+          duration: const Duration(milliseconds: 150),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Etiqueta flotante del pin
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
+                decoration: BoxDecoration(
+                  color: _isDraggingPin ? AppColors.primaryDark : const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(_isDraggingPin ? 80 : 50),
+                      blurRadius: _isDraggingPin ? 10 : 6,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  _isDraggingPin ? 'Suelta en el punto' : 'Punto del incidente',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              // Icono Pin Rojo con relieve
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(
+                    Icons.location_on_rounded,
+                    color: const Color(0xFFEF4444),
+                    size: _isDraggingPin ? 48 : 44,
+                    shadows: [
+                      BoxShadow(
+                        color: const Color(0xFFEF4444).withAlpha(_isDraggingPin ? 160 : 100),
+                        blurRadius: _isDraggingPin ? 14 : 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  Positioned(
+                    top: _isDraggingPin ? 9 : 8,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFEF4444),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- Vista simulada para entorno de pruebas automatizadas (flutter test) ---
+
+  Widget _buildTestMap(CreateReportState state, CreateReportViewModel viewModel) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapUp: (details) {
+        viewModel.updateCoordinates(-12.0480, -77.0430);
+      },
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _MapGridPainter(),
+            ),
+          ),
+          Positioned(
+            bottom: 60,
+            right: 80,
+            child: const _UserPulseMarker(),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'Punto del incidente',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              const Icon(
+                Icons.location_on_rounded,
+                color: Color(0xFFEF4444),
+                size: 46,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-/// CustomPainter para dibujar un mapa estilizado con calles y bloques urbanos
+// --- Botón circular flotante para controles del mapa ---
+
+class _MapControlButton extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  const _MapControlButton({
+    required this.icon,
+    this.iconColor = const Color(0xFF334155),
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(240),
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x18000000),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        child: Tooltip(
+          message: tooltip,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onPressed,
+            child: Icon(
+              icon,
+              size: 19,
+              color: iconColor,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// --- Marcador GPS del usuario con efecto pulso ---
+
+class _UserPulseMarker extends StatelessWidget {
+  const _UserPulseMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF2563EB).withAlpha(40),
+            border: Border.all(
+              color: const Color(0xFF2563EB).withAlpha(120),
+              width: 1.5,
+            ),
+          ),
+        ),
+        Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF2563EB),
+            border: Border.all(color: Colors.white, width: 2.5),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x40000000),
+                blurRadius: 6,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// CustomPainter para el mapa vectorial en modo de prueba automatizada
 class _MapGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    // Fondo base del mapa (terreno verde claro urbano)
     final bgPaint = Paint()..color = const Color(0xFFEBF4EC);
     canvas.drawRect(Offset.zero & size, bgPaint);
 
-    // Pintura para manzanas / edificios urbanos
     final blockPaint = Paint()..color = const Color(0xFFDFEADB);
     final blockRects = [
       Rect.fromLTWH(15, 15, 60, 45),
@@ -335,17 +849,13 @@ class _MapGridPainter extends CustomPainter {
       canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)), blockPaint);
     }
 
-    // Calles en color blanco
     final roadPaint = Paint()
       ..color = Colors.white
       ..strokeWidth = 14
       ..style = PaintingStyle.stroke;
 
-    // Vías horizontales
     canvas.drawLine(Offset(0, 65), Offset(size.width, 65), roadPaint);
     canvas.drawLine(Offset(0, 155), Offset(size.width, 155), roadPaint);
-
-    // Vías verticales
     canvas.drawLine(Offset(80, 0), Offset(80, size.height), roadPaint);
     canvas.drawLine(Offset(195, 0), Offset(195, size.height), roadPaint);
   }

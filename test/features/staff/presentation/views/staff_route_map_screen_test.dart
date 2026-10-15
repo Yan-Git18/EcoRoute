@@ -39,6 +39,15 @@ class MockStaffLocationService implements LocationService {
   Future<String> getAddressFromCoordinates(double lat, double lng) async {
     return 'Base de Operaciones Municipal';
   }
+
+  @override
+  Future<LocationDataResult?> getCoordinatesFromAddress(String address) async {
+    return const LocationDataResult(
+      latitude: -12.046374,
+      longitude: -77.042793,
+      address: 'Base de Operaciones Municipal',
+    );
+  }
 }
 
 class MockStaffRepository implements StaffRepository {

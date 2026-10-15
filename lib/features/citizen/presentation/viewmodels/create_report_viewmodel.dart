@@ -155,13 +155,15 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
     state = state.copyWith(
       latitude: result.latitude,
       longitude: result.longitude,
+      userLatitude: result.latitude,
+      userLongitude: result.longitude,
       address: result.address ?? 'Av. Las Palmeras 412, Centro',
       isLocating: false,
       errorMessage: result.errorMessage,
     );
   }
 
-  /// Actualiza coordenadas y busca dirección vía geocoding
+  /// Actualiza coordenadas del incidente y busca dirección vía geocoding inverso
   Future<void> updateCoordinates(double lat, double lng) async {
     state = state.copyWith(
       latitude: lat,
@@ -177,6 +179,29 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
       address: address,
       isLocating: false,
     );
+  }
+
+  /// Busca una dirección por texto y ubica el pin en sus coordenadas
+  Future<bool> searchAndSetAddress(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return false;
+    state = state.copyWith(isLocating: true, clearError: true);
+    final result = await _locationService.getCoordinatesFromAddress(trimmed);
+    if (result != null) {
+      state = state.copyWith(
+        latitude: result.latitude,
+        longitude: result.longitude,
+        address: result.address ?? trimmed,
+        isLocating: false,
+      );
+      return true;
+    } else {
+      state = state.copyWith(
+        isLocating: false,
+        errorMessage: 'No se encontró la dirección "$trimmed".',
+      );
+      return false;
+    }
   }
 
   void setManualAddress(String address) {

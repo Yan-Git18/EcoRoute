@@ -23,6 +23,15 @@ class FakeLocationService implements LocationService {
   Future<String> getAddressFromCoordinates(double lat, double lng) async {
     return 'Plaza Mayor de Lima';
   }
+
+  @override
+  Future<LocationDataResult?> getCoordinatesFromAddress(String address) async {
+    return const LocationDataResult(
+      latitude: -12.046374,
+      longitude: -77.042793,
+      address: 'Plaza Mayor de Lima',
+    );
+  }
 }
 
 class FakeReportRepository implements ReportRepository {

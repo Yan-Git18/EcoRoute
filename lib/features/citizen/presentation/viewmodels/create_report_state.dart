@@ -16,6 +16,8 @@ class CreateReportState {
   final Uint8List? imageBytes;
   final double latitude;
   final double longitude;
+  final double? userLatitude;
+  final double? userLongitude;
   final String address;
   final String reference;
   final String description;
@@ -34,6 +36,8 @@ class CreateReportState {
     this.imageBytes,
     this.latitude = -12.046374, // Coordenadas por defecto de ejemplo (Lima Centro)
     this.longitude = -77.042793,
+    this.userLatitude,
+    this.userLongitude,
     this.address = 'Cargando ubicación...',
     this.reference = '',
     this.description = '',
@@ -44,6 +48,8 @@ class CreateReportState {
     this.createdReportNumber,
     this.errorMessage,
   });
+
+  bool get hasUserLocation => userLatitude != null && userLongitude != null;
 
   bool get canAdvanceFromStep1 => selectedCategory != null;
   bool get canAdvanceFromStep2 => true; // La fotografía es altamente recomendada pero no bloqueante
@@ -60,6 +66,8 @@ class CreateReportState {
     Uint8List? imageBytes,
     double? latitude,
     double? longitude,
+    double? userLatitude,
+    double? userLongitude,
     String? address,
     String? reference,
     String? description,
@@ -79,6 +87,8 @@ class CreateReportState {
       imageBytes: clearImage ? null : (imageBytes ?? this.imageBytes),
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
+      userLatitude: userLatitude ?? this.userLatitude,
+      userLongitude: userLongitude ?? this.userLongitude,
       address: address ?? this.address,
       reference: reference ?? this.reference,
       description: description ?? this.description,
