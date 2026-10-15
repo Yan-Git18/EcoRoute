@@ -1,4 +1,5 @@
 import 'package:geolocator/geolocator.dart';
+import '../../../../core/constants/geo_constants.dart';
 import '../../../../core/enums/report_filter.dart';
 import '../../domain/entities/report_entity.dart';
 
@@ -26,9 +27,9 @@ class CitizenMapState {
     this.searchQuery = '',
     this.selectedFilter = ReportFilter.all,
     this.selectedReport,
-    this.userLatitude = -12.046374,
-    this.userLongitude = -77.042793,
-    this.userAddress = 'Centro de la Ciudad',
+    this.userLatitude = AppGeoConstants.cajamarcaCenterLat,
+    this.userLongitude = AppGeoConstants.cajamarcaCenterLng,
+    this.userAddress = 'Centro de Cajamarca',
     this.isListView = false,
     this.errorMessage,
   });

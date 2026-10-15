@@ -1,10 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../../core/constants/geo_constants.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../domain/entities/staff_task_entity.dart';
 
 /// DTO para la serialización de tareas del Personal en Cloud Firestore.
-///
-/// Ubicación: `lib/features/staff/data/models/staff_task_dto.dart`
 /// Capa: Data (Models)
 class StaffTaskDto {
   final String id;
@@ -54,6 +53,17 @@ class StaffTaskDto {
       return DateTime.now();
     }
 
+    final rawLat = (map['latitude'] as num?)?.toDouble() ?? 0.0;
+    final rawLng = (map['longitude'] as num?)?.toDouble() ?? 0.0;
+    final hasValidGeo = rawLat != 0.0 &&
+        rawLng != 0.0 &&
+        AppGeoConstants.isInsideCajamarca(rawLat, rawLng);
+
+    final rawAddress = map['address'] as String?;
+    final resolvedAddress = (rawAddress != null && rawAddress.trim().isNotEmpty && rawAddress != 'Ubicación registrada')
+        ? rawAddress.trim()
+        : AppGeoConstants.defaultAddress;
+
     return StaffTaskDto(
       id: id,
       reportNumber: map['reportNumber'] as String? ?? '#0000',
@@ -65,9 +75,9 @@ class StaffTaskDto {
       description: map['description'] as String? ?? '',
       priority: map['priority'] as String? ?? 'medium',
       status: map['status'] as String? ?? 'assigned',
-      address: map['address'] as String? ?? 'Ubicación registrada',
-      latitude: (map['latitude'] as num?)?.toDouble() ?? 0.0,
-      longitude: (map['longitude'] as num?)?.toDouble() ?? 0.0,
+      address: resolvedAddress,
+      latitude: hasValidGeo ? rawLat : AppGeoConstants.cajamarcaCenterLat,
+      longitude: hasValidGeo ? rawLng : AppGeoConstants.cajamarcaCenterLng,
       reportImageUrls: (map['imageUrls'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??

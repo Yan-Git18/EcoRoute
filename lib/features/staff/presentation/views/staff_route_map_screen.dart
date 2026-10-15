@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart' hide Path;
+import '../../../../core/constants/geo_constants.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -17,6 +18,7 @@ import '../widgets/staff_complete_task_sheet.dart';
 
 /// Pantalla del Mapa Operativo de Rutas para la Cuadrilla de Limpieza (Fase 2).
 ///
+/// Delimitado exclusivamente a la cobertura urbana de Cajamarca, Perú mediante [AppGeoConstants].
 /// Utiliza [FlutterMap] con OpenStreetMap para mostrar la ubicación GPS actual del operario,
 /// los puntos de recolección geolocalizados, el trazado del circuito sugerido y una tarjeta
 /// interactiva de acción directa para atender o completar tareas.
@@ -34,12 +36,12 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
   final MapController _mapController = MapController();
   final TransformationController _desktopTransformController = TransformationController();
 
-  double _userLat = -12.046374;
-  double _userLng = -77.042793;
+  double _userLat = AppGeoConstants.cajamarcaCenterLat;
+  double _userLng = AppGeoConstants.cajamarcaCenterLng;
   bool _isLocating = false;
   StaffTaskEntity? _selectedTask;
 
-  // Tareas de demostración para visualización inicial si la base de datos está vacía
+  // Tareas de demostración geolocalizadas estrictamente en Cajamarca, Perú
   static final List<StaffTaskEntity> _defaultDemoTasks = [
     StaffTaskEntity(
       id: 'task-demo-1',
@@ -48,12 +50,12 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
       citizenName: 'Vecino Ciudadano',
       categoryName: 'Contenedor lleno',
       categoryIcon: 'delete_outline_rounded',
-      description: 'Contenedor saturado en la avenida principal.',
+      description: 'Contenedor saturado en Jr. Del Comercio.',
       priority: ReportPriority.high,
       status: ReportStatus.pending,
-      address: 'Av. Los Próceres 452',
-      latitude: -12.0440,
-      longitude: -77.0400,
+      address: 'Jr. Del Comercio 620, Centro Histórico',
+      latitude: -7.1580,
+      longitude: -78.5180,
       reportImageUrls: const [],
       assignedAt: DateTime.now().subtract(const Duration(hours: 1)),
     ),
@@ -67,9 +69,9 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
       description: 'Restos de poda y bolsas en vereda.',
       priority: ReportPriority.medium,
       status: ReportStatus.pending,
-      address: 'Jr. Amazonas 120',
-      latitude: -12.0480,
-      longitude: -77.0415,
+      address: 'Jr. Amazonas 450, Cajamarca',
+      latitude: -7.1565,
+      longitude: -78.5160,
       reportImageUrls: const [],
       assignedAt: DateTime.now().subtract(const Duration(hours: 2)),
     ),
@@ -83,9 +85,9 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
       description: 'Limpieza periódica de contenedores verdes.',
       priority: ReportPriority.low,
       status: ReportStatus.pending,
-      address: 'Parque Central',
-      latitude: -12.0510,
-      longitude: -77.0440,
+      address: 'Plaza de Armas de Cajamarca',
+      latitude: -7.1578,
+      longitude: -78.5175,
       reportImageUrls: const [],
       assignedAt: DateTime.now().subtract(const Duration(hours: 3)),
     ),
@@ -99,9 +101,9 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
       description: 'Cuadrilla atendiendo en zona con camión recolector.',
       priority: ReportPriority.high,
       status: ReportStatus.inProgress,
-      address: 'Calle Los Pinos 88',
-      latitude: -12.0430,
-      longitude: -77.0460,
+      address: 'Jr. Dos de Mayo 780, Cajamarca',
+      latitude: -7.1610,
+      longitude: -78.5210,
       reportImageUrls: const [],
       assignedAt: DateTime.now().subtract(const Duration(hours: 5)),
     ),
@@ -131,8 +133,13 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
       final result = await locService.getCurrentPosition();
       if (mounted) {
         setState(() {
-          _userLat = result.latitude;
-          _userLng = result.longitude;
+          if (AppGeoConstants.isInsideCajamarca(result.latitude, result.longitude)) {
+            _userLat = result.latitude;
+            _userLng = result.longitude;
+          } else {
+            _userLat = AppGeoConstants.cajamarcaCenterLat;
+            _userLng = AppGeoConstants.cajamarcaCenterLng;
+          }
           _isLocating = false;
         });
       }
@@ -145,9 +152,30 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
 
   void _recenterMap() {
     if (!_isFlutterTest) {
-      _mapController.move(LatLng(_userLat, _userLng), 15.0);
+      final target = AppGeoConstants.isInsideCajamarca(_userLat, _userLng)
+          ? LatLng(_userLat, _userLng)
+          : AppGeoConstants.cajamarcaCenter;
+      _mapController.move(target, AppGeoConstants.defaultZoom);
     } else {
       _desktopTransformController.value = Matrix4.identity();
+    }
+  }
+
+  void _zoomIn() {
+    if (!_isFlutterTest) {
+      final zoom = _mapController.camera.zoom;
+      if (zoom < AppGeoConstants.maxZoom) {
+        _mapController.move(_mapController.camera.center, zoom + 1.0);
+      }
+    }
+  }
+
+  void _zoomOut() {
+    if (!_isFlutterTest) {
+      final zoom = _mapController.camera.zoom;
+      if (zoom > AppGeoConstants.minZoom) {
+        _mapController.move(_mapController.camera.center, zoom - 1.0);
+      }
     }
   }
 
@@ -282,8 +310,8 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
                           ),
                           Text(
                             activeTasks.isEmpty
-                                ? 'Todas las paradas han sido atendidas.'
-                                : 'Ruta activa optimizada para tu personal.',
+                                ? 'Todas las paradas en Cajamarca han sido atendidas.'
+                                : 'Ruta urbana activa en Cajamarca.',
                             style: const TextStyle(
                               fontSize: 11.5,
                               color: Color(0xFF64748B),
@@ -313,7 +341,28 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
             ),
           ),
 
-          // 3. Botón flotante para recentrar en ubicación GPS del vehículo
+          // 3. Controles de Zoom vertical flotantes en la esquina superior derecha
+          Positioned(
+            top: 86,
+            right: 16,
+            child: Column(
+              children: [
+                _MapControlButton(
+                  icon: Icons.add_rounded,
+                  tooltip: 'Acercar mapa',
+                  onPressed: _zoomIn,
+                ),
+                const SizedBox(height: 6),
+                _MapControlButton(
+                  icon: Icons.remove_rounded,
+                  tooltip: 'Alejar mapa',
+                  onPressed: _zoomOut,
+                ),
+              ],
+            ),
+          ),
+
+          // 4. Botón flotante para recentrar en ubicación GPS del vehículo / Cajamarca
           Positioned(
             bottom: _selectedTask != null ? 220 : 20,
             right: 16,
@@ -326,7 +375,7 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
             ),
           ),
 
-          // 4. Tarjeta emergente flotante con la parada/incidencia seleccionada
+          // 5. Tarjeta emergente flotante con la parada/incidencia seleccionada
           if (_selectedTask != null)
             Positioned(
               bottom: 12,
@@ -381,22 +430,40 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
     );
   }
 
-  // --- Mapa real con flutter_map y OpenStreetMap ---
+  // --- Mapa real con flutter_map y OpenStreetMap delimitado a Cajamarca ---
 
   Widget _buildOpenStreetMap(List<StaffTaskEntity> activeTasks) {
+    final validUserPos = AppGeoConstants.isInsideCajamarca(_userLat, _userLng)
+        ? LatLng(_userLat, _userLng)
+        : AppGeoConstants.cajamarcaCenter;
+
+    // Sanitizar tareas para que siempre pertenezcan a la ciudad de Cajamarca
+    final validTasks = activeTasks.map((t) {
+      final isInside = t.latitude != 0.0 &&
+          t.longitude != 0.0 &&
+          AppGeoConstants.isInsideCajamarca(t.latitude, t.longitude);
+      if (isInside) return t;
+      return t.copyWith(
+        latitude: AppGeoConstants.cajamarcaCenterLat,
+        longitude: AppGeoConstants.cajamarcaCenterLng,
+        address: t.address == 'Ubicación registrada' ? AppGeoConstants.defaultAddress : t.address,
+      );
+    }).toList();
+
     final routePoints = <LatLng>[
-      LatLng(_userLat, _userLng),
-      for (final t in activeTasks)
+      validUserPos,
+      for (final t in validTasks)
         LatLng(t.latitude, t.longitude),
     ];
 
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
-        initialCenter: LatLng(_userLat, _userLng),
-        initialZoom: 14.5,
-        minZoom: 3.0,
-        maxZoom: 19.0,
+        initialCenter: validUserPos,
+        initialZoom: AppGeoConstants.defaultZoom,
+        minZoom: AppGeoConstants.minZoom,
+        maxZoom: AppGeoConstants.maxZoom,
+        cameraConstraint: AppGeoConstants.cameraConstraint,
         interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
         onTap: (_, __) => setState(() => _selectedTask = null),
       ),
@@ -408,7 +475,7 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
           maxZoom: 19,
         ),
 
-        // 2. Trazo de la ruta sugerida de recolección (Polilínea punteada/continua)
+        // 2. Trazo de la ruta sugerida de recolección (Polilínea continua de circuito en Cajamarca)
         if (routePoints.length > 1)
           PolylineLayer(
             polylines: [
@@ -422,12 +489,12 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
             ],
           ),
 
-        // 3. Marcadores de vehículos y paradas
+        // 3. Marcadores de vehículos y paradas dentro de Cajamarca
         MarkerLayer(
           markers: [
-            // Marcador GPS del vehículo / operario
+            // Marcador GPS del vehículo / cuadrilla en Cajamarca
             Marker(
-              point: LatLng(_userLat, _userLng),
+              point: validUserPos,
               width: 54,
               height: 54,
               alignment: Alignment.center,
@@ -435,8 +502,8 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
             ),
 
             // Marcadores de paradas pendientes numeradas
-            for (int i = 0; i < activeTasks.length; i++)
-              _buildStopMarker(activeTasks[i], stopNumber: i + 1),
+            for (int i = 0; i < validTasks.length; i++)
+              _buildStopMarker(validTasks[i], stopNumber: i + 1),
           ],
         ),
       ],
@@ -849,6 +916,52 @@ class _PriorityBadge extends StatelessWidget {
           fontSize: 11,
           fontWeight: FontWeight.w700,
           color: fg,
+        ),
+      ),
+    );
+  }
+}
+
+/// Botón circular flotante para controles del mapa (+ y -)
+class _MapControlButton extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  const _MapControlButton({
+    required this.icon,
+    this.iconColor = const Color(0xFF334155),
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(240),
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x18000000),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: Tooltip(
+            message: tooltip,
+            child: Icon(icon, color: iconColor, size: 20),
+          ),
         ),
       ),
     );

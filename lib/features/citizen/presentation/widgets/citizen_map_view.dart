@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' hide Path;
+import '../../../../core/constants/geo_constants.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/entities/report_entity.dart';
 
@@ -71,13 +72,18 @@ class CitizenMapViewState extends State<CitizenMapView> {
 
   /// Vista de Mapa Real interactivo con OpenStreetMap y flutter_map
   Widget _buildOpenStreetMap() {
+    final initialPos = AppGeoConstants.isInsideCajamarca(widget.userLatitude, widget.userLongitude)
+        ? LatLng(widget.userLatitude, widget.userLongitude)
+        : AppGeoConstants.cajamarcaCenter;
+
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
-        initialCenter: LatLng(widget.userLatitude, widget.userLongitude),
-        initialZoom: 14.5,
-        minZoom: 3.0,
-        maxZoom: 19.0,
+        initialCenter: initialPos,
+        initialZoom: AppGeoConstants.defaultZoom,
+        minZoom: AppGeoConstants.minZoom,
+        maxZoom: AppGeoConstants.maxZoom,
+        cameraConstraint: AppGeoConstants.cameraConstraint,
         interactionOptions: const InteractionOptions(
           flags: InteractiveFlag.all,
         ),

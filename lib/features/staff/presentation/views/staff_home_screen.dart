@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/constants/geo_constants.dart';
 import '../../../../core/enums/report_filter.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -14,7 +15,6 @@ import '../../domain/entities/staff_task_entity.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
 import '../widgets/staff_bottom_nav_bar.dart';
 import '../widgets/staff_complete_task_sheet.dart';
-import '../widgets/staff_shift_status_card.dart';
 import '../widgets/staff_shift_status_modal.dart';
 import '../widgets/staff_task_item_card.dart';
 
@@ -31,7 +31,7 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
   String _shiftStatus = 'En turno';
   final int _currentNavIndex = 0; // 'Inicio' activo en la pantalla principal
 
-  // Tareas de demostración para visualización inicial si la base de datos está vacía
+  // Tareas de demostración para Cajamarca, Perú si la base de datos está vacía
   static final List<StaffTaskEntity> _defaultDemoTasks = [
     StaffTaskEntity(
       id: 'task-demo-1',
@@ -40,12 +40,12 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
       citizenName: 'Vecino Ciudadano',
       categoryName: 'Contenedor lleno',
       categoryIcon: 'delete_outline_rounded',
-      description: 'Contenedor saturado en la avenida principal.',
+      description: 'Contenedor saturado en Jr. Del Comercio.',
       priority: ReportPriority.high,
       status: ReportStatus.pending,
       address: 'Av. Los Próceres 452',
-      latitude: -12.046,
-      longitude: -77.042,
+      latitude: -7.1580,
+      longitude: -78.5180,
       reportImageUrls: const [],
       assignedAt: DateTime.now(),
     ),
@@ -60,8 +60,8 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
       priority: ReportPriority.medium,
       status: ReportStatus.pending,
       address: 'Jr. Amazonas 120',
-      latitude: -12.047,
-      longitude: -77.043,
+      latitude: -7.1565,
+      longitude: -78.5160,
       reportImageUrls: const [],
       assignedAt: DateTime.now(),
     ),
@@ -76,8 +76,8 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
       priority: ReportPriority.low,
       status: ReportStatus.pending,
       address: 'Parque Central',
-      latitude: -12.048,
-      longitude: -77.044,
+      latitude: -7.1578,
+      longitude: -78.5175,
       reportImageUrls: const [],
       assignedAt: DateTime.now(),
     ),
@@ -92,8 +92,8 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
       priority: ReportPriority.medium,
       status: ReportStatus.pending,
       address: 'Av. Las Palmas 890',
-      latitude: -12.049,
-      longitude: -77.045,
+      latitude: -7.1610,
+      longitude: -78.5210,
       reportImageUrls: const [],
       assignedAt: DateTime.now(),
     ),
@@ -108,8 +108,8 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
       priority: ReportPriority.high,
       status: ReportStatus.inProgress,
       address: 'Calle Los Pinos 88',
-      latitude: -12.050,
-      longitude: -77.046,
+      latitude: -7.1520,
+      longitude: -78.5130,
       reportImageUrls: const [],
       assignedAt: DateTime.now(),
     ),
@@ -126,8 +126,8 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
         priority: ReportPriority.low,
         status: ReportStatus.resolved,
         address: 'Sector ${i + 1}',
-        latitude: -12.045,
-        longitude: -77.041,
+        latitude: -7.1600 - (i * 0.001),
+        longitude: -78.5150 - (i * 0.001),
         reportImageUrls: const [],
         assignedAt: DateTime.now().subtract(Duration(days: i + 1)),
       ),
@@ -183,6 +183,8 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
       }
     }
 
+    final urgentTask = allTasks.where((t) => t.isPending && t.priority == ReportPriority.high).firstOrNull;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -224,20 +226,160 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Tarjeta superior del Operario / Cuadrilla
-              StaffShiftStatusCard(
-                staffName: staffName,
-                shiftStatus: _shiftStatus,
-                statusColor: _getShiftStatusColor(),
-                onTapChangeStatus: () => StaffShiftStatusModal.show(
-                  context: context,
-                  currentStatus: _shiftStatus,
-                  onStatusSelected: (status) => setState(() => _shiftStatus = status),
+              // 1. Cabecera limpia y moderna del personal (reemplaza la tarjeta verde abultada)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          staffName,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
+                            letterSpacing: -0.4,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          children: const [
+                            Icon(Icons.shield_outlined, size: 14, color: Color(0xFF047857)),
+                            SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                'Cuadrilla Zona Norte',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+
+                  // Pill de control de estado de turno (discreto y elegante)
+                  InkWell(
+                    onTap: () => StaffShiftStatusModal.show(
+                      context: context,
+                      currentStatus: _shiftStatus,
+                      onStatusSelected: (status) => setState(() => _shiftStatus = status),
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x06000000),
+                            blurRadius: 4,
+                            offset: Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: _getShiftStatusColor(),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _shiftStatus,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: _getShiftStatusColor(),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Text(
+                            'Cambiar estado',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          const Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            size: 16,
+                            color: Color(0xFF64748B),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+
+              // 2. Información importante para el personal: Hero Card de Circuito Operativo en Cajamarca
+              _buildOperationalCircuitCard(
+                context: context,
+                pendingCount: pendingCount,
+                resolvedCount: resolvedCount,
+                totalCount: allTasks.length,
+              ),
+              const SizedBox(height: 18),
+
+              // 3. Alerta de incidencia prioritaria (si existe reporte de alta prioridad pendiente)
+              if (urgentTask != null) ...[
+                _buildUrgentTaskAlert(
+                  task: urgentTask,
+                  onTap: () => StaffCompleteTaskSheet.show(context, urgentTask),
                 ),
+                const SizedBox(height: 18),
+              ],
+
+              // 4. Acciones Operativas Rápidas
+              Row(
+                children: [
+                  Expanded(
+                    child: _OperationalActionCard(
+                      icon: Icons.map_rounded,
+                      iconColor: const Color(0xFF047857),
+                      iconBgColor: const Color(0xFFDCFCE7),
+                      title: 'Mapa de Ruta',
+                      subtitle: 'Circuito en Cajamarca',
+                      onTap: () => context.push(RouteNames.staffRouteMap),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _OperationalActionCard(
+                      icon: Icons.assignment_outlined,
+                      iconColor: const Color(0xFF2563EB),
+                      iconBgColor: const Color(0xFFEFF6FF),
+                      title: 'Todas las Tareas',
+                      subtitle: 'Gestión y filtros',
+                      onTap: () => context.push(RouteNames.staffTasks),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 24),
 
-              // 2. Sección "Mis tareas" con contadores de métricas
+              // 5. Sección "Mis tareas" con contadores de métricas
               EcoSectionHeader(
                 title: 'Mis tareas',
                 actionText: 'Ver todas',
@@ -283,7 +425,7 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
               ),
               const SizedBox(height: 24),
 
-              // 3. Sección "Siguiente tarea"
+              // 6. Sección "Siguiente tarea"
               if (nextTask != null) ...[
                 const EcoSectionHeader(title: 'Siguiente tarea'),
                 const SizedBox(height: 12),
@@ -296,7 +438,7 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
                 const SizedBox(height: 24),
               ],
 
-              // 4. Sección "Otras tareas"
+              // 7. Sección "Otras tareas"
               EcoSectionHeader(
                 title: 'Otras tareas',
                 actionText: 'Ver todas',
@@ -375,6 +517,273 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
             context.push(RouteNames.staffProfile);
           }
         },
+      ),
+    );
+  }
+
+  /// Tarjeta de Información Operativa Destacada (Circuito de Ruta y Camión)
+  Widget _buildOperationalCircuitCard({
+    required BuildContext context,
+    required int pendingCount,
+    required int resolvedCount,
+    required int totalCount,
+  }) {
+    final double progress = totalCount > 0 ? (resolvedCount / totalCount).clamp(0.0, 1.0) : 0.0;
+    final int percentage = (progress * 100).round();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF064E3B), Color(0xFF047857)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x28047857),
+            blurRadius: 14,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(40),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.local_shipping_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        'Circuito Cajamarca Centro',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      Text(
+                        'Camión #04 • Sector Urbano',
+                        style: TextStyle(
+                          color: Color(0xFFD1FAE5),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withAlpha(45),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$pendingCount pendientes',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Barra de progreso de recolección del día
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Progreso de paradas hoy',
+                    style: TextStyle(
+                      color: Color(0xFFD1FAE5),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    '$percentage% ($resolvedCount/$totalCount atendidas)',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 7),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 7,
+                  backgroundColor: Colors.white.withAlpha(45),
+                  valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF34D399)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Botón directo para abrir el mapa de ruta en Cajamarca
+          InkWell(
+            onTap: () => context.push(RouteNames.staffRouteMap),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x1A000000),
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(Icons.map_rounded, size: 16, color: Color(0xFF047857)),
+                  SizedBox(width: 8),
+                  Text(
+                    'Ver mapa de ruta en Cajamarca',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF047857),
+                    ),
+                  ),
+                  SizedBox(width: 4),
+                  Icon(Icons.arrow_forward_rounded, size: 16, color: Color(0xFF047857)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Banner de alerta para incidencias prioritarias
+  Widget _buildUrgentTaskAlert({
+    required StaffTaskEntity task,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFECACA), width: 1.2),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFEE2E2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.warning_amber_rounded,
+              color: Color(0xFFDC2626),
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDC2626),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'URGENTE',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      task.reportNumber,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${task.categoryName} • ${task.address}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF475569),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: onTap,
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text(
+              'Ver alerta',
+              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -488,6 +897,93 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Tarjeta compacta para acciones rápidas operativas del personal
+class _OperationalActionCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBgColor;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _OperationalActionCard({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBgColor,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x06000000),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: iconBgColor,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Center(
+                  child: Icon(icon, color: iconColor, size: 22),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
