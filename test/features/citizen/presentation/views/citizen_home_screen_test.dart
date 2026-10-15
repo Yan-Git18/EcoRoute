@@ -116,6 +116,15 @@ void main() {
     // 1. Marca y AppBar
     expect(find.text('EcoRoute'), findsOneWidget);
     expect(find.byIcon(Icons.notifications_none_rounded), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Image &&
+            widget.image is AssetImage &&
+            (widget.image as AssetImage).assetName == 'assets/images/logo_app.png',
+      ),
+      findsOneWidget,
+    );
 
     // 2. Saludo personalizado
     expect(find.text('¡Hola, Carlos!'), findsOneWidget);

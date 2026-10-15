@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/enums/report_filter.dart';
 import '../../../../core/router/route_names.dart';
-import '../../../../core/widgets/eco_logo_badge.dart';
 import '../../../../core/widgets/eco_notification_button.dart';
 import '../../../../core/widgets/eco_section_header.dart';
 import '../../../../core/widgets/eco_status_summary_card.dart';
@@ -48,10 +47,29 @@ class CitizenHomeScreen extends ConsumerWidget {
         automaticallyImplyLeading: false,
         titleSpacing: 20,
         title: Row(
-          children: const [
-            EcoLogoBadge(size: 38, iconSize: 22),
-            SizedBox(width: 10),
-            Text(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF000000),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(30),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1.5),
+                  ),
+                ],
+              ),
+              child: Image.asset(
+                'assets/images/logo_app.png',
+                fit: BoxFit.contain,
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text(
               'EcoRoute',
               style: TextStyle(
                 fontSize: 22,
