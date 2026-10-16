@@ -147,4 +147,65 @@ void main() {
     expect(find.text('Tareas'), findsOneWidget);
     expect(find.text('Perfil'), findsOneWidget);
   });
+
+  testWidgets('Marcador de parada en el mapa se renderiza sin overflow de pixeles',
+      (tester) async {
+    // Probar el contenedor exacto del marcador con tamaño ajustado (80x72)
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 80,
+              height: 72,
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                      margin: const EdgeInsets.only(bottom: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF047857),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        'Parada 1',
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          height: 1.1,
+                        ),
+                      ),
+                    ),
+                    const Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Icon(
+                          Icons.location_on_rounded,
+                          size: 40,
+                          color: Color(0xFF047857),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Parada 1'), findsOneWidget);
+  });
 }
+

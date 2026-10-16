@@ -516,83 +516,92 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
 
     return Marker(
       point: LatLng(task.latitude, task.longitude),
-      width: isSelected ? 80 : 50,
-      height: isSelected ? 82 : 56,
+      width: isSelected ? 90 : 80,
+      height: isSelected ? 84 : 72,
       alignment: Alignment.topCenter,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => setState(() => _selectedTask = task),
-        child: AnimatedScale(
-          scale: isSelected ? 1.15 : 1.0,
-          duration: const Duration(milliseconds: 200),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Badge de parada
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                margin: const EdgeInsets.only(bottom: 2),
-                decoration: BoxDecoration(
-                  color: isSelected ? const Color(0xFF0F172A) : pinColor,
-                  borderRadius: BorderRadius.circular(10),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x33000000),
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Text(
-                  isSelected ? task.reportNumber : 'Parada $stopNumber',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-
-              // Pin con icono
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  Icon(
-                    Icons.location_on_rounded,
-                    size: isSelected ? 46 : 40,
-                    color: pinColor,
-                    shadows: [
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: AnimatedScale(
+            scale: isSelected ? 1.15 : 1.0,
+            alignment: Alignment.bottomCenter,
+            duration: const Duration(milliseconds: 200),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                // Badge de parada
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                  margin: const EdgeInsets.only(bottom: 2),
+                  decoration: BoxDecoration(
+                    color: isSelected ? const Color(0xFF0F172A) : pinColor,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: const [
                       BoxShadow(
-                        color: pinColor.withAlpha(120),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
+                        color: Color(0x33000000),
+                        blurRadius: 4,
+                        offset: Offset(0, 2),
                       ),
                     ],
                   ),
-                  Positioned(
-                    top: isSelected ? 8 : 7,
-                    child: Container(
-                      width: 14,
-                      height: 14,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          '$stopNumber',
-                          style: TextStyle(
-                            fontSize: 8.5,
-                            fontWeight: FontWeight.w900,
-                            color: pinColor,
+                  child: Text(
+                    isSelected ? task.reportNumber : 'Parada $stopNumber',
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w800,
+                      height: 1.1,
+                    ),
+                  ),
+                ),
+
+                // Pin con icono
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Icon(
+                      Icons.location_on_rounded,
+                      size: isSelected ? 46 : 40,
+                      color: pinColor,
+                      shadows: [
+                        BoxShadow(
+                          color: pinColor.withAlpha(120),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    Positioned(
+                      top: isSelected ? 8 : 7,
+                      child: Container(
+                        width: 14,
+                        height: 14,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            '$stopNumber',
+                            style: TextStyle(
+                              fontSize: 8.5,
+                              fontWeight: FontWeight.w900,
+                              color: pinColor,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -925,13 +934,11 @@ class _PriorityBadge extends StatelessWidget {
 /// Botón circular flotante para controles del mapa (+ y -)
 class _MapControlButton extends StatelessWidget {
   final IconData icon;
-  final Color iconColor;
   final String tooltip;
   final VoidCallback onPressed;
 
   const _MapControlButton({
     required this.icon,
-    this.iconColor = const Color(0xFF334155),
     required this.tooltip,
     required this.onPressed,
   });
@@ -960,7 +967,7 @@ class _MapControlButton extends StatelessWidget {
           onTap: onPressed,
           child: Tooltip(
             message: tooltip,
-            child: Icon(icon, color: iconColor, size: 20),
+            child: Icon(icon, color: const Color(0xFF334155), size: 20),
           ),
         ),
       ),
