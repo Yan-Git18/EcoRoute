@@ -69,14 +69,14 @@ class MockStaffRepository implements StaffRepository {
 
 final testStaffUser = UserEntity(
   id: 'staff-101',
-  name: 'Carlos Cuadrilla',
-  email: 'carlos.cuadrilla@ecoroute.com',
+  name: 'Carlos Mendoza',
+  email: 'carlos.mendoza@ecoroute.com',
   role: UserRole.staff,
   createdAt: DateTime(2025, 1, 1),
 );
 
 void main() {
-  testWidgets('Renderiza StaffProfileScreen con ficha de operario, asignación y métricas',
+  testWidgets('Renderiza StaffProfileScreen con diseno de tarjeta y opciones operativas',
       (tester) async {
     final mockAuth = MockStaffAuthViewModel(testStaffUser);
     final mockRepo = MockStaffRepository();
@@ -95,46 +95,30 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    // 1. Título de AppBar
-    expect(find.text('Perfil Operativo'), findsOneWidget);
+    // 1. Título de AppBar centrado 'Mi perfil'
+    expect(find.text('Mi perfil'), findsOneWidget);
 
-    // 2. Ficha de Identidad
-    expect(find.text('Carlos Cuadrilla'), findsOneWidget);
-    expect(find.text('carlos.cuadrilla@ecoroute.com'), findsOneWidget);
-    expect(find.text('Cuadrilla de Campo'), findsOneWidget);
-    expect(find.text('Legajo #OP-2048'), findsOneWidget);
+    // 2. Ficha de Identidad del Personal
+    expect(find.text('Carlos Mendoza'), findsOneWidget);
+    expect(find.text('Equipo de limpieza #03'), findsOneWidget);
+    expect(find.byIcon(Icons.engineering_rounded), findsOneWidget);
 
-    // 3. Control de Estado de Turno
-    expect(find.text('Estado de Turno'), findsOneWidget);
-    expect(find.text('En turno'), findsOneWidget);
-    expect(find.text('Cambiar'), findsOneWidget);
+    // 3. Opciones principales en la tarjeta
+    expect(find.text('Mis estadísticas'), findsOneWidget);
+    expect(find.text('Historial de tareas'), findsOneWidget);
+    expect(find.text('Configuración'), findsOneWidget);
+    expect(find.text('Ayuda y soporte'), findsOneWidget);
+    expect(find.text('Cerrar sesión'), findsOneWidget);
 
-    // 4. Asignación Operativa
-    expect(find.text('Asignación Operativa'), findsOneWidget);
-    expect(find.text('Personal Asignado'), findsOneWidget);
-    expect(find.text('Cuadrilla Zona Norte (Turno Diurno)'), findsOneWidget);
-    expect(find.text('Unidad Vehicular'), findsOneWidget);
-    expect(find.text('Camión Recolector #04 • Placa ECR-882'), findsOneWidget);
-    expect(find.text('Zona de Cobertura'), findsOneWidget);
-
-    // 5. Rendimiento en campo
-    expect(find.text('Rendimiento en Campo'), findsOneWidget);
-    expect(find.text('Resueltas Hoy'), findsOneWidget);
-    expect(find.text('Por Atender'), findsOneWidget);
-    expect(find.text('Tasa a Tiempo'), findsOneWidget);
-    expect(find.text('Horas en Turno'), findsOneWidget);
-
-    // 6. Botón de Cerrar Sesión Operativa
-    expect(find.text('Cerrar Sesión Operativa'), findsOneWidget);
-
-    // 7. Navegación inferior
+    // 4. Barra de navegación inferior
     expect(find.text('Inicio'), findsOneWidget);
     expect(find.text('Mapa'), findsOneWidget);
     expect(find.text('Tareas'), findsOneWidget);
     expect(find.text('Perfil'), findsOneWidget);
   });
 
-  testWidgets('Permite cambiar el estado de turno abriendo el modal interactivo', (tester) async {
+  testWidgets('Configuracion abre modal con Mis datos, Cambiar contrasena y Notificaciones',
+      (tester) async {
     final mockAuth = MockStaffAuthViewModel(testStaffUser);
     final mockRepo = MockStaffRepository();
 
@@ -152,25 +136,29 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    // Tap en botón 'Cambiar'
-    final changeButton = find.text('Cambiar');
-    expect(changeButton, findsOneWidget);
-    await tester.tap(changeButton);
+    // Tocar 'Configuración'
+    await tester.tap(find.text('Configuración'));
     await tester.pumpAndSettle();
 
-    // Debe abrir el modal de estado de turno
-    expect(find.text('Estado de turno operativo'), findsOneWidget);
-    expect(find.text('Pausa para refrigerio o mantenimiento'), findsOneWidget);
+    // Verificar que el modal de Configuración se abre con las 3 opciones requeridas
+    expect(find.text('Mis datos'), findsOneWidget);
+    expect(find.text('Cambiar contraseña'), findsOneWidget);
+    expect(find.text('Notificaciones'), findsOneWidget);
 
-    // Seleccionar la opción de descanso
-    await tester.tap(find.text('Pausa para refrigerio o mantenimiento'));
+    // Verificar que NO incluye 'Acerca de EcoRoute' ni 'Cerrar sesión' dentro del modal
+    expect(find.text('Acerca de EcoRoute'), findsNothing);
+
+    // Probar abrir 'Mis datos'
+    await tester.tap(find.text('Mis datos'));
     await tester.pumpAndSettle();
 
-    // El estado en pantalla debe actualizarse a 'En descanso'
-    expect(find.text('En descanso'), findsOneWidget);
+    expect(find.text('Mis datos personales'), findsOneWidget);
+    expect(find.text('carlos.mendoza@ecoroute.com'), findsOneWidget);
+    expect(find.text('Personal de Limpieza'), findsOneWidget);
   });
 
-  testWidgets('Muestra diálogo de confirmación antes de cerrar sesión', (tester) async {
+  testWidgets('Mis estadisticas abre modal con rendimiento y estado de turno',
+      (tester) async {
     final mockAuth = MockStaffAuthViewModel(testStaffUser);
     final mockRepo = MockStaffRepository();
 
@@ -188,19 +176,79 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    // Scroll hasta el botón de cerrar sesión
-    final logoutButton = find.text('Cerrar Sesión Operativa');
-    await tester.ensureVisible(logoutButton);
-    await tester.tap(logoutButton);
+    // Tocar 'Mis estadísticas'
+    await tester.tap(find.text('Mis estadísticas'));
+    await tester.pumpAndSettle();
+
+    // Debe mostrar métricas y estado de turno
+    expect(find.text('Estado de Turno'), findsOneWidget);
+    expect(find.text('En turno'), findsOneWidget);
+    expect(find.text('Resueltas Hoy'), findsOneWidget);
+    expect(find.text('Por Atender'), findsOneWidget);
+    expect(find.text('Cambiar'), findsOneWidget);
+
+    // Probar interactuar con 'Cambiar' turno
+    await tester.tap(find.text('Cambiar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Estado de turno operativo'), findsOneWidget);
+  });
+
+  testWidgets('Historial de tareas abre modal con paradas recientes', (tester) async {
+    final mockAuth = MockStaffAuthViewModel(testStaffUser);
+    final mockRepo = MockStaffRepository();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authViewModelProvider.overrideWith(() => mockAuth),
+          staffRepositoryProvider.overrideWithValue(mockRepo),
+        ],
+        child: const MaterialApp(
+          home: StaffProfileScreen(),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Historial de tareas'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ver todas las tareas en el panel'), findsOneWidget);
+    expect(find.textContaining('Contenedor lleno'), findsOneWidget);
+  });
+
+  testWidgets('Muestra dialogo de confirmacion y permite cerrar sesion', (tester) async {
+    final mockAuth = MockStaffAuthViewModel(testStaffUser);
+    final mockRepo = MockStaffRepository();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authViewModelProvider.overrideWith(() => mockAuth),
+          staffRepositoryProvider.overrideWithValue(mockRepo),
+        ],
+        child: const MaterialApp(
+          home: StaffProfileScreen(),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // Tocar 'Cerrar sesión'
+    await tester.tap(find.text('Cerrar sesión'));
     await tester.pumpAndSettle();
 
     // Verifica que se muestre el diálogo de advertencia
-    expect(find.text('¿Finalizar sesión?'), findsOneWidget);
+    expect(find.text('¿Cerrar sesión?'), findsOneWidget);
     expect(find.text('Cancelar'), findsOneWidget);
-    expect(find.text('Cerrar sesión'), findsOneWidget);
 
-    // Tocar cerrar sesión dentro del diálogo
-    await tester.tap(find.text('Cerrar sesión'));
+    // Tocar confirmar en el diálogo
+    final confirmButtons = find.widgetWithText(ElevatedButton, 'Cerrar sesión');
+    expect(confirmButtons, findsOneWidget);
+    await tester.tap(confirmButtons);
     await tester.pumpAndSettle();
 
     expect(mockAuth.logoutCalled, isTrue);
