@@ -29,9 +29,12 @@ class CitizenBottomNavBar extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
+        bottom: true,
         minimum: const EdgeInsets.only(bottom: 12),
-        child: SizedBox(
-          height: 66,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 6, bottom: 10),
+          child: SizedBox(
+            height: 60,
           child: Row(
             children: [
               // 0: Inicio
@@ -154,6 +157,7 @@ class CitizenBottomNavBar extends StatelessWidget {
               ),
             ],
           ),
+        ),
         ),
       ),
     );

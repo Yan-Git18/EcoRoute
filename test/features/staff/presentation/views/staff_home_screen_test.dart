@@ -104,11 +104,10 @@ void main() {
     expect(find.byIcon(Icons.menu_rounded), findsNothing);
     expect(find.byIcon(Icons.notifications_none_rounded), findsOneWidget);
 
-    // 2. Tarjeta del personal y estado de turno
+    // 2. Cabecera del personal (nombre y cuadrilla, sin badge de estado)
     expect(find.text('Mario Limpieza'), findsOneWidget);
     expect(find.text('Cuadrilla Zona Norte'), findsOneWidget);
-    expect(find.text('En turno'), findsOneWidget);
-    expect(find.text('Cambiar estado'), findsOneWidget);
+    expect(find.text('Cambiar estado'), findsNothing);
 
     // 3. Sección "Mis tareas" con contadores
     expect(find.text('Mis tareas'), findsOneWidget);

@@ -10,18 +10,19 @@ import 'firebase_options.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Ocultar la barra de navegación nativa del móvil (Modo Inmersivo)
+  // Habilitar la barra de navegación nativa del móvil (Edge-to-edge con navegación activa)
   await SystemChrome.setEnabledSystemUIMode(
-    SystemUiMode.immersiveSticky,
+    SystemUiMode.edgeToEdge,
   );
 
-  // Barra de estado y navegación transparente
+  // Barra de estado y navegación transparente con iconos visibles oscuros
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
       systemNavigationBarColor: Colors.transparent,
       systemNavigationBarIconBrightness: Brightness.dark,
+      systemNavigationBarDividerColor: Colors.transparent,
     ),
   );
 

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/constants/geo_constants.dart';
 import '../../../../core/enums/report_filter.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -15,7 +14,6 @@ import '../../domain/entities/staff_task_entity.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
 import '../widgets/staff_bottom_nav_bar.dart';
 import '../widgets/staff_complete_task_sheet.dart';
-import '../widgets/staff_shift_status_modal.dart';
 import '../widgets/staff_task_item_card.dart';
 
 /// Pantalla principal para el Personal de Limpieza / Recolección (Staff).
@@ -28,7 +26,6 @@ class StaffHomeScreen extends ConsumerStatefulWidget {
 }
 
 class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
-  String _shiftStatus = 'En turno';
   final int _currentNavIndex = 0; // 'Inicio' activo en la pantalla principal
 
   // Tareas de demostración para Cajamarca, Perú si la base de datos está vacía
@@ -226,108 +223,37 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Cabecera limpia y moderna del personal (reemplaza la tarjeta verde abultada)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
+              // 1. Cabecera limpia del personal (solo nombre y cuadrilla)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          staffName,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF0F172A),
-                            letterSpacing: -0.4,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Row(
-                          children: const [
-                            Icon(Icons.shield_outlined, size: 14, color: Color(0xFF047857)),
-                            SizedBox(width: 4),
-                            Flexible(
-                              child: Text(
-                                'Cuadrilla Zona Norte',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF64748B),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                  Text(
+                    staffName,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                      letterSpacing: -0.4,
                     ),
                   ),
-                  const SizedBox(width: 10),
-
-                  // Pill de control de estado de turno (discreto y elegante)
-                  InkWell(
-                    onTap: () => StaffShiftStatusModal.show(
-                      context: context,
-                      currentStatus: _shiftStatus,
-                      onStatusSelected: (status) => setState(() => _shiftStatus = status),
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x06000000),
-                            blurRadius: 4,
-                            offset: Offset(0, 1),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: _getShiftStatusColor(),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _shiftStatus,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: _getShiftStatusColor(),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          const Text(
-                            'Cambiar estado',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF64748B),
-                            ),
-                          ),
-                          const SizedBox(width: 2),
-                          const Icon(
-                            Icons.keyboard_arrow_down_rounded,
-                            size: 16,
+                  const SizedBox(height: 3),
+                  Row(
+                    children: const [
+                      Icon(Icons.shield_outlined, size: 14, color: Color(0xFF047857)),
+                      SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'Cuadrilla Zona Norte',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
                             color: Color(0xFF64748B),
                           ),
-                        ],
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ],
               ),
@@ -801,17 +727,6 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
     }
   }
 
-  Color _getShiftStatusColor() {
-    switch (_shiftStatus) {
-      case 'En turno':
-        return const Color(0xFF10B981);
-      case 'En descanso':
-        return const Color(0xFFF59E0B);
-      case 'Fin de turno':
-      default:
-        return const Color(0xFF94A3B8);
-    }
-  }
 
   void _showNotificationsModal(BuildContext context, int pending, int inProgress) {
     showModalBottomSheet(
