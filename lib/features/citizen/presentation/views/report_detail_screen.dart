@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -229,7 +230,13 @@ class _ReportDetailBody extends StatelessWidget {
           _ReportSummaryCard(report: report),
           const SizedBox(height: 16),
 
-          // 3. Tarjeta de detalles: Descripción, fecha de reporte y métricas de prioridad/estado
+          // 3. Tarjeta destacada de Evidencia de Resolución (Personal de Limpieza)
+          if (report.isResolved || report.hasEvidence) ...[
+            _ResolutionEvidenceCard(report: report),
+            const SizedBox(height: 16),
+          ],
+
+          // 4. Tarjeta de detalles: Descripción, fecha de reporte y métricas de prioridad/estado
           _ReportDetailsCard(report: report),
           const SizedBox(height: 16),
 
@@ -326,8 +333,23 @@ class _ReportPhotoCardState extends State<_ReportPhotoCard> {
             ),
           );
         },
-        errorBuilder: (context, error, stackTrace) => const _EmptyPhotoPlaceholder(),
+        errorBuilder: (context, error, stackTrace) => const _ImageLoadErrorPlaceholder(),
       );
+    } else if (url.startsWith('data:image')) {
+      try {
+        final commaIdx = url.indexOf(',');
+        final base64Str = commaIdx != -1 ? url.substring(commaIdx + 1) : url;
+        final bytes = base64Decode(base64Str);
+        return Image.memory(
+          bytes,
+          width: double.infinity,
+          height: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const _ImageLoadErrorPlaceholder(),
+        );
+      } catch (_) {
+        return const _ImageLoadErrorPlaceholder();
+      }
     } else {
       final file = File(url);
       if (file.existsSync()) {
@@ -336,10 +358,10 @@ class _ReportPhotoCardState extends State<_ReportPhotoCard> {
           width: double.infinity,
           height: double.infinity,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => const _EmptyPhotoPlaceholder(),
+          errorBuilder: (context, error, stackTrace) => const _ImageLoadErrorPlaceholder(),
         );
       }
-      return const _EmptyPhotoPlaceholder();
+      return const _ImageLoadErrorPlaceholder();
     }
   }
 
@@ -595,6 +617,372 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
         itemCount: widget.imageUrls.length,
         onPageChanged: (i) => setState(() => _currentIndex = i),
         itemBuilder: (ctx, i) => Center(child: _buildImage(widget.imageUrls[i])),
+      ),
+    );
+  }
+}
+
+/// Componente para indicar que la imagen no pudo ser cargada o el archivo no está disponible.
+class _ImageLoadErrorPlaceholder extends StatelessWidget {
+  const _ImageLoadErrorPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(12.0),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Icon(
+              Icons.broken_image_rounded,
+              size: 44,
+              color: Color(0xFF94A3B8),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'No se pudo cargar la imagen',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF64748B),
+              ),
+            ),
+            SizedBox(height: 2),
+            Text(
+              'Archivo temporal no disponible en este dispositivo',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                color: Color(0xFF94A3B8),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Tarjeta destacada para visualizar la evidencia de limpieza y resolución provista por el personal de campo.
+/// Principio SRP: Muestra exclusivamente la evidencia fotográfica y observaciones del trabajo completado.
+class _ResolutionEvidenceCard extends StatelessWidget {
+  final ReportEntity report;
+
+  const _ResolutionEvidenceCard({required this.report});
+
+  void _openFullScreenViewer(BuildContext context, String url) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _FullScreenImageViewer(
+          imageUrls: [url],
+          initialIndex: 0,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEvidenceImage(BuildContext context, String url) {
+    Widget imageWidget;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      imageWidget = Image.network(
+        url,
+        width: double.infinity,
+        height: 210,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return const SizedBox(
+            height: 210,
+            child: Center(
+              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF047857)),
+            ),
+          );
+        },
+        errorBuilder: (_, __, ___) => const _ImageLoadErrorPlaceholder(),
+      );
+    } else if (url.startsWith('data:image')) {
+      try {
+        final commaIdx = url.indexOf(',');
+        final base64Str = commaIdx != -1 ? url.substring(commaIdx + 1) : url;
+        final bytes = base64Decode(base64Str);
+        imageWidget = Image.memory(
+          bytes,
+          width: double.infinity,
+          height: 210,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const _ImageLoadErrorPlaceholder(),
+        );
+      } catch (_) {
+        imageWidget = const _ImageLoadErrorPlaceholder();
+      }
+    } else {
+      final file = File(url);
+      if (file.existsSync()) {
+        imageWidget = Image.file(
+          file,
+          width: double.infinity,
+          height: 210,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const _ImageLoadErrorPlaceholder(),
+        );
+      } else {
+        imageWidget = const _ImageLoadErrorPlaceholder();
+      }
+    }
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
+          children: [
+            imageWidget,
+            // Badge 'Foto posterior a la limpieza'
+            Positioned(
+              top: 10,
+              left: 10,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF047857).withAlpha(225),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_circle_rounded, size: 14, color: Colors.white),
+                    SizedBox(width: 4),
+                    Text(
+                      'Zona atendida',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Botón 'Ampliar'
+            Positioned(
+              bottom: 10,
+              right: 10,
+              child: Material(
+                color: Colors.black.withAlpha(160),
+                borderRadius: BorderRadius.circular(14),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => _openFullScreenViewer(context, url),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
+                        SizedBox(width: 4),
+                        Text(
+                          'Ampliar',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = report.evidenceImageUrl != null && report.evidenceImageUrl!.trim().isNotEmpty;
+    final staffName = report.assignedStaffName ?? 'Personal municipal de limpieza';
+    final notes = report.resolutionNotes?.trim();
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFA7F3D0), width: 1.2),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A059669),
+            blurRadius: 14,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 1. Cabecera con ícono verde de verificación y título
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.task_alt_rounded,
+                  color: Color(0xFF047857),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      'Evidencia de resolución',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    SizedBox(height: 1),
+                    Text(
+                      'Trabajo completado en el lugar',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF047857),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'Resuelto ✓',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF047857),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // 2. Fotografía de evidencia
+          if (hasPhoto)
+            _buildEvidenceImage(context, report.evidenceImageUrl!)
+          else
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, color: Color(0xFF64748B), size: 20),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'El personal completó la limpieza de la incidencia.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // 3. Notas del personal de limpieza
+          if (notes != null && notes.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.notes_rounded, size: 16, color: Color(0xFF047857)),
+                      SizedBox(width: 6),
+                      Text(
+                        'Notas de la atención:',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF047857),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    notes,
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      color: Color(0xFF1E293B),
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // 4. Pie de metadatos: Cuadrilla/Personal
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(Icons.person_pin_circle_outlined, size: 16, color: Color(0xFF64748B)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Atendido por: $staffName',
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -228,6 +228,8 @@ class ReportEntity {
   final String? assignedToTeamName;
   final String? assignedStaffName;
   final String? assignedVehicle;
+  final String? evidenceImageUrl;
+  final String? resolutionNotes;
 
   const ReportEntity({
     required this.id,
@@ -252,7 +254,12 @@ class ReportEntity {
     this.assignedToTeamName,
     this.assignedStaffName,
     this.assignedVehicle,
+    this.evidenceImageUrl,
+    this.resolutionNotes,
   });
+
+  bool get isResolved => status == ReportStatus.resolved;
+  bool get hasEvidence => evidenceImageUrl != null && evidenceImageUrl!.trim().isNotEmpty;
 
   ReportEntity copyWith({
     String? id,
@@ -277,6 +284,8 @@ class ReportEntity {
     String? assignedToTeamName,
     String? assignedStaffName,
     String? assignedVehicle,
+    String? evidenceImageUrl,
+    String? resolutionNotes,
   }) {
     return ReportEntity(
       id: id ?? this.id,
@@ -301,6 +310,8 @@ class ReportEntity {
       assignedToTeamName: assignedToTeamName ?? this.assignedToTeamName,
       assignedStaffName: assignedStaffName ?? this.assignedStaffName,
       assignedVehicle: assignedVehicle ?? this.assignedVehicle,
+      evidenceImageUrl: evidenceImageUrl ?? this.evidenceImageUrl,
+      resolutionNotes: resolutionNotes ?? this.resolutionNotes,
     );
   }
 }

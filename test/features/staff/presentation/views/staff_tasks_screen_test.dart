@@ -59,6 +59,7 @@ class MockStaffRepository implements StaffRepository {
     required String staffName,
     required List<int> evidenceImageBytes,
     required String notes,
+    String? localImagePath,
   }) async {
     final match = tasks.firstWhere((t) => t.id == taskId);
     final updated = match.copyWith(

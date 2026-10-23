@@ -27,5 +27,6 @@ abstract class StaffRepository {
     required String staffName,
     required List<int> evidenceImageBytes,
     required String notes,
+    String? localImagePath,
   });
 }

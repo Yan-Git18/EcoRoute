@@ -20,6 +20,7 @@ class CompleteTaskWithEvidenceUseCase {
     required String staffName,
     required List<int> evidenceImageBytes,
     required String notes,
+    String? localImagePath,
   }) async {
     if (taskId.trim().isEmpty) {
       return const FailureResult(
@@ -45,6 +46,7 @@ class CompleteTaskWithEvidenceUseCase {
       staffName: staffName,
       evidenceImageBytes: evidenceImageBytes,
       notes: notes.trim(),
+      localImagePath: localImagePath,
     );
   }
 }

@@ -219,4 +219,47 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('Muestra la tarjeta de Evidencia de resolución con notas y foto cuando el reporte está resuelto', (WidgetTester tester) async {
+    final resolvedReport = ReportEntity(
+      id: 'rep-resolved-test',
+      reportNumber: '#770475',
+      citizenId: 'user-test',
+      citizenName: 'Vecino',
+      categoryId: 'waste_accumulation',
+      categoryName: 'Acumulación de basura',
+      categoryIcon: 'delete_outline_rounded',
+      description: 'Acumulación considerable en la vereda.',
+      priority: ReportPriority.high,
+      status: ReportStatus.resolved,
+      latitude: -7.15,
+      longitude: -78.51,
+      address: 'Rafael Narváez 270, Cajamarca',
+      imageUrls: const [],
+      createdAt: DateTime(2026, 10, 15, 22, 16),
+      updatedAt: DateTime(2026, 10, 16, 9, 30),
+      evidenceImageUrl: 'https://images.unsplash.com/photo-cleaned.jpg',
+      resolutionNotes: 'Limpieza y recolección completada con éxito por la cuadrilla.',
+      assignedStaffName: 'Juan Pérez (Cuadrilla Norte)',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: ReportDetailScreen(
+            reportId: resolvedReport.id,
+            initialReport: resolvedReport,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verificamos que se muestre la tarjeta de Evidencia de resolución
+    expect(find.text('Evidencia de resolución'), findsOneWidget);
+    expect(find.text('Trabajo completado en el lugar'), findsOneWidget);
+    expect(find.text('Notas de la atención:'), findsOneWidget);
+    expect(find.text('Limpieza y recolección completada con éxito por la cuadrilla.'), findsOneWidget);
+    expect(find.text('Atendido por: Juan Pérez (Cuadrilla Norte)'), findsOneWidget);
+  });
 }

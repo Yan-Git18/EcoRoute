@@ -9,6 +9,7 @@ import '../../domain/entities/staff_task_entity.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
 import '../widgets/staff_bottom_nav_bar.dart';
 import '../widgets/staff_complete_task_sheet.dart';
+import '../widgets/staff_evidence_detail_sheet.dart';
 import '../widgets/staff_task_item_card.dart';
 
 /// Enum para opciones de ordenamiento de tareas en StaffTasksScreen
@@ -394,6 +395,7 @@ class _StaffTasksScreenState extends ConsumerState<StaffTasksScreen> {
                           isNextTask: index == 0 && task.isPending && staffState.selectedFilter == ReportFilter.all,
                           onStart: () => _handleStartTask(task),
                           onResolve: () => StaffCompleteTaskSheet.show(context, task),
+                          onViewEvidence: () => StaffEvidenceDetailSheet.show(context, task),
                         );
                       },
                     ),

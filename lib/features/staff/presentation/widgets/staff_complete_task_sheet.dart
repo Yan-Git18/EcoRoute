@@ -37,6 +37,7 @@ class StaffCompleteTaskSheet extends ConsumerStatefulWidget {
 class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet> {
   final _notesController = TextEditingController();
   Uint8List? _imageBytes;
+  String? _localImagePath;
   bool _isSubmitting = false;
   String? _error;
 
@@ -55,6 +56,7 @@ class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet>
     if (result.hasImage) {
       setState(() {
         _imageBytes = result.bytes;
+        _localImagePath = result.file?.path;
         _error = null;
       });
     } else if (result.errorMessage != null) {
@@ -84,6 +86,7 @@ class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet>
       taskId: widget.task.id,
       imageBytes: _imageBytes!,
       notes: notes,
+      localImagePath: _localImagePath,
     );
 
     if (mounted) {

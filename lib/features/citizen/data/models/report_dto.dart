@@ -24,6 +24,9 @@ class ReportDto {
   final List<String> imageUrls;
   final DateTime createdAt;
   final DateTime? updatedAt;
+  final String? evidenceImageUrl;
+  final String? resolutionNotes;
+  final String? assignedStaffName;
 
   const ReportDto({
     required this.id,
@@ -44,6 +47,9 @@ class ReportDto {
     required this.imageUrls,
     required this.createdAt,
     this.updatedAt,
+    this.evidenceImageUrl,
+    this.resolutionNotes,
+    this.assignedStaffName,
   });
 
   factory ReportDto.fromMap(Map<String, dynamic> map, String documentId) {
@@ -78,6 +84,9 @@ class ReportDto {
           [],
       createdAt: parseDate(map['createdAt']),
       updatedAt: map['updatedAt'] != null ? parseDate(map['updatedAt']) : null,
+      evidenceImageUrl: map['evidenceImageUrl'] as String? ?? (map['evidencePhoto'] as String?),
+      resolutionNotes: map['resolutionNotes'] as String? ?? (map['resolutionComment'] as String?),
+      assignedStaffName: map['assignedStaffName'] as String? ?? (map['assignedToTeamName'] as String?),
     );
   }
 
@@ -103,6 +112,9 @@ class ReportDto {
       'images': imageUrls.map((url) => {'url': url, 'uploadedAt': Timestamp.now()}).toList(),
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': FieldValue.serverTimestamp(),
+      if (evidenceImageUrl != null) 'evidenceImageUrl': evidenceImageUrl,
+      if (resolutionNotes != null) 'resolutionNotes': resolutionNotes,
+      if (assignedStaffName != null) 'assignedStaffName': assignedStaffName,
     };
   }
 
@@ -126,6 +138,9 @@ class ReportDto {
       imageUrls: imageUrls,
       createdAt: createdAt,
       updatedAt: updatedAt,
+      assignedStaffName: assignedStaffName,
+      evidenceImageUrl: evidenceImageUrl,
+      resolutionNotes: resolutionNotes,
     );
   }
 
@@ -149,6 +164,9 @@ class ReportDto {
       imageUrls: entity.imageUrls,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
+      evidenceImageUrl: entity.evidenceImageUrl,
+      resolutionNotes: entity.resolutionNotes,
+      assignedStaffName: entity.assignedStaffName,
     );
   }
 }

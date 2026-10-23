@@ -103,6 +103,7 @@ class StaffRepositoryImpl implements StaffRepository {
     required String staffName,
     required List<int> evidenceImageBytes,
     required String notes,
+    String? localImagePath,
   }) async {
     String? evidenceUrl;
 
@@ -114,6 +115,11 @@ class StaffRepositoryImpl implements StaffRepository {
           fileName: fileName,
         );
       } catch (_) {}
+    }
+
+    // Si Firebase Storage retornó nulo o falló, usar la ruta local como contingencia
+    if ((evidenceUrl == null || evidenceUrl.isEmpty) && localImagePath != null && localImagePath.isNotEmpty) {
+      evidenceUrl = localImagePath;
     }
 
     try {

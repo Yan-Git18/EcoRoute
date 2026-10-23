@@ -142,6 +142,7 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
     required String taskId,
     required List<int> imageBytes,
     required String notes,
+    String? localImagePath,
   }) async {
     final authState = ref.read(authViewModelProvider);
     final user = authState.user;
@@ -152,6 +153,7 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
       staffName: user?.name ?? 'Personal de Campo',
       evidenceImageBytes: imageBytes,
       notes: notes,
+      localImagePath: localImagePath,
     );
 
     return result.fold(

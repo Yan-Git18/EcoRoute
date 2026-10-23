@@ -107,6 +107,9 @@ class ReportRepositoryImpl implements ReportRepository {
       imageUrls: finalImageUrls,
       createdAt: report.createdAt,
       updatedAt: report.updatedAt,
+      evidenceImageUrl: report.evidenceImageUrl,
+      resolutionNotes: report.resolutionNotes,
+      assignedStaffName: report.assignedStaffName,
     );
 
     // 1. Guardar de inmediato en la caché de sesión
@@ -154,22 +157,23 @@ class ReportRepositoryImpl implements ReportRepository {
 
   @override
   Future<Result<ReportEntity>> getReportById(String reportId) async {
-    // Buscar primero en caché
-    final cached = _sessionCache.cast<ReportEntity?>().firstWhere(
-          (r) => r?.id == reportId,
-          orElse: () => null,
-        );
-    if (cached != null) {
-      return Success(cached);
-    }
-
+    // 1. Consultar datos frescos desde Cloud Firestore
     try {
       final dto = await _remoteDataSource.getReportById(reportId);
-      return Success(dto.toDomain());
-    } on ServerException catch (e) {
-      return FailureResult(ServerFailure(message: e.message, code: e.code));
-    } catch (e) {
-      return FailureResult(ServerFailure(message: 'Error al consultar reporte: $e'));
+      final entity = dto.toDomain();
+      _sessionCache.removeWhere((r) => r.id == entity.id);
+      _sessionCache.insert(0, entity);
+      return Success(entity);
+    } catch (_) {
+      // 2. Si falla la red o está offline, buscar en caché de sesión
+      final cached = _sessionCache.cast<ReportEntity?>().firstWhere(
+            (r) => r?.id == reportId,
+            orElse: () => null,
+          );
+      if (cached != null) {
+        return Success(cached);
+      }
+      return const FailureResult(ServerFailure(message: 'Error al consultar reporte o no se encuentra disponible.'));
     }
   }
 
@@ -301,6 +305,8 @@ class ReportRepositoryImpl implements ReportRepository {
         reference: 'Cruce con Jr. Conde de Superunda',
         imageUrls: const [],
         createdAt: now.subtract(const Duration(hours: 18)),
+        resolutionNotes: 'Limpieza y barrido integral del tramo completado con éxito.',
+        assignedStaffName: 'Cuadrilla Centro Histórico',
       ),
       ReportEntity(
         id: 'seed-rep-4',

@@ -10,6 +10,7 @@ class StaffTaskItemCard extends StatelessWidget {
   final bool isNextTask;
   final VoidCallback onStart;
   final VoidCallback onResolve;
+  final VoidCallback? onViewEvidence;
 
   const StaffTaskItemCard({
     super.key,
@@ -17,6 +18,7 @@ class StaffTaskItemCard extends StatelessWidget {
     this.isNextTask = false,
     required this.onStart,
     required this.onResolve,
+    this.onViewEvidence,
   });
 
   @override
@@ -102,9 +104,13 @@ class StaffTaskItemCard extends StatelessWidget {
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: rowContent,
+    return InkWell(
+      onTap: task.isResolved ? onViewEvidence : null,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: rowContent,
+      ),
     );
   }
 
@@ -139,11 +145,13 @@ class StaffTaskItemCard extends StatelessWidget {
             : const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       );
     } else {
-      return const EcoActionPill(
+      return EcoActionPill(
         label: 'Resuelta ✓',
-        textColor: Color(0xFF047857),
-        backgroundColor: Color(0xFFDCFCE7),
-        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        textColor: const Color(0xFF047857),
+        backgroundColor: const Color(0xFFDCFCE7),
+        icon: Icons.visibility_outlined,
+        onTap: onViewEvidence,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       );
     }
   }
