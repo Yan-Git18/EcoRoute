@@ -62,7 +62,7 @@ class MockAdminRepository implements AdminRepository {
       reports[index] = updated;
       return Success(updated);
     }
-    return FailureResult(ServerFailure(message: 'No encontrado'));
+    return const FailureResult(ServerFailure(message: 'No encontrado'));
   }
 
   @override

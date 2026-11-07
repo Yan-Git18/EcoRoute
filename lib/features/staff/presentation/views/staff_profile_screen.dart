@@ -895,8 +895,8 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    children: const [
+                  const Row(
+                    children: [
                       Expanded(
                         child: _StatMiniCard(
                           title: 'Tasa a Tiempo',
@@ -926,8 +926,8 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
-                    child: Column(
-                      children: const [
+                    child: const Column(
+                      children: [
                         _SmallInfoRow(
                           icon: Icons.groups_rounded,
                           iconColor: Color(0xFF047857),

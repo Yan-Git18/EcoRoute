@@ -628,12 +628,12 @@ class _ImageLoadErrorPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(12.0),
+    return const Padding(
+      padding: EdgeInsets.all(12.0),
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
+          children: [
             Icon(
               Icons.broken_image_rounded,
               size: 44,
@@ -848,10 +848,10 @@ class _ResolutionEvidenceCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              Expanded(
+              const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Text(
                       'Evidencia de resolución',
                       style: TextStyle(
@@ -994,17 +994,17 @@ class _EmptyPhotoPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(12.0),
+    return const Padding(
+      padding: EdgeInsets.all(12.0),
       child: CustomPaint(
-        painter: const _DashedRRectPainter(
+        painter: _DashedRRectPainter(
           color: Color(0xFFD3DDE7),
           strokeWidth: 1.2,
           radius: 14.0,
           dashWidth: 6.0,
           dashSpace: 4.0,
         ),
-        child: const Center(
+        child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

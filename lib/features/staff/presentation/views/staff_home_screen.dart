@@ -190,8 +190,8 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
         scrolledUnderElevation: 0,
         automaticallyImplyLeading: false,
         titleSpacing: 20,
-        title: Row(
-          children: const [
+        title: const Row(
+          children: [
             EcoLogoBadge(size: 38, iconSize: 22),
             SizedBox(width: 12),
             Text(
@@ -237,8 +237,8 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 3),
-                  Row(
-                    children: const [
+                  const Row(
+                    children: [
                       Icon(Icons.shield_outlined, size: 14, color: Color(0xFF047857)),
                       SizedBox(width: 4),
                       Flexible(
@@ -496,9 +496,9 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  Column(
+                  const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
+                    children: [
                       Text(
                         'Circuito Cajamarca Centro',
                         style: TextStyle(
@@ -596,9 +596,9 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
                   ),
                 ],
               ),
-              child: Row(
+              child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
+                children: [
                   Icon(Icons.map_rounded, size: 16, color: Color(0xFF047857)),
                   SizedBox(width: 8),
                   Text(

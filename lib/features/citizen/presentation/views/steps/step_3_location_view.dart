@@ -268,9 +268,9 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
                           ),
                         ],
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
+                        children: [
                           Icon(Icons.location_city_rounded, color: Color(0xFF34D399), size: 14),
                           SizedBox(width: 6),
                           Text(
@@ -389,8 +389,8 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: const Color(0xFFFECACA)),
               ),
-              child: Row(
-                children: const [
+              child: const Row(
+                children: [
                   Icon(Icons.warning_amber_rounded, size: 18, color: Color(0xFFDC2626)),
                   SizedBox(width: 8),
                   Expanded(
@@ -728,10 +728,10 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
               painter: _MapGridPainter(),
             ),
           ),
-          Positioned(
+          const Positioned(
             bottom: 60,
             right: 80,
-            child: const _UserPulseMarker(),
+            child: _UserPulseMarker(),
           ),
           Column(
             mainAxisSize: MainAxisSize.min,
@@ -869,15 +869,15 @@ class _MapGridPainter extends CustomPainter {
 
     final blockPaint = Paint()..color = const Color(0xFFDFEADB);
     final blockRects = [
-      Rect.fromLTWH(15, 15, 60, 45),
-      Rect.fromLTWH(90, 15, 100, 45),
-      Rect.fromLTWH(205, 15, 80, 45),
-      Rect.fromLTWH(15, 75, 60, 75),
-      Rect.fromLTWH(90, 75, 100, 75),
-      Rect.fromLTWH(205, 75, 80, 75),
-      Rect.fromLTWH(15, 165, 60, 60),
-      Rect.fromLTWH(90, 165, 100, 60),
-      Rect.fromLTWH(205, 165, 80, 60),
+      const Rect.fromLTWH(15, 15, 60, 45),
+      const Rect.fromLTWH(90, 15, 100, 45),
+      const Rect.fromLTWH(205, 15, 80, 45),
+      const Rect.fromLTWH(15, 75, 60, 75),
+      const Rect.fromLTWH(90, 75, 100, 75),
+      const Rect.fromLTWH(205, 75, 80, 75),
+      const Rect.fromLTWH(15, 165, 60, 60),
+      const Rect.fromLTWH(90, 165, 100, 60),
+      const Rect.fromLTWH(205, 165, 80, 60),
     ];
     for (final rect in blockRects) {
       canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)), blockPaint);
@@ -888,10 +888,10 @@ class _MapGridPainter extends CustomPainter {
       ..strokeWidth = 14
       ..style = PaintingStyle.stroke;
 
-    canvas.drawLine(Offset(0, 65), Offset(size.width, 65), roadPaint);
-    canvas.drawLine(Offset(0, 155), Offset(size.width, 155), roadPaint);
-    canvas.drawLine(Offset(80, 0), Offset(80, size.height), roadPaint);
-    canvas.drawLine(Offset(195, 0), Offset(195, size.height), roadPaint);
+    canvas.drawLine(const Offset(0, 65), Offset(size.width, 65), roadPaint);
+    canvas.drawLine(const Offset(0, 155), Offset(size.width, 155), roadPaint);
+    canvas.drawLine(const Offset(80, 0), Offset(80, size.height), roadPaint);
+    canvas.drawLine(const Offset(195, 0), Offset(195, size.height), roadPaint);
   }
 
   @override

@@ -40,8 +40,8 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: const [
+        title: const Row(
+          children: [
             Icon(Icons.badge_rounded, color: Color(0xFF0A5835)),
             SizedBox(width: 8),
             Text('Promover a Personal', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -116,8 +116,8 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: const [
+        title: const Row(
+          children: [
             Icon(Icons.person_remove_rounded, color: Color(0xFFE11D48)),
             SizedBox(width: 8),
             Text('Revertir a Ciudadano', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -210,9 +210,9 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: const Color(0xFFA7F3D0)),
                 ),
-                child: Row(
+                child: const Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Icon(Icons.shield_outlined, color: Color(0xFF059669), size: 20),
                     SizedBox(width: 10),
                     Expanded(
@@ -626,9 +626,9 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: Column(
+      child: const Column(
         mainAxisSize: MainAxisSize.min,
-        children: const [
+        children: [
           Icon(Icons.badge_outlined, size: 48, color: Color(0xFF94A3B8)),
           SizedBox(height: 12),
           Text(

@@ -191,9 +191,9 @@ class CitizenMapPreviewCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: Row(
+                child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
+                  children: [
                     Text(
                       'Ver detalles del reporte',
                       style: TextStyle(

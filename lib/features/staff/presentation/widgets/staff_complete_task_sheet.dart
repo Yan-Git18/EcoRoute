@@ -232,8 +232,8 @@ class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet>
             const SizedBox(height: 20),
 
             // 3. Título de sección: Evidencia fotográfica *
-            Row(
-              children: const [
+            const Row(
+              children: [
                 Text(
                   'Evidencia fotográfica',
                   style: TextStyle(
@@ -501,9 +501,9 @@ class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet>
                         width: 22,
                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.2),
                       )
-                    : Row(
+                    : const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
+                        children: [
                           Icon(
                             Icons.check_circle_rounded,
                             size: 20,
@@ -525,10 +525,10 @@ class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet>
             const SizedBox(height: 14),
 
             // 7. Nota informativa al pie
-            Center(
+            const Center(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
+                children: [
                   Icon(
                     Icons.info_outline_rounded,
                     size: 16,

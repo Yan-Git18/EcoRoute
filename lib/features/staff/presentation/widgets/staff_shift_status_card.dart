@@ -106,9 +106,9 @@ class StaffShiftStatusCard extends StatelessWidget {
                 color: const Color(0xFFDCFCE7),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Row(
+              child: const Row(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
+                children: [
                   Text(
                     'Cambiar estado',
                     style: TextStyle(

@@ -120,7 +120,7 @@ class AdminRepositoryImpl implements AdminRepository {
         _adminReportsCache[reportId] = updated;
         return Success(updated);
       }
-      return FailureResult(const ServerFailure(message: 'Reporte no encontrado'));
+      return const FailureResult(ServerFailure(message: 'Reporte no encontrado'));
     } catch (e) {
       return FailureResult(ServerFailure(message: 'Error al actualizar prioridad: $e'));
     }

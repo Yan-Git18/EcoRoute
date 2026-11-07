@@ -70,17 +70,17 @@ class _CitizenMapLegendState extends State<CitizenMapLegend> {
           ),
           if (_isExpanded) ...[
             const SizedBox(height: 8),
-            _LegendItem(
+            const _LegendItem(
               color: AppColors.statusPending,
               label: 'Pendiente',
             ),
             const SizedBox(height: 5),
-            _LegendItem(
+            const _LegendItem(
               color: AppColors.statusInProgress,
               label: 'En proceso',
             ),
             const SizedBox(height: 5),
-            _LegendItem(
+            const _LegendItem(
               color: AppColors.statusResolved,
               label: 'Resuelto',
             ),

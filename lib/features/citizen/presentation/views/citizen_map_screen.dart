@@ -126,12 +126,12 @@ class _CitizenMapScreenState extends ConsumerState<CitizenMapScreen> {
         ),
 
         // 3. Leyenda flotante de estados (esquina superior derecha, bajo el buscador)
-        Positioned(
+        const Positioned(
           top: 120,
           right: 16,
           child: SafeArea(
             bottom: false,
-            child: const CitizenMapLegend(),
+            child: CitizenMapLegend(),
           ),
         ),
 
@@ -217,9 +217,9 @@ class _CitizenMapScreenState extends ConsumerState<CitizenMapScreen> {
               const SizedBox(width: 8),
               InkWell(
                 onTap: () => viewModel.requestUserLocation(),
-                child: Row(
+                child: const Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: const [
+                  children: [
                     Icon(Icons.gps_fixed_rounded, size: 13, color: AppColors.primaryDark),
                     SizedBox(width: 4),
                     Text(
@@ -392,9 +392,9 @@ class _FloatingGpsButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         shape: BoxShape.circle,
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
             color: Color(0x24000000),
             blurRadius: 12,
@@ -511,10 +511,10 @@ class _MapLoadingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
+        children: [
           CircularProgressIndicator(
             color: AppColors.primary,
             strokeWidth: 3,
