@@ -1,7 +1,6 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../../core/widgets/eco_priority_indicator.dart';
+import '../../../../core/widgets/evidence_image_card.dart';
 import '../../domain/entities/staff_task_entity.dart';
 
 /// Modal bottom sheet para que el Personal de Limpieza consulte la evidencia registrada de una tarea resuelta.
@@ -20,169 +19,6 @@ class StaffEvidenceDetailSheet extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => StaffEvidenceDetailSheet(task: task),
-    );
-  }
-
-  Widget _buildEvidenceImage(BuildContext context, String url) {
-    Widget imageWidget;
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      imageWidget = Image.network(
-        url,
-        width: double.infinity,
-        height: 220,
-        fit: BoxFit.cover,
-        loadingBuilder: (context, child, progress) {
-          if (progress == null) return child;
-          return const SizedBox(
-            height: 220,
-            child: Center(
-              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF047857)),
-            ),
-          );
-        },
-        errorBuilder: (_, __, ___) => _buildErrorImagePlaceholder(),
-      );
-    } else if (url.startsWith('data:image')) {
-      try {
-        final commaIdx = url.indexOf(',');
-        final base64Str = commaIdx != -1 ? url.substring(commaIdx + 1) : url;
-        final bytes = base64Decode(base64Str);
-        imageWidget = Image.memory(
-          bytes,
-          width: double.infinity,
-          height: 220,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _buildErrorImagePlaceholder(),
-        );
-      } catch (_) {
-        imageWidget = _buildErrorImagePlaceholder();
-      }
-    } else {
-      final file = File(url);
-      if (file.existsSync()) {
-        imageWidget = Image.file(
-          file,
-          width: double.infinity,
-          height: 220,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _buildErrorImagePlaceholder(),
-        );
-      } else {
-        imageWidget = _buildErrorImagePlaceholder();
-      }
-    }
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: Stack(
-          children: [
-            imageWidget,
-            Positioned(
-              top: 10,
-              left: 10,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF047857).withAlpha(220),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.check_circle_rounded, size: 14, color: Colors.white),
-                    SizedBox(width: 4),
-                    Text(
-                      'Evidencia registrada',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 10,
-              right: 10,
-              child: Material(
-                color: Colors.black.withAlpha(160),
-                borderRadius: BorderRadius.circular(14),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => Scaffold(
-                          backgroundColor: Colors.black,
-                          appBar: AppBar(
-                            backgroundColor: Colors.black,
-                            foregroundColor: Colors.white,
-                            title: Text('Evidencia ${task.reportNumber}'),
-                          ),
-                          body: Center(
-                            child: InteractiveViewer(
-                              maxScale: 4.0,
-                              child: imageWidget,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
-                        SizedBox(width: 4),
-                        Text(
-                          'Ampliar',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildErrorImagePlaceholder() {
-    return Container(
-      height: 180,
-      width: double.infinity,
-      color: const Color(0xFFF8FAFC),
-      child: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.broken_image_rounded, size: 42, color: Color(0xFF94A3B8)),
-            SizedBox(height: 8),
-            Text(
-              'No se pudo cargar la imagen de evidencia',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -316,7 +152,13 @@ class StaffEvidenceDetailSheet extends StatelessWidget {
             const SizedBox(height: 8),
 
             if (hasPhoto)
-              _buildEvidenceImage(context, task.evidenceImageUrl!)
+              EvidenceImageCard(
+                imageUrl: task.evidenceImageUrl!,
+                reportTitle: 'Evidencia ${task.reportNumber}',
+                badgeLabel: 'Evidencia registrada',
+                height: 220,
+                borderRadius: BorderRadius.circular(18),
+              )
             else
               Container(
                 width: double.infinity,

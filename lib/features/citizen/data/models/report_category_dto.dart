@@ -2,27 +2,20 @@ import '../../domain/entities/report_category_entity.dart';
 
 /// DTO para serialización y deserialización de categorías de reportes en Cloud Firestore.
 ///
+/// Principio Clean Architecture y DRY: Extiende [ReportCategoryEntity] para evitar
+/// duplicación de campos del modelo de dominio en la capa de datos.
 /// Ubicación: `lib/features/citizen/data/models/report_category_dto.dart`
 /// Capa: Data (Models)
-class ReportCategoryDto {
-  final String id;
-  final String name;
-  final String description;
-  final String icon;
-  final String defaultPriority;
-  final int slaHours;
-  final int order;
-  final bool isActive;
-
+class ReportCategoryDto extends ReportCategoryEntity {
   const ReportCategoryDto({
-    required this.id,
-    required this.name,
-    required this.description,
-    required this.icon,
-    required this.defaultPriority,
-    required this.slaHours,
-    required this.order,
-    this.isActive = true,
+    required super.id,
+    required super.name,
+    required super.description,
+    required super.icon,
+    required super.defaultPriority,
+    required super.slaHours,
+    required super.order,
+    super.isActive = true,
   });
 
   factory ReportCategoryDto.fromFirestore(String id, Map<String, dynamic> data) {
@@ -50,18 +43,7 @@ class ReportCategoryDto {
     };
   }
 
-  ReportCategoryEntity toEntity() {
-    return ReportCategoryEntity(
-      id: id,
-      name: name,
-      description: description,
-      icon: icon,
-      defaultPriority: defaultPriority,
-      slaHours: slaHours,
-      order: order,
-      isActive: isActive,
-    );
-  }
+  ReportCategoryEntity toEntity() => this;
 
   factory ReportCategoryDto.fromEntity(ReportCategoryEntity entity) {
     return ReportCategoryDto(

@@ -1,11 +1,12 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/date_formatter.dart';
+import '../../../../core/widgets/report_thumbnail.dart';
 import '../../domain/entities/report_entity.dart';
 import 'report_status_badge.dart';
 
 /// Tarjeta para la visualización resumida de un reporte en la lista.
 ///
+/// Principio DRY: Utiliza [ReportThumbnail] y [DateFormatter].
 /// Ubicación: `lib/features/citizen/presentation/widgets/report_card.dart`
 /// Capa: Presentation (Widgets)
 class ReportCard extends StatelessWidget {
@@ -18,39 +19,8 @@ class ReportCard extends StatelessWidget {
     required this.onTap,
   });
 
-  String _formatDate(DateTime date) {
-    const months = [
-      'ene.', 'feb.', 'mar.', 'abr.', 'may.', 'jun.',
-      'jul.', 'ago.', 'sep.', 'oct.', 'nov.', 'dic.'
-    ];
-    final monthName = months[date.month - 1];
-    return '${date.day} $monthName ${date.year}';
-  }
-
-  Widget _buildThumbnail(String url) {
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return Image.network(
-        url,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => const _ThumbnailPlaceholder(),
-      );
-    } else {
-      final file = File(url);
-      if (file.existsSync()) {
-        return Image.file(
-          file,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => const _ThumbnailPlaceholder(),
-        );
-      }
-      return const _ThumbnailPlaceholder();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final hasImage = report.imageUrls.isNotEmpty;
-
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -75,16 +45,11 @@ class ReportCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Miniatura de la fotografía o placeholder temático
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    width: 72,
-                    height: 72,
-                    color: const Color(0xFFF1F5F9),
-                    child: hasImage
-                        ? _buildThumbnail(report.imageUrls.first)
-                        : const _ThumbnailPlaceholder(),
-                  ),
+                ReportThumbnail(
+                  imageUrl: report.imageUrls.isNotEmpty ? report.imageUrls.first : null,
+                  width: 72,
+                  height: 72,
+                  borderRadius: 12,
                 ),
                 const SizedBox(width: 14),
 
@@ -125,7 +90,7 @@ class ReportCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        _formatDate(report.createdAt),
+                        DateFormatter.formatShortDate(report.createdAt),
                         style: const TextStyle(
                           fontSize: 11,
                           color: Color(0xFF94A3B8),
@@ -142,28 +107,6 @@ class ReportCard extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ThumbnailPlaceholder extends StatelessWidget {
-  const _ThumbnailPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: AppColors.primary.withAlpha(20),
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(
-          Icons.delete_outline_rounded,
-          color: AppColors.primary,
-          size: 24,
         ),
       ),
     );

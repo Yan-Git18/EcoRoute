@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 import '../../../../../core/constants/geo_constants.dart';
 import '../../../../../core/theme/app_colors.dart';
+import '../../../../../core/widgets/map/map_widgets.dart';
 import '../../viewmodels/create_report_state.dart';
 import '../../viewmodels/create_report_viewmodel.dart';
 
@@ -292,13 +293,13 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
                     right: 12,
                     child: Column(
                       children: [
-                        _MapControlButton(
+                        MapControlButton(
                           icon: Icons.add_rounded,
                           tooltip: 'Acercar mapa',
                           onPressed: _zoomIn,
                         ),
                         const SizedBox(height: 6),
-                        _MapControlButton(
+                        MapControlButton(
                           icon: Icons.remove_rounded,
                           tooltip: 'Alejar mapa',
                           onPressed: _zoomOut,
@@ -313,7 +314,7 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
                     right: 12,
                     child: Column(
                       children: [
-                        _MapControlButton(
+                        MapControlButton(
                           icon: Icons.pin_drop_rounded,
                           iconColor: const Color(0xFFEF4444),
                           tooltip: 'Recentrar en el PIN',
@@ -323,7 +324,7 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
                         ),
                         if (state.hasUserLocation) ...[
                           const SizedBox(height: 6),
-                          _MapControlButton(
+                          MapControlButton(
                             icon: Icons.my_location_rounded,
                             iconColor: AppColors.primary,
                             tooltip: 'Ver mi ubicación actual',
@@ -544,7 +545,7 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
                 ),
               ),
               const SizedBox(height: 2),
-              const _UserPulseMarker(),
+              const UserPulseMarker(outerSize: 44),
             ],
           ),
         ),
@@ -731,7 +732,7 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
           const Positioned(
             bottom: 60,
             right: 80,
-            child: _UserPulseMarker(),
+            child: UserPulseMarker(outerSize: 44),
           ),
           Column(
             mainAxisSize: MainAxisSize.min,
@@ -761,101 +762,6 @@ class _Step3LocationViewState extends ConsumerState<Step3LocationView> {
           ),
         ],
       ),
-    );
-  }
-}
-
-// --- Botón circular flotante para controles del mapa ---
-
-class _MapControlButton extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String tooltip;
-  final VoidCallback onPressed;
-
-  const _MapControlButton({
-    required this.icon,
-    this.iconColor = const Color(0xFF334155),
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: Colors.white.withAlpha(240),
-        shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x18000000),
-            blurRadius: 6,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
-        child: Tooltip(
-          message: tooltip,
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onPressed,
-            child: Icon(
-              icon,
-              size: 19,
-              color: iconColor,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// --- Marcador GPS del usuario con efecto pulso ---
-
-class _UserPulseMarker extends StatelessWidget {
-  const _UserPulseMarker();
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: const Color(0xFF2563EB).withAlpha(40),
-            border: Border.all(
-              color: const Color(0xFF2563EB).withAlpha(120),
-              width: 1.5,
-            ),
-          ),
-        ),
-        Container(
-          width: 16,
-          height: 16,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: const Color(0xFF2563EB),
-            border: Border.all(color: Colors.white, width: 2.5),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x40000000),
-                blurRadius: 6,
-                offset: Offset(0, 2),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

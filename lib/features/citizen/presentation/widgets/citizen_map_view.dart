@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 import '../../../../core/constants/geo_constants.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/map/map_widgets.dart';
 import '../../domain/entities/report_entity.dart';
 
 /// Componente de mapa urbano comunitario interactivo basado en OpenStreetMap (100% gratuito).
@@ -109,7 +110,7 @@ class CitizenMapViewState extends State<CitizenMapView> {
               width: 52,
               height: 52,
               alignment: Alignment.center,
-              child: const _UserPulseMarker(),
+              child: const UserPulseMarker(outerSize: 38),
             ),
 
             // Marcadores de reportes ciudadanos
@@ -254,7 +255,7 @@ class CitizenMapViewState extends State<CitizenMapView> {
                   Positioned(
                     left: width / 2 - 20,
                     top: height / 2 - 20,
-                    child: const _UserPulseMarker(),
+                    child: const UserPulseMarker(outerSize: 38),
                   ),
                   for (final report in widget.reports) ...[
                     _buildVectorMarker(
@@ -328,48 +329,6 @@ class CitizenMapViewState extends State<CitizenMapView> {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Marcador animado/estilizado para la posición GPS del usuario.
-class _UserPulseMarker extends StatelessWidget {
-  const _UserPulseMarker();
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: const Color(0xFF2563EB).withAlpha(45),
-            border: Border.all(
-              color: const Color(0xFF2563EB).withAlpha(130),
-              width: 1.5,
-            ),
-          ),
-        ),
-        Container(
-          width: 16,
-          height: 16,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: const Color(0xFF2563EB),
-            border: Border.all(color: Colors.white, width: 2.5),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x40000000),
-                blurRadius: 6,
-                offset: Offset(0, 2),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

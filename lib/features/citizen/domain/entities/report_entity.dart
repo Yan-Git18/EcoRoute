@@ -40,6 +40,17 @@ enum ReportPriority {
 extension ReportPriorityX on ReportPriority {
   String get displayLabel => label;
 
+  String get priorityFullLabel {
+    switch (this) {
+      case ReportPriority.high:
+        return 'Alta Prioridad';
+      case ReportPriority.medium:
+        return 'Prioridad Media';
+      case ReportPriority.low:
+        return 'Prioridad Baja';
+    }
+  }
+
   Color get color {
     switch (this) {
       case ReportPriority.high:

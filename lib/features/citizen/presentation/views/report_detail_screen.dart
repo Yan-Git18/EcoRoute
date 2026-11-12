@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/evidence_image_card.dart';
 import '../../domain/entities/report_entity.dart';
 import '../viewmodels/my_reports_viewmodel.dart';
 import '../widgets/report_status_badge.dart';
@@ -671,142 +672,6 @@ class _ResolutionEvidenceCard extends StatelessWidget {
 
   const _ResolutionEvidenceCard({required this.report});
 
-  void _openFullScreenViewer(BuildContext context, String url) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => _FullScreenImageViewer(
-          imageUrls: [url],
-          initialIndex: 0,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEvidenceImage(BuildContext context, String url) {
-    Widget imageWidget;
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      imageWidget = Image.network(
-        url,
-        width: double.infinity,
-        height: 210,
-        fit: BoxFit.cover,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return const SizedBox(
-            height: 210,
-            child: Center(
-              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF047857)),
-            ),
-          );
-        },
-        errorBuilder: (_, __, ___) => const _ImageLoadErrorPlaceholder(),
-      );
-    } else if (url.startsWith('data:image')) {
-      try {
-        final commaIdx = url.indexOf(',');
-        final base64Str = commaIdx != -1 ? url.substring(commaIdx + 1) : url;
-        final bytes = base64Decode(base64Str);
-        imageWidget = Image.memory(
-          bytes,
-          width: double.infinity,
-          height: 210,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => const _ImageLoadErrorPlaceholder(),
-        );
-      } catch (_) {
-        imageWidget = const _ImageLoadErrorPlaceholder();
-      }
-    } else {
-      final file = File(url);
-      if (file.existsSync()) {
-        imageWidget = Image.file(
-          file,
-          width: double.infinity,
-          height: 210,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => const _ImageLoadErrorPlaceholder(),
-        );
-      } else {
-        imageWidget = const _ImageLoadErrorPlaceholder();
-      }
-    }
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Stack(
-          children: [
-            imageWidget,
-            // Badge 'Foto posterior a la limpieza'
-            Positioned(
-              top: 10,
-              left: 10,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF047857).withAlpha(225),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.check_circle_rounded, size: 14, color: Colors.white),
-                    SizedBox(width: 4),
-                    Text(
-                      'Zona atendida',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // Botón 'Ampliar'
-            Positioned(
-              bottom: 10,
-              right: 10,
-              child: Material(
-                color: Colors.black.withAlpha(160),
-                borderRadius: BorderRadius.circular(14),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () => _openFullScreenViewer(context, url),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
-                        SizedBox(width: 4),
-                        Text(
-                          'Ampliar',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final hasPhoto = report.evidenceImageUrl != null && report.evidenceImageUrl!.trim().isNotEmpty;
@@ -894,7 +759,11 @@ class _ResolutionEvidenceCard extends StatelessWidget {
 
           // 2. Fotografía de evidencia
           if (hasPhoto)
-            _buildEvidenceImage(context, report.evidenceImageUrl!)
+            EvidenceImageCard(
+              imageUrl: report.evidenceImageUrl!,
+              reportTitle: 'Evidencia #${report.reportNumber}',
+              badgeLabel: 'Zona atendida',
+            )
           else
             Container(
               width: double.infinity,

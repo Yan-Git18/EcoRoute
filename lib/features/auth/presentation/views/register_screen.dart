@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_assets.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/auth/auth_text_field.dart';
 import '../../domain/entities/user_entity.dart';
 import '../viewmodels/auth_viewmodel.dart';
 
@@ -141,7 +142,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           // 1. Nombre y Apellido
-                          _RegisterInputField(
+                          AuthTextField(
                             label: 'Nombre y Apellido',
                             hintText: 'Ej. Juan Pérez',
                             icon: Icons.person_outline_rounded,
@@ -162,7 +163,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           const SizedBox(height: 15),
 
                           // 2. Correo electrónico
-                          _RegisterInputField(
+                          AuthTextField(
                             label: 'Correo electrónico',
                             hintText: 'ejemplo@gmail.com',
                             icon: Icons.mail_outline_rounded,
@@ -183,7 +184,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           const SizedBox(height: 15),
 
                           // 3. Teléfono de contacto (opcional)
-                          _RegisterInputField(
+                          AuthTextField(
                             label: 'Teléfono de contacto (opcional)',
                             hintText: 'Ej. +51 987654321',
                             icon: Icons.phone_outlined,
@@ -203,7 +204,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           const SizedBox(height: 15),
 
                           // 4. Contraseña
-                          _RegisterInputField(
+                          AuthTextField(
                             label: 'Contraseña',
                             hintText: 'Mínimo 6 caracteres',
                             icon: Icons.lock_outline_rounded,
@@ -238,7 +239,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           const SizedBox(height: 15),
 
                           // 5. Confirmar contraseña
-                          _RegisterInputField(
+                          AuthTextField(
                             label: 'Confirmar contraseña',
                             hintText: 'Repite la contraseña',
                             icon: Icons.lock_outline_rounded,
@@ -366,127 +367,6 @@ class _RegisterHeader extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Campo de entrada reutilizable y estandarizado para el formulario de registro.
-///
-/// Responsabilidad única: Renderizar la etiqueta y la caja de texto con sus estilos e iconos.
-class _RegisterInputField extends StatelessWidget {
-  final String label;
-  final String hintText;
-  final IconData icon;
-  final TextEditingController controller;
-  final bool obscureText;
-  final Widget? suffixIcon;
-  final TextInputType? keyboardType;
-  final TextInputAction? textInputAction;
-  final TextCapitalization textCapitalization;
-  final FormFieldValidator<String>? validator;
-  final ValueChanged<String>? onFieldSubmitted;
-
-  const _RegisterInputField({
-    required this.label,
-    required this.hintText,
-    required this.icon,
-    required this.controller,
-    this.obscureText = false,
-    this.suffixIcon,
-    this.keyboardType,
-    this.textInputAction,
-    this.textCapitalization = TextCapitalization.none,
-    this.validator,
-    this.onFieldSubmitted,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Etiqueta del campo
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13.5,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF1E293B),
-            letterSpacing: -0.2,
-          ),
-        ),
-        const SizedBox(height: 6),
-
-        // Campo interactivo
-        TextFormField(
-          controller: controller,
-          obscureText: obscureText,
-          keyboardType: keyboardType,
-          textInputAction: textInputAction,
-          textCapitalization: textCapitalization,
-          validator: validator,
-          onFieldSubmitted: onFieldSubmitted,
-          style: const TextStyle(
-            fontSize: 14.5,
-            color: Color(0xFF0F172A),
-          ),
-          decoration: InputDecoration(
-            hintText: hintText,
-            hintStyle: const TextStyle(
-              color: Color(0xFF94A3B8),
-              fontSize: 14,
-              fontWeight: FontWeight.w400,
-            ),
-            prefixIcon: Icon(
-              icon,
-              color: const Color(0xFF64748B),
-              size: 20,
-            ),
-            suffixIcon: suffixIcon,
-            filled: true,
-            fillColor: const Color(0xFFF8FAFC),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 14,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: Color(0xFFE2E8F0),
-                width: 1.2,
-              ),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: Color(0xFFE2E8F0),
-                width: 1.2,
-              ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: Color(0xFF0E8A54),
-                width: 1.8,
-              ),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: AppColors.error,
-                width: 1.2,
-              ),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(
-                color: AppColors.error,
-                width: 1.8,
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

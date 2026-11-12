@@ -10,6 +10,7 @@ import '../../../../core/widgets/eco_section_header.dart';
 import '../../../../core/widgets/eco_status_summary_card.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
+import '../../data/fixtures/staff_tasks_fixtures.dart';
 import '../../domain/entities/staff_task_entity.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
 import '../widgets/staff_bottom_nav_bar.dart';
@@ -28,108 +29,7 @@ class StaffHomeScreen extends ConsumerStatefulWidget {
 class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
   final int _currentNavIndex = 0; // 'Inicio' activo en la pantalla principal
 
-  // Tareas de demostración para Cajamarca, Perú si la base de datos está vacía
-  static final List<StaffTaskEntity> _defaultDemoTasks = [
-    StaffTaskEntity(
-      id: 'task-demo-1',
-      reportNumber: '#0102',
-      citizenId: 'c-demo-1',
-      citizenName: 'Vecino Ciudadano',
-      categoryName: 'Contenedor lleno',
-      categoryIcon: 'delete_outline_rounded',
-      description: 'Contenedor saturado en Jr. Del Comercio.',
-      priority: ReportPriority.high,
-      status: ReportStatus.pending,
-      address: 'Av. Los Próceres 452',
-      latitude: -7.1580,
-      longitude: -78.5180,
-      reportImageUrls: const [],
-      assignedAt: DateTime.now(),
-    ),
-    StaffTaskEntity(
-      id: 'task-demo-2',
-      reportNumber: '#0103',
-      citizenId: 'c-demo-2',
-      citizenName: 'Vecino Ciudadano',
-      categoryName: 'Residuos en vía pública',
-      categoryIcon: 'cleaning_services_rounded',
-      description: 'Restos de poda y bolsas en vereda.',
-      priority: ReportPriority.medium,
-      status: ReportStatus.pending,
-      address: 'Jr. Amazonas 120',
-      latitude: -7.1565,
-      longitude: -78.5160,
-      reportImageUrls: const [],
-      assignedAt: DateTime.now(),
-    ),
-    StaffTaskEntity(
-      id: 'task-demo-3',
-      reportNumber: '#0104',
-      citizenId: 'c-demo-3',
-      citizenName: 'Vecino Ciudadano',
-      categoryName: 'Punto de recolección',
-      categoryIcon: 'recycling_rounded',
-      description: 'Limpieza periódica de contenedores verdes.',
-      priority: ReportPriority.low,
-      status: ReportStatus.pending,
-      address: 'Parque Central',
-      latitude: -7.1578,
-      longitude: -78.5175,
-      reportImageUrls: const [],
-      assignedAt: DateTime.now(),
-    ),
-    StaffTaskEntity(
-      id: 'task-demo-4',
-      reportNumber: '#0105',
-      citizenId: 'c-demo-4',
-      citizenName: 'Vecino Ciudadano',
-      categoryName: 'Acumulación de maleza',
-      categoryIcon: 'delete_sweep_rounded',
-      description: 'Restos vegetales en vereda.',
-      priority: ReportPriority.medium,
-      status: ReportStatus.pending,
-      address: 'Av. Las Palmas 890',
-      latitude: -7.1610,
-      longitude: -78.5210,
-      reportImageUrls: const [],
-      assignedAt: DateTime.now(),
-    ),
-    StaffTaskEntity(
-      id: 'task-demo-5',
-      reportNumber: '#0101',
-      citizenId: 'c-demo-5',
-      citizenName: 'Vecino Ciudadano',
-      categoryName: 'Desborde de basura',
-      categoryIcon: 'delete_outline_rounded',
-      description: 'Cuadrilla atendiendo en zona con camión recolector.',
-      priority: ReportPriority.high,
-      status: ReportStatus.inProgress,
-      address: 'Calle Los Pinos 88',
-      latitude: -7.1520,
-      longitude: -78.5130,
-      reportImageUrls: const [],
-      assignedAt: DateTime.now(),
-    ),
-    ...List.generate(
-      6,
-      (i) => StaffTaskEntity(
-        id: 'task-res-$i',
-        reportNumber: '#009${i + 1}',
-        citizenId: 'c-res',
-        citizenName: 'Vecino Ciudadano',
-        categoryName: 'Limpieza de zona',
-        categoryIcon: 'check_circle_outline_rounded',
-        description: 'Limpieza completada y validada.',
-        priority: ReportPriority.low,
-        status: ReportStatus.resolved,
-        address: 'Sector ${i + 1}',
-        latitude: -7.1600 - (i * 0.001),
-        longitude: -78.5150 - (i * 0.001),
-        reportImageUrls: const [],
-        assignedAt: DateTime.now().subtract(Duration(days: i + 1)),
-      ),
-    ),
-  ];
+  static List<StaffTaskEntity> get _defaultDemoTasks => StaffTasksFixtures.defaultDemoTasks;
 
   @override
   Widget build(BuildContext context) {

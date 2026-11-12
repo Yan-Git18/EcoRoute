@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/utils/date_formatter.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 
 /// Tarjeta de gestión administrativa de reporte.
@@ -16,17 +17,6 @@ class AdminReportCard extends StatelessWidget {
     required this.onAssign,
     required this.onViewDetail,
   });
-
-  String _formatTimeAgo(DateTime date) {
-    final diff = DateTime.now().difference(date);
-    if (diff.inMinutes < 60) {
-      return 'Hace ${diff.inMinutes.clamp(1, 60)} min';
-    } else if (diff.inHours < 24) {
-      return 'Hace ${diff.inHours} h';
-    } else {
-      return 'Hace ${diff.inDays} d';
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -86,7 +76,7 @@ class AdminReportCard extends StatelessWidget {
                     _StatusBadge(status: report.status),
                     const SizedBox(width: 8),
                     Text(
-                      _formatTimeAgo(report.createdAt),
+                      DateFormatter.formatTimeAgo(report.createdAt),
                       style: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
                     ),
                   ],

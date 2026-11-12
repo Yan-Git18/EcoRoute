@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/router/route_names.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/profile/profile_widgets.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
@@ -150,7 +150,7 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
               child: Column(
                 children: [
                   // Mis estadísticas
-                  _ProfileMenuItem(
+                  EcoProfileMenuItem(
                     icon: Icons.bar_chart_rounded,
                     title: 'Mis estadísticas',
                     onTap: () => _showStatsModal(context),
@@ -164,7 +164,7 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
                   ),
 
                   // Historial de tareas
-                  _ProfileMenuItem(
+                  EcoProfileMenuItem(
                     icon: Icons.event_note_rounded,
                     title: 'Historial de tareas',
                     onTap: () => _showTaskHistoryModal(context),
@@ -178,7 +178,7 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
                   ),
 
                   // Configuración
-                  _ProfileMenuItem(
+                  EcoProfileMenuItem(
                     icon: Icons.settings_outlined,
                     title: 'Configuración',
                     onTap: () => _showSettingsModal(context, ref, user),
@@ -192,7 +192,7 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
                   ),
 
                   // Ayuda y soporte
-                  _ProfileMenuItem(
+                  EcoProfileMenuItem(
                     icon: Icons.help_outline_rounded,
                     title: 'Ayuda y soporte',
                     onTap: () => _showSupportModal(context),
@@ -333,7 +333,7 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
                 child: Column(
                   children: [
                     // 1. Mis datos
-                    _ProfileMenuItem(
+                    EcoProfileMenuItem(
                       icon: Icons.person_outline_rounded,
                       title: 'Mis datos',
                       onTap: () {
@@ -350,7 +350,7 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
                     ),
 
                     // 2. Cambiar contraseña
-                    _ProfileMenuItem(
+                    EcoProfileMenuItem(
                       icon: Icons.lock_outline_rounded,
                       title: 'Cambiar contraseña',
                       onTap: () {
@@ -367,7 +367,7 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
                     ),
 
                     // 3. Notificaciones
-                    _ProfileMenuItem(
+                    EcoProfileMenuItem(
                       icon: Icons.notifications_none_rounded,
                       title: 'Notificaciones',
                       onTap: () {
@@ -389,110 +389,14 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
   void _showMyDataModal(BuildContext context, UserEntity? user) {
     final staffName = user?.name.isNotEmpty == true ? user!.name : 'Carlos Mendoza';
     final staffEmail = user?.email.isNotEmpty == true ? user!.email : 'carlos.mendoza@ecoroute.com';
-    final teamName = user?.teamId != null && user!.teamId!.isNotEmpty
-        ? 'Equipo de limpieza #${user.teamId}'
-        : 'Equipo de limpieza #03';
+    final phone = user?.phoneNumber ?? '+51 988 123 456';
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            top: 20,
-            left: 24,
-            right: 24,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE2E8F0),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Mis datos personales',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _buildDataRow(
-                icon: Icons.person_rounded,
-                label: 'Nombre completo',
-                value: staffName,
-              ),
-              const SizedBox(height: 14),
-              _buildDataRow(
-                icon: Icons.email_rounded,
-                label: 'Correo electrónico',
-                value: staffEmail,
-              ),
-              const SizedBox(height: 14),
-              _buildDataRow(
-                icon: Icons.groups_rounded,
-                label: 'Cuadrilla / Asignación',
-                value: teamName,
-              ),
-              const SizedBox(height: 14),
-              _buildDataRow(
-                icon: Icons.badge_rounded,
-                label: 'Legajo operativo',
-                value: '#OP-2048',
-              ),
-              const SizedBox(height: 14),
-              _buildDataRow(
-                icon: Icons.shield_rounded,
-                label: 'Rol en la plataforma',
-                value: 'Personal de Limpieza',
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0A5835),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: const Text(
-                    'Cerrar',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+    ProfileDataModal.show(
+      context,
+      name: staffName,
+      email: staffEmail,
+      phone: phone,
+      roleLabel: 'Personal de Limpieza',
     );
   }
 
@@ -503,247 +407,33 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
     UserEntity? user,
   ) {
     final email = user?.email.isNotEmpty == true ? user!.email : 'carlos.mendoza@ecoroute.com';
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            top: 20,
-            left: 24,
-            right: 24,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE2E8F0),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              const Text(
-                'Cambiar contraseña',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Por seguridad operativa, te enviaremos un enlace de restablecimiento seguro a tu correo institucional registrado.',
-                style: TextStyle(fontSize: 13.5, color: Color(0xFF64748B), height: 1.4),
-              ),
-              const SizedBox(height: 18),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.mark_email_read_rounded, color: Color(0xFF0A5835)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        email,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF0F172A),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    Navigator.pop(ctx);
-                    final success = await ref
-                        .read(authViewModelProvider.notifier)
-                        .sendPasswordResetEmail(email);
-
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          backgroundColor: success ? AppColors.primary : AppColors.error,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          content: Text(
-                            success
-                                ? 'Enlace de restablecimiento enviado a $email'
-                                : 'No se pudo enviar el correo de recuperación.',
-                          ),
-                        ),
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0A5835),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: const Text(
-                    'Enviar enlace de restablecimiento',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
+    ProfileChangePasswordModal.show(context, ref, email: email);
   }
 
   /// Modal de preferencias de notificaciones operativas
   void _showNotificationsModal(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE2E8F0),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  const Text(
-                    'Preferencias de Notificaciones',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: _priorityNotificationsEnabled,
-                    onChanged: (val) {
-                      setState(() => _priorityNotificationsEnabled = val);
-                      setModalState(() {});
-                    },
-                    activeThumbColor: const Color(0xFF0A5835),
-                    title: const Text(
-                      'Alertas de paradas prioritarias',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: const Text(
-                      'Notificar cuando se asigne un desborde urgente en ruta.',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                    ),
-                  ),
-                  const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: _taskAssignedNotificationsEnabled,
-                    onChanged: (val) {
-                      setState(() => _taskAssignedNotificationsEnabled = val);
-                      setModalState(() {});
-                    },
-                    activeThumbColor: const Color(0xFF0A5835),
-                    title: const Text(
-                      'Asignación de nuevas paradas',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: const Text(
-                      'Avisar cuando se agreguen paradas al circuito actual.',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                    ),
-                  ),
-                  const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: _shiftAlertsEnabled,
-                    onChanged: (val) {
-                      setState(() => _shiftAlertsEnabled = val);
-                      setModalState(() {});
-                    },
-                    activeThumbColor: const Color(0xFF0A5835),
-                    title: const Text(
-                      'Avisos de inicio y fin de turno',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: const Text(
-                      'Recordatorios del horario de entrada y relevo de cuadrilla.',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Preferencias de notificación guardadas.'),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0A5835),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: const Text(
-                        'Guardar preferencias',
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+    ProfileNotificationsModal.show(
+      context,
+      options: [
+        NotificationOptionItem(
+          title: 'Alertas de paradas prioritarias',
+          subtitle: 'Notificar cuando se asigne un desborde urgente en ruta.',
+          initialValue: _priorityNotificationsEnabled,
+          onChanged: (val) => _priorityNotificationsEnabled = val,
+        ),
+        NotificationOptionItem(
+          title: 'Asignación de nuevas paradas',
+          subtitle: 'Avisar cuando se agreguen paradas al circuito actual.',
+          initialValue: _taskAssignedNotificationsEnabled,
+          onChanged: (val) => _taskAssignedNotificationsEnabled = val,
+        ),
+        NotificationOptionItem(
+          title: 'Avisos de inicio y fin de turno',
+          subtitle: 'Recordatorios del horario de entrada y relevo de cuadrilla.',
+          initialValue: _shiftAlertsEnabled,
+          onChanged: (val) => _shiftAlertsEnabled = val,
+        ),
+      ],
     );
   }
 
@@ -1162,152 +852,9 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
 
   /// Confirmación de cierre de sesión
   void _confirmLogout(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          '¿Cerrar sesión?',
-          style: TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: 18,
-            color: Color(0xFF0F172A),
-          ),
-        ),
-        content: const Text(
-          '¿Estás seguro de que deseas salir de tu cuenta de personal de limpieza?',
-          style: TextStyle(
-            fontSize: 14,
-            color: Color(0xFF64748B),
-            height: 1.4,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              'Cancelar',
-              style: TextStyle(
-                color: Color(0xFF64748B),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ref.read(authViewModelProvider.notifier).logout();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text(
-              'Cerrar sesión',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static Widget _buildDataRow({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, color: const Color(0xFF475569), size: 20),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF64748B),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Elemento de menú de perfil individual
-class _ProfileMenuItem extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final VoidCallback onTap;
-
-  const _ProfileMenuItem({
-    required this.icon,
-    required this.title,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-          child: Row(
-            children: [
-              Icon(
-                icon,
-                size: 22,
-                color: const Color(0xFF334155),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF0F172A),
-                    letterSpacing: -0.2,
-                  ),
-                ),
-              ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                size: 22,
-                color: Color(0xFF94A3B8),
-              ),
-            ],
-          ),
-        ),
-      ),
+    ProfileLogoutDialog.show(
+      context,
+      onConfirm: () => ref.read(authViewModelProvider.notifier).logout(),
     );
   }
 }

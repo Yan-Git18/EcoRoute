@@ -10,7 +10,9 @@ import '../../../../core/constants/geo_constants.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/map/map_widgets.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
+import '../../data/fixtures/staff_tasks_fixtures.dart';
 import '../../domain/entities/staff_task_entity.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
 import '../widgets/staff_bottom_nav_bar.dart';
@@ -41,73 +43,7 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
   bool _isLocating = false;
   StaffTaskEntity? _selectedTask;
 
-  // Tareas de demostración geolocalizadas estrictamente en Cajamarca, Perú
-  static final List<StaffTaskEntity> _defaultDemoTasks = [
-    StaffTaskEntity(
-      id: 'task-demo-1',
-      reportNumber: '#0102',
-      citizenId: 'c-demo-1',
-      citizenName: 'Vecino Ciudadano',
-      categoryName: 'Contenedor lleno',
-      categoryIcon: 'delete_outline_rounded',
-      description: 'Contenedor saturado en Jr. Del Comercio.',
-      priority: ReportPriority.high,
-      status: ReportStatus.pending,
-      address: 'Jr. Del Comercio 620, Centro Histórico',
-      latitude: -7.1580,
-      longitude: -78.5180,
-      reportImageUrls: const [],
-      assignedAt: DateTime.now().subtract(const Duration(hours: 1)),
-    ),
-    StaffTaskEntity(
-      id: 'task-demo-2',
-      reportNumber: '#0103',
-      citizenId: 'c-demo-2',
-      citizenName: 'Vecino Ciudadano',
-      categoryName: 'Residuos en vía pública',
-      categoryIcon: 'cleaning_services_rounded',
-      description: 'Restos de poda y bolsas en vereda.',
-      priority: ReportPriority.medium,
-      status: ReportStatus.pending,
-      address: 'Jr. Amazonas 450, Cajamarca',
-      latitude: -7.1565,
-      longitude: -78.5160,
-      reportImageUrls: const [],
-      assignedAt: DateTime.now().subtract(const Duration(hours: 2)),
-    ),
-    StaffTaskEntity(
-      id: 'task-demo-3',
-      reportNumber: '#0104',
-      citizenId: 'c-demo-3',
-      citizenName: 'Vecino Ciudadano',
-      categoryName: 'Punto de recolección',
-      categoryIcon: 'recycling_rounded',
-      description: 'Limpieza periódica de contenedores verdes.',
-      priority: ReportPriority.low,
-      status: ReportStatus.pending,
-      address: 'Plaza de Armas de Cajamarca',
-      latitude: -7.1578,
-      longitude: -78.5175,
-      reportImageUrls: const [],
-      assignedAt: DateTime.now().subtract(const Duration(hours: 3)),
-    ),
-    StaffTaskEntity(
-      id: 'task-demo-5',
-      reportNumber: '#0101',
-      citizenId: 'c-demo-5',
-      citizenName: 'Vecino Ciudadano',
-      categoryName: 'Desborde de basura',
-      categoryIcon: 'delete_outline_rounded',
-      description: 'Cuadrilla atendiendo en zona con camión recolector.',
-      priority: ReportPriority.high,
-      status: ReportStatus.inProgress,
-      address: 'Jr. Dos de Mayo 780, Cajamarca',
-      latitude: -7.1610,
-      longitude: -78.5210,
-      reportImageUrls: const [],
-      assignedAt: DateTime.now().subtract(const Duration(hours: 5)),
-    ),
-  ];
+  static List<StaffTaskEntity> get _defaultDemoTasks => StaffTasksFixtures.defaultDemoTasks;
 
   bool get _isFlutterTest {
     return !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
@@ -347,13 +283,13 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
             right: 16,
             child: Column(
               children: [
-                _MapControlButton(
+                MapControlButton(
                   icon: Icons.add_rounded,
                   tooltip: 'Acercar mapa',
                   onPressed: _zoomIn,
                 ),
                 const SizedBox(height: 6),
-                _MapControlButton(
+                MapControlButton(
                   icon: Icons.remove_rounded,
                   tooltip: 'Alejar mapa',
                   onPressed: _zoomOut,
@@ -925,50 +861,6 @@ class _PriorityBadge extends StatelessWidget {
           fontSize: 11,
           fontWeight: FontWeight.w700,
           color: fg,
-        ),
-      ),
-    );
-  }
-}
-
-/// Botón circular flotante para controles del mapa (+ y -)
-class _MapControlButton extends StatelessWidget {
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onPressed;
-
-  const _MapControlButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: Colors.white.withAlpha(240),
-        shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x18000000),
-            blurRadius: 6,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onPressed,
-          child: Tooltip(
-            message: tooltip,
-            child: Icon(icon, color: const Color(0xFF334155), size: 20),
-          ),
         ),
       ),
     );

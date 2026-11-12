@@ -19,31 +19,9 @@ class AdminMapReportPreviewCard extends StatelessWidget {
     required this.onAssignCrew,
   });
 
-  Color _getPriorityColor(ReportPriority priority) {
-    switch (priority) {
-      case ReportPriority.high:
-        return const Color(0xFFDC2626);
-      case ReportPriority.medium:
-        return const Color(0xFFD97706);
-      case ReportPriority.low:
-        return const Color(0xFF059669);
-    }
-  }
-
-  String _getPriorityLabel(ReportPriority priority) {
-    switch (priority) {
-      case ReportPriority.high:
-        return 'Alta Prioridad';
-      case ReportPriority.medium:
-        return 'Prioridad Media';
-      case ReportPriority.low:
-        return 'Prioridad Baja';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final priorityColor = _getPriorityColor(report.priority);
+    final priorityColor = report.priority.color;
     final isPending = report.status == ReportStatus.pending;
 
     return Container(
@@ -104,7 +82,7 @@ class AdminMapReportPreviewCard extends StatelessWidget {
                         Icon(Icons.flag_rounded, size: 12, color: priorityColor),
                         const SizedBox(width: 4),
                         Text(
-                          _getPriorityLabel(report.priority),
+                          report.priority.priorityFullLabel,
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
