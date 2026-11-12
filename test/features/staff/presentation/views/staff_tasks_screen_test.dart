@@ -57,9 +57,11 @@ class MockStaffRepository implements StaffRepository {
     required String taskId,
     required String staffId,
     required String staffName,
-    required List<int> evidenceImageBytes,
+    List<int>? evidenceImageBytes,
+    List<List<int>>? multipleEvidenceBytes,
     required String notes,
     String? localImagePath,
+    List<String>? localImagePaths,
   }) async {
     final match = tasks.firstWhere((t) => t.id == taskId);
     final updated = match.copyWith(
@@ -115,15 +117,22 @@ void main() {
     expect(find.text('En proceso'), findsOneWidget);
     expect(find.text('Resueltas'), findsOneWidget);
 
-    // 4. Barra de ordenamiento
-    expect(find.textContaining('Ordenar por:'), findsOneWidget);
+    // 4. Barra de ordenamiento (por defecto: Más recientes)
+    expect(find.text('Ordenar por: Más recientes'), findsOneWidget);
 
     // 5. Tareas mostradas en pantalla
     expect(find.text('#0102'), findsOneWidget);
     expect(find.text('Contenedor lleno'), findsOneWidget);
     expect(find.text('#0103'), findsOneWidget);
 
-    // 6. Barra de navegación inferior
+    // 6. Cambiar ordenamiento manualmente a Prioridad
+    await tester.tap(find.byIcon(Icons.tune_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Prioridad (Alta primero)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ordenar por: Prioridad (Alta primero)'), findsOneWidget);
+
+    // 7. Barra de navegación inferior
     expect(find.text('Inicio'), findsOneWidget);
     expect(find.text('Mapa'), findsOneWidget);
     expect(find.text('Tareas'), findsOneWidget);

@@ -11,12 +11,13 @@ import '../viewmodels/staff_home_viewmodel.dart';
 import '../widgets/staff_bottom_nav_bar.dart';
 import '../widgets/staff_complete_task_sheet.dart';
 import '../widgets/staff_evidence_detail_sheet.dart';
+import '../widgets/staff_task_detail_sheet.dart';
 import '../widgets/staff_task_item_card.dart';
 
 /// Enum para opciones de ordenamiento de tareas en StaffTasksScreen
 enum StaffTaskSortOrder {
-  priority('Prioridad (Alta primero)'),
-  recent('Más recientes');
+  recent('Más recientes'),
+  priority('Prioridad (Alta primero)');
 
   final String label;
   const StaffTaskSortOrder(this.label);
@@ -38,7 +39,7 @@ class StaffTasksScreen extends ConsumerStatefulWidget {
 
 class _StaffTasksScreenState extends ConsumerState<StaffTasksScreen> {
   final TextEditingController _searchController = TextEditingController();
-  StaffTaskSortOrder _sortOrder = StaffTaskSortOrder.priority;
+  StaffTaskSortOrder _sortOrder = StaffTaskSortOrder.recent;
 
   static List<StaffTaskEntity> get _defaultDemoTasks => StaffTasksFixtures.defaultDemoTasks;
 
@@ -78,17 +79,19 @@ class _StaffTasksScreenState extends ConsumerState<StaffTasksScreen> {
       }).toList();
     }
 
-    // 3. Ordenamiento
+    // 3. Ordenamiento (Por defecto: Más recientes primero)
     final sortedList = List<StaffTaskEntity>.from(filteredList);
     if (_sortOrder == StaffTaskSortOrder.priority) {
       sortedList.sort((a, b) {
-        // Orden: high -> medium -> low
+        // Orden: high -> medium -> low, y a igual prioridad más recientes primero
         final priorityRank = {
           ReportPriority.high: 0,
           ReportPriority.medium: 1,
           ReportPriority.low: 2,
         };
-        return (priorityRank[a.priority] ?? 1).compareTo(priorityRank[b.priority] ?? 1);
+        final cmp = (priorityRank[a.priority] ?? 1).compareTo(priorityRank[b.priority] ?? 1);
+        if (cmp != 0) return cmp;
+        return b.assignedAt.compareTo(a.assignedAt);
       });
     } else {
       sortedList.sort((a, b) => b.assignedAt.compareTo(a.assignedAt));
@@ -172,7 +175,10 @@ class _StaffTasksScreenState extends ConsumerState<StaffTasksScreen> {
                               },
                             )
                           : null,
+                      filled: false,
                       border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     ),
                   ),
@@ -254,17 +260,18 @@ class _StaffTasksScreenState extends ConsumerState<StaffTasksScreen> {
                 ),
                 PopupMenuButton<StaffTaskSortOrder>(
                   tooltip: 'Cambiar orden',
+                  initialValue: _sortOrder,
                   icon: const Icon(Icons.tune_rounded, size: 18, color: Color(0xFF0A5835)),
                   padding: EdgeInsets.zero,
                   onSelected: (order) => setState(() => _sortOrder = order),
                   itemBuilder: (context) => [
                     const PopupMenuItem(
-                      value: StaffTaskSortOrder.priority,
-                      child: Text('Prioridad (Alta primero)'),
-                    ),
-                    const PopupMenuItem(
                       value: StaffTaskSortOrder.recent,
                       child: Text('Más recientes'),
+                    ),
+                    const PopupMenuItem(
+                      value: StaffTaskSortOrder.priority,
+                      child: Text('Prioridad (Alta primero)'),
                     ),
                   ],
                 ),
@@ -299,6 +306,12 @@ class _StaffTasksScreenState extends ConsumerState<StaffTasksScreen> {
                           onStart: () => _handleStartTask(task),
                           onResolve: () => StaffCompleteTaskSheet.show(context, task),
                           onViewEvidence: () => StaffEvidenceDetailSheet.show(context, task),
+                          onViewDetail: () => StaffTaskDetailSheet.show(
+                            context: context,
+                            task: task,
+                            onStart: () => _handleStartTask(task),
+                            onResolve: () => StaffCompleteTaskSheet.show(context, task),
+                          ),
                         );
                       },
                     ),

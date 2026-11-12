@@ -17,10 +17,12 @@ class StaffTaskDto {
   final String priority;
   final String status;
   final String address;
+  final String? reference;
   final double latitude;
   final double longitude;
   final List<String> reportImageUrls;
   final String? evidenceImageUrl;
+  final List<String> evidenceImageUrls;
   final String? resolutionNotes;
   final DateTime assignedAt;
   final DateTime? updatedAt;
@@ -37,10 +39,12 @@ class StaffTaskDto {
     required this.priority,
     required this.status,
     required this.address,
+    this.reference,
     required this.latitude,
     required this.longitude,
     required this.reportImageUrls,
     this.evidenceImageUrl,
+    this.evidenceImageUrls = const [],
     this.resolutionNotes,
     required this.assignedAt,
     this.updatedAt,
@@ -53,16 +57,57 @@ class StaffTaskDto {
       return DateTime.now();
     }
 
-    final rawLat = (map['latitude'] as num?)?.toDouble() ?? 0.0;
-    final rawLng = (map['longitude'] as num?)?.toDouble() ?? 0.0;
+    final locationMap = map['location'] as Map<String, dynamic>? ?? {};
+
+    final rawLat = (map['latitude'] as num?)?.toDouble() ??
+        (locationMap['latitude'] as num?)?.toDouble() ??
+        0.0;
+    final rawLng = (map['longitude'] as num?)?.toDouble() ??
+        (locationMap['longitude'] as num?)?.toDouble() ??
+        0.0;
     final hasValidGeo = rawLat != 0.0 &&
         rawLng != 0.0 &&
         AppGeoConstants.isInsideCajamarca(rawLat, rawLng);
 
-    final rawAddress = map['address'] as String?;
+    final rawAddress = (map['address'] as String?) ?? (locationMap['address'] as String?);
     final resolvedAddress = (rawAddress != null && rawAddress.trim().isNotEmpty && rawAddress != 'Ubicación registrada')
         ? rawAddress.trim()
         : AppGeoConstants.defaultAddress;
+
+    final resolvedReference = (map['reference'] as String?) ?? (locationMap['reference'] as String?);
+
+    // Extraer imágenes ciudadanas de 'images' y/o 'imageUrls'
+    final List<String> extractedCitizenImages = [];
+    if (map['images'] is List) {
+      for (final item in map['images']) {
+        if (item is Map && item['url'] != null) {
+          extractedCitizenImages.add(item['url'].toString());
+        } else if (item is String && item.isNotEmpty) {
+          extractedCitizenImages.add(item);
+        }
+      }
+    }
+    if (map['imageUrls'] is List) {
+      for (final item in map['imageUrls']) {
+        if (item is String && item.isNotEmpty && !extractedCitizenImages.contains(item)) {
+          extractedCitizenImages.add(item);
+        }
+      }
+    }
+
+    // Extraer imágenes de evidencia de limpieza
+    final List<String> extractedEvidence = [];
+    if (map['evidenceImageUrls'] is List) {
+      for (final item in map['evidenceImageUrls']) {
+        if (item != null && item.toString().isNotEmpty) {
+          extractedEvidence.add(item.toString());
+        }
+      }
+    }
+    final singleEvidence = map['evidenceImageUrl'] as String? ?? (map['evidencePhoto'] as String?);
+    if (extractedEvidence.isEmpty && singleEvidence != null && singleEvidence.isNotEmpty) {
+      extractedEvidence.add(singleEvidence);
+    }
 
     return StaffTaskDto(
       id: id,
@@ -76,13 +121,12 @@ class StaffTaskDto {
       priority: map['priority'] as String? ?? 'medium',
       status: map['status'] as String? ?? 'assigned',
       address: resolvedAddress,
+      reference: resolvedReference,
       latitude: hasValidGeo ? rawLat : AppGeoConstants.cajamarcaCenterLat,
       longitude: hasValidGeo ? rawLng : AppGeoConstants.cajamarcaCenterLng,
-      reportImageUrls: (map['imageUrls'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          const [],
-      evidenceImageUrl: map['evidenceImageUrl'] as String?,
+      reportImageUrls: extractedCitizenImages,
+      evidenceImageUrl: singleEvidence ?? (extractedEvidence.isNotEmpty ? extractedEvidence.first : null),
+      evidenceImageUrls: extractedEvidence,
       resolutionNotes: map['resolutionNotes'] as String?,
       assignedAt: parseDate(map['createdAt']),
       updatedAt: map['updatedAt'] != null ? parseDate(map['updatedAt']) : null,
@@ -102,10 +146,12 @@ class StaffTaskDto {
       priority: ReportPriority.fromString(priority),
       status: ReportStatus.fromString(status),
       address: address,
+      reference: reference,
       latitude: latitude,
       longitude: longitude,
       reportImageUrls: reportImageUrls,
       evidenceImageUrl: evidenceImageUrl,
+      evidenceImageUrls: evidenceImageUrls,
       resolutionNotes: resolutionNotes,
       assignedAt: assignedAt,
       updatedAt: updatedAt,

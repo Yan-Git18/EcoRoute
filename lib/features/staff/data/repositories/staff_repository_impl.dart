@@ -1,3 +1,4 @@
+import 'dart:convert';
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/utils/result.dart';
@@ -101,26 +102,43 @@ class StaffRepositoryImpl implements StaffRepository {
     required String taskId,
     required String staffId,
     required String staffName,
-    required List<int> evidenceImageBytes,
+    List<int>? evidenceImageBytes,
+    List<List<int>>? multipleEvidenceBytes,
     required String notes,
     String? localImagePath,
+    List<String>? localImagePaths,
   }) async {
-    String? evidenceUrl;
+    final List<List<int>> bytesToProcess = [];
+    if (multipleEvidenceBytes != null && multipleEvidenceBytes.isNotEmpty) {
+      bytesToProcess.addAll(multipleEvidenceBytes);
+    } else if (evidenceImageBytes != null && evidenceImageBytes.isNotEmpty) {
+      bytesToProcess.add(evidenceImageBytes);
+    }
 
-    if (evidenceImageBytes.isNotEmpty) {
-      final fileName = 'evidence_${taskId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final List<String> finalEvidenceUrls = [];
+
+    for (int i = 0; i < bytesToProcess.length; i++) {
+      final bytes = bytesToProcess[i];
+      final fileName = 'evidence_${taskId}_${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
+      String? uploadedUrl;
       try {
-        evidenceUrl = await _storageDataSource.uploadEvidenceImage(
-          imageBytes: evidenceImageBytes,
+        uploadedUrl = await _storageDataSource.uploadEvidenceImage(
+          imageBytes: bytes,
           fileName: fileName,
         );
       } catch (_) {}
+
+      if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+        finalEvidenceUrls.add(uploadedUrl);
+      } else {
+        // Respaldo de alta disponibilidad: Convertir a Base64 data URI
+        // para garantizar que la evidencia sea visible en cualquier dispositivo
+        // y tras reinstalar el APK.
+        finalEvidenceUrls.add('data:image/jpeg;base64,${base64Encode(bytes)}');
+      }
     }
 
-    // Si Firebase Storage retornó nulo o falló, usar la ruta local como contingencia
-    if ((evidenceUrl == null || evidenceUrl.isEmpty) && localImagePath != null && localImagePath.isNotEmpty) {
-      evidenceUrl = localImagePath;
-    }
+    final primaryEvidenceUrl = finalEvidenceUrls.isNotEmpty ? finalEvidenceUrls.first : null;
 
     try {
       final dto = await _remoteDataSource.updateTaskStatus(
@@ -129,7 +147,8 @@ class StaffRepositoryImpl implements StaffRepository {
         staffName: staffName,
         newStatus: ReportStatus.resolved,
         notes: notes,
-        evidenceImageUrl: evidenceUrl,
+        evidenceImageUrl: primaryEvidenceUrl,
+        evidenceImageUrls: finalEvidenceUrls,
       );
       final entity = dto.toDomain();
       _taskCache[entity.id] = entity;
@@ -139,7 +158,8 @@ class StaffRepositoryImpl implements StaffRepository {
       if (existing != null) {
         final updated = existing.copyWith(
           status: ReportStatus.resolved,
-          evidenceImageUrl: evidenceUrl,
+          evidenceImageUrl: primaryEvidenceUrl,
+          evidenceImageUrls: finalEvidenceUrls,
           resolutionNotes: notes,
           updatedAt: DateTime.now(),
         );

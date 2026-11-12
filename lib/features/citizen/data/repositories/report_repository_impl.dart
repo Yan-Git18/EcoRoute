@@ -1,3 +1,4 @@
+import 'dart:convert';
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/utils/result.dart';
@@ -78,13 +79,12 @@ class ReportRepositoryImpl implements ReportRepository {
 
       if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
         finalImageUrls.add(uploadedUrl);
-      } else if (localImagePaths != null && i < localImagePaths.length) {
-        // Respaldo de contingencia: Guardar la ruta local para que la evidencia
-        // sea visible de inmediato en la app aunque Firebase Storage esté offline
-        final localPath = localImagePaths[i];
-        if (localPath.isNotEmpty) {
-          finalImageUrls.add(localPath);
-        }
+      } else {
+        // Respaldo de alta disponibilidad: Si Firebase Storage no está disponible o falla,
+        // se codifican los bytes en Base64 para que la imagen persista en Firestore
+        // y pueda ser visualizada desde cualquier dispositivo y tras reinstalar el APK.
+        final base64Image = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+        finalImageUrls.add(base64Image);
       }
     }
 

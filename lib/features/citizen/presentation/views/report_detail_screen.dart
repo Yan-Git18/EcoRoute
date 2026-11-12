@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/evidence_image_card.dart';
+import '../../../../core/widgets/report_thumbnail.dart';
 import '../../domain/entities/report_entity.dart';
 import '../viewmodels/my_reports_viewmodel.dart';
 import '../widgets/report_status_badge.dart';
@@ -503,6 +504,30 @@ class _ReportPhotoCardState extends State<_ReportPhotoCard> {
                 ),
               ),
             ),
+            // Indicadores de puntos (dots)
+            Positioned(
+              bottom: 14,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(validImages.length, (idx) {
+                    final isCurrent = idx == _currentIndex;
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      width: isCurrent ? 16 : 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: isCurrent ? Colors.white : Colors.white.withAlpha(140),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ),
             Positioned(
               bottom: 12,
               right: 12,
@@ -580,6 +605,26 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
           ),
         ),
       );
+    } else if (url.startsWith('data:image')) {
+      try {
+        final commaIdx = url.indexOf(',');
+        final base64Str = commaIdx != -1 ? url.substring(commaIdx + 1) : url;
+        final bytes = base64Decode(base64Str);
+        return InteractiveViewer(
+          maxScale: 4.0,
+          child: Image.memory(
+            bytes,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const Center(
+              child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 48),
+            ),
+          ),
+        );
+      } catch (_) {
+        return const Center(
+          child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 48),
+        );
+      }
     } else {
       final file = File(url);
       if (file.existsSync()) {
@@ -667,14 +712,36 @@ class _ImageLoadErrorPlaceholder extends StatelessWidget {
 
 /// Tarjeta destacada para visualizar la evidencia de limpieza y resolución provista por el personal de campo.
 /// Principio SRP: Muestra exclusivamente la evidencia fotográfica y observaciones del trabajo completado.
-class _ResolutionEvidenceCard extends StatelessWidget {
+class _ResolutionEvidenceCard extends StatefulWidget {
   final ReportEntity report;
 
   const _ResolutionEvidenceCard({required this.report});
 
   @override
+  State<_ResolutionEvidenceCard> createState() => _ResolutionEvidenceCardState();
+}
+
+class _ResolutionEvidenceCardState extends State<_ResolutionEvidenceCard> {
+  int _activePhotoIndex = 0;
+
+  void _openFullScreen(BuildContext context, List<String> images, int initialIndex) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _FullScreenImageViewer(
+          imageUrls: images,
+          initialIndex: initialIndex,
+        ),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final hasPhoto = report.evidenceImageUrl != null && report.evidenceImageUrl!.trim().isNotEmpty;
+    final report = widget.report;
+    final evidencePhotos = report.evidenceImageUrls.where((u) => u.trim().isNotEmpty).toList();
+    if (evidencePhotos.isEmpty && report.evidenceImageUrl != null && report.evidenceImageUrl!.trim().isNotEmpty) {
+      evidencePhotos.add(report.evidenceImageUrl!.trim());
+    }
     final staffName = report.assignedStaffName ?? 'Personal municipal de limpieza';
     final notes = report.resolutionNotes?.trim();
 
@@ -757,12 +824,144 @@ class _ResolutionEvidenceCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          // 2. Fotografía de evidencia
-          if (hasPhoto)
+          // 2. Fotografía(s) de evidencia (carrusel si son múltiples)
+          if (evidencePhotos.length == 1)
             EvidenceImageCard(
-              imageUrl: report.evidenceImageUrl!,
+              imageUrl: evidencePhotos.first,
               reportTitle: 'Evidencia #${report.reportNumber}',
               badgeLabel: 'Zona atendida',
+            )
+          else if (evidencePhotos.length > 1)
+            Container(
+              height: 215,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    PageView.builder(
+                      itemCount: evidencePhotos.length,
+                      onPageChanged: (idx) => setState(() => _activePhotoIndex = idx),
+                      itemBuilder: (context, idx) {
+                        return GestureDetector(
+                          onTap: () => _openFullScreen(context, evidencePhotos, idx),
+                          child: ReportThumbnail(
+                            imageUrl: evidencePhotos[idx],
+                            width: double.infinity,
+                            height: double.infinity,
+                            fit: BoxFit.cover,
+                            borderRadius: 0,
+                          ),
+                        );
+                      },
+                    ),
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF047857).withAlpha(225),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.check_circle_rounded, size: 14, color: Colors.white),
+                            SizedBox(width: 4),
+                            Text(
+                              'Zona atendida',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 12,
+                      left: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withAlpha(160),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Text(
+                          '${_activePhotoIndex + 1} de ${evidencePhotos.length} fotos',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 14,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: List.generate(evidencePhotos.length, (idx) {
+                            final isCurrent = idx == _activePhotoIndex;
+                            return AnimatedContainer(
+                              duration: const Duration(milliseconds: 250),
+                              margin: const EdgeInsets.symmetric(horizontal: 3),
+                              width: isCurrent ? 16 : 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: isCurrent ? Colors.white : Colors.white.withAlpha(140),
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                            );
+                          }),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 12,
+                      right: 12,
+                      child: Material(
+                        color: Colors.black.withAlpha(160),
+                        borderRadius: BorderRadius.circular(14),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () => _openFullScreen(context, evidencePhotos, _activePhotoIndex),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Ampliar',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             )
           else
             Container(

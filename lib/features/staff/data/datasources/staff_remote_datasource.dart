@@ -19,6 +19,7 @@ abstract class StaffRemoteDataSource {
     required ReportStatus newStatus,
     String? notes,
     String? evidenceImageUrl,
+    List<String>? evidenceImageUrls,
   });
 }
 
@@ -80,6 +81,7 @@ class FirebaseStaffRemoteDataSourceImpl implements StaffRemoteDataSource {
     required ReportStatus newStatus,
     String? notes,
     String? evidenceImageUrl,
+    List<String>? evidenceImageUrls,
   }) async {
     if (!_isFirebaseReady && _customFirestore == null) {
       throw const ServerException(message: 'Base de datos no inicializada.');
@@ -99,8 +101,12 @@ class FirebaseStaffRemoteDataSourceImpl implements StaffRemoteDataSource {
         updateData['resolutionNotes'] = notes;
       }
 
-      if (evidenceImageUrl != null && evidenceImageUrl.isNotEmpty) {
+      if (evidenceImageUrls != null && evidenceImageUrls.isNotEmpty) {
+        updateData['evidenceImageUrls'] = evidenceImageUrls;
+        updateData['evidenceImageUrl'] = evidenceImageUrls.first;
+      } else if (evidenceImageUrl != null && evidenceImageUrl.isNotEmpty) {
         updateData['evidenceImageUrl'] = evidenceImageUrl;
+        updateData['evidenceImageUrls'] = [evidenceImageUrl];
       }
 
       await docRef.update(updateData);

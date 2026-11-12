@@ -137,12 +137,14 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
     return await _mediaPickerService.pickImageFromGallery();
   }
 
-  /// Completar y resolver una tarea de limpieza con foto y notas
+  /// Completar y resolver una tarea de limpieza con foto(s) y notas
   Future<bool> completeTask({
     required String taskId,
-    required List<int> imageBytes,
+    List<int>? imageBytes,
+    List<List<int>>? multipleImageBytes,
     required String notes,
     String? localImagePath,
+    List<String>? localImagePaths,
   }) async {
     final authState = ref.read(authViewModelProvider);
     final user = authState.user;
@@ -152,8 +154,10 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
       staffId: user?.id ?? 'staff_demo',
       staffName: user?.name ?? 'Personal de Campo',
       evidenceImageBytes: imageBytes,
+      multipleEvidenceBytes: multipleImageBytes,
       notes: notes,
       localImagePath: localImagePath,
+      localImagePaths: localImagePaths,
     );
 
     return result.fold(

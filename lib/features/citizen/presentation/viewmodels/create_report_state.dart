@@ -64,7 +64,7 @@ class CreateReportState {
   bool get isLocationInsideCajamarca => AppGeoConstants.isInsideCajamarca(latitude, longitude);
 
   bool get canAdvanceFromStep1 => selectedCategory != null;
-  bool get canAdvanceFromStep2 => true; // La fotografía es altamente recomendada pero no bloqueante
+  bool get canAdvanceFromStep2 => hasImage; // La fotografía es obligatoria (al menos una foto tomada)
   bool get canAdvanceFromStep3 => address.trim().isNotEmpty && isLocationInsideCajamarca;
   bool get canAdvanceFromStep4 => description.trim().length >= 5;
 

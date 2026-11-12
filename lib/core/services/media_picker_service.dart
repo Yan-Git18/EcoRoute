@@ -21,9 +21,9 @@ class MediaPickResult {
 ///
 /// Responsabilidad Única: Encapsular el acceso a cámara y galería de imágenes.
 abstract class MediaPickerService {
-  Future<MediaPickResult> pickImageFromCamera({int quality = 80, double maxWidth = 1200});
-  Future<MediaPickResult> pickImageFromGallery({int quality = 80, double maxWidth = 1200});
-  Future<List<MediaPickResult>> pickMultipleImagesFromGallery({int quality = 80, double maxWidth = 1200, int? limit});
+  Future<MediaPickResult> pickImageFromCamera({int quality = 70, double maxWidth = 800, double maxHeight = 800});
+  Future<MediaPickResult> pickImageFromGallery({int quality = 70, double maxWidth = 800, double maxHeight = 800});
+  Future<List<MediaPickResult>> pickMultipleImagesFromGallery({int quality = 70, double maxWidth = 800, double maxHeight = 800, int? limit});
 }
 
 /// Implementación concreta de MediaPickerService con ImagePicker.
@@ -33,25 +33,27 @@ class ImagePickerMediaServiceImpl implements MediaPickerService {
   ImagePickerMediaServiceImpl({ImagePicker? picker}) : _picker = picker ?? ImagePicker();
 
   @override
-  Future<MediaPickResult> pickImageFromCamera({int quality = 80, double maxWidth = 1200}) async {
-    return _pickImage(ImageSource.camera, quality: quality, maxWidth: maxWidth);
+  Future<MediaPickResult> pickImageFromCamera({int quality = 70, double maxWidth = 800, double maxHeight = 800}) async {
+    return _pickImage(ImageSource.camera, quality: quality, maxWidth: maxWidth, maxHeight: maxHeight);
   }
 
   @override
-  Future<MediaPickResult> pickImageFromGallery({int quality = 80, double maxWidth = 1200}) async {
-    return _pickImage(ImageSource.gallery, quality: quality, maxWidth: maxWidth);
+  Future<MediaPickResult> pickImageFromGallery({int quality = 70, double maxWidth = 800, double maxHeight = 800}) async {
+    return _pickImage(ImageSource.gallery, quality: quality, maxWidth: maxWidth, maxHeight: maxHeight);
   }
 
   @override
   Future<List<MediaPickResult>> pickMultipleImagesFromGallery({
-    int quality = 80,
-    double maxWidth = 1200,
+    int quality = 70,
+    double maxWidth = 800,
+    double maxHeight = 800,
     int? limit,
   }) async {
     try {
       final pickedList = await _picker.pickMultiImage(
         imageQuality: quality,
         maxWidth: maxWidth,
+        maxHeight: maxHeight,
         limit: limit,
       );
 
@@ -74,12 +76,14 @@ class ImagePickerMediaServiceImpl implements MediaPickerService {
     ImageSource source, {
     required int quality,
     required double maxWidth,
+    double? maxHeight,
   }) async {
     try {
       final picked = await _picker.pickImage(
         source: source,
         imageQuality: quality,
         maxWidth: maxWidth,
+        maxHeight: maxHeight,
       );
 
       if (picked != null) {

@@ -75,7 +75,7 @@ void main() {
     latitude: -12.046,
     longitude: -77.042,
     address: 'Av. Las Palmeras 412',
-    imageUrls: const [],
+    imageUrls: const ['https://example.com/photo.jpg'],
     createdAt: DateTime.now(),
   );
 
@@ -155,6 +155,27 @@ void main() {
     expect(result.isFailure, true);
     expect(result.failureOrNull, isA<ValidationFailure>());
     expect(result.failureOrNull?.message, contains('dirección'));
+  });
+
+  test('debe retornar ValidationFailure si no se incluye ninguna fotografía', () async {
+    final reportWithoutImages = validReport.copyWith(imageUrls: const []);
+    final result = await useCase(report: reportWithoutImages);
+
+    expect(result.isFailure, true);
+    expect(result.failureOrNull, isA<ValidationFailure>());
+    expect(result.failureOrNull?.message, contains('fotografía'));
+  });
+
+  test('debe retornar Success cuando se incluye fotografía vía imageBytes', () async {
+    final reportWithoutUrls = validReport.copyWith(imageUrls: const []);
+    final result = await useCase(
+      report: reportWithoutUrls,
+      imageBytes: [1, 2, 3],
+      imageFileName: 'foto.jpg',
+    );
+
+    expect(result.isSuccess, true);
+    expect(fakeRepository.lastCreatedReport?.id, 'rep-1');
   });
 
   test('debe retornar Success y guardar el reporte cuando todos los campos son válidos', () async {

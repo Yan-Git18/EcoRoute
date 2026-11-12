@@ -121,7 +121,10 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
                               },
                             )
                           : null,
+                      filled: false,
                       border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     ),
                   ),

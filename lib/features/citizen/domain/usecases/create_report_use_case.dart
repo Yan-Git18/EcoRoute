@@ -40,6 +40,19 @@ class CreateReportUseCase {
       );
     }
 
+    final hasImages = (imageBytes != null && imageBytes.isNotEmpty) ||
+        (multipleImageBytes != null && multipleImageBytes.isNotEmpty) ||
+        (localImagePaths != null && localImagePaths.isNotEmpty) ||
+        report.imageUrls.isNotEmpty ||
+        report.evidenceImageUrls.isNotEmpty;
+    if (!hasImages) {
+      return const FailureResult(
+        ValidationFailure(
+          message: 'Debe adjuntar al menos una fotografía de evidencia tomada al instante.',
+        ),
+      );
+    }
+
     return _repository.createReport(
       report: report,
       imageBytes: imageBytes,

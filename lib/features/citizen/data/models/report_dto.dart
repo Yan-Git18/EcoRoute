@@ -25,6 +25,7 @@ class ReportDto {
   final DateTime createdAt;
   final DateTime? updatedAt;
   final String? evidenceImageUrl;
+  final List<String> evidenceImageUrls;
   final String? resolutionNotes;
   final String? assignedStaffName;
 
@@ -48,6 +49,7 @@ class ReportDto {
     required this.createdAt,
     this.updatedAt,
     this.evidenceImageUrl,
+    this.evidenceImageUrls = const [],
     this.resolutionNotes,
     this.assignedStaffName,
   });
@@ -60,6 +62,19 @@ class ReportDto {
     }
 
     final locationMap = map['location'] as Map<String, dynamic>? ?? {};
+
+    final List<String> extractedEvidence = [];
+    if (map['evidenceImageUrls'] is List) {
+      for (final item in map['evidenceImageUrls']) {
+        if (item != null && item.toString().isNotEmpty) {
+          extractedEvidence.add(item.toString());
+        }
+      }
+    }
+    final singleEvidence = map['evidenceImageUrl'] as String? ?? (map['evidencePhoto'] as String?);
+    if (extractedEvidence.isEmpty && singleEvidence != null && singleEvidence.isNotEmpty) {
+      extractedEvidence.add(singleEvidence);
+    }
 
     return ReportDto(
       id: documentId,
@@ -81,10 +96,12 @@ class ReportDto {
               ?.map((e) => e is Map ? (e['url'] as String? ?? '') : e.toString())
               .where((url) => url.isNotEmpty)
               .toList() ??
+          (map['imageUrls'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
           [],
       createdAt: parseDate(map['createdAt']),
       updatedAt: map['updatedAt'] != null ? parseDate(map['updatedAt']) : null,
-      evidenceImageUrl: map['evidenceImageUrl'] as String? ?? (map['evidencePhoto'] as String?),
+      evidenceImageUrl: singleEvidence ?? (extractedEvidence.isNotEmpty ? extractedEvidence.first : null),
+      evidenceImageUrls: extractedEvidence,
       resolutionNotes: map['resolutionNotes'] as String? ?? (map['resolutionComment'] as String?),
       assignedStaffName: map['assignedStaffName'] as String? ?? (map['assignedToTeamName'] as String?),
     );
@@ -110,9 +127,11 @@ class ReportDto {
         'reference': reference,
       },
       'images': imageUrls.map((url) => {'url': url, 'uploadedAt': Timestamp.now()}).toList(),
+      'imageUrls': imageUrls,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': FieldValue.serverTimestamp(),
       if (evidenceImageUrl != null) 'evidenceImageUrl': evidenceImageUrl,
+      if (evidenceImageUrls.isNotEmpty) 'evidenceImageUrls': evidenceImageUrls,
       if (resolutionNotes != null) 'resolutionNotes': resolutionNotes,
       if (assignedStaffName != null) 'assignedStaffName': assignedStaffName,
     };
@@ -140,6 +159,7 @@ class ReportDto {
       updatedAt: updatedAt,
       assignedStaffName: assignedStaffName,
       evidenceImageUrl: evidenceImageUrl,
+      evidenceImageUrls: evidenceImageUrls,
       resolutionNotes: resolutionNotes,
     );
   }
@@ -165,6 +185,7 @@ class ReportDto {
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
       evidenceImageUrl: entity.evidenceImageUrl,
+      evidenceImageUrls: entity.evidenceImageUrls,
       resolutionNotes: entity.resolutionNotes,
       assignedStaffName: entity.assignedStaffName,
     );

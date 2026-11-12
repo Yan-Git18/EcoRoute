@@ -93,7 +93,10 @@ class _CitizenMapSearchBarState extends State<CitizenMapSearchBar> {
                       },
                     )
                   : null,
+              filled: false,
               border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
           ),
