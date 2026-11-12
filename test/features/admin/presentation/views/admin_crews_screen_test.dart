@@ -8,6 +8,7 @@ import 'package:ecoroute/features/admin/presentation/viewmodels/admin_reports_vi
 import 'package:ecoroute/features/admin/presentation/views/admin_crews_screen.dart';
 import 'package:ecoroute/features/admin/presentation/widgets/admin_bottom_nav_bar.dart';
 import 'package:ecoroute/features/admin/presentation/widgets/admin_crew_card.dart';
+import 'package:ecoroute/features/admin/presentation/widgets/admin_crew_create_modal.dart';
 import 'package:ecoroute/features/admin/presentation/widgets/admin_crew_edit_modal.dart';
 import 'package:ecoroute/features/auth/domain/entities/user_entity.dart';
 import 'package:ecoroute/features/auth/presentation/viewmodels/auth_state.dart';
@@ -35,7 +36,29 @@ class MockAdminCrewsRepository implements AdminRepository {
   Future<Result<List<ReportEntity>>> getAllReports() async => Success(reports);
 
   @override
-  Future<Result<List<MunicipalCrewEntity>>> getAvailableCrews() async => Success(crews);
+  Future<Result<List<MunicipalCrewEntity>>> getAvailableCrews() async => Success(List.from(crews));
+
+  @override
+  Future<Result<MunicipalCrewEntity>> createCrew(MunicipalCrewEntity crew) async {
+    final created = crew.copyWith(id: 'crew-${crews.length + 1}');
+    crews.insert(0, created);
+    return Success(created);
+  }
+
+  @override
+  Future<Result<MunicipalCrewEntity>> updateCrew(MunicipalCrewEntity crew) async {
+    final index = crews.indexWhere((c) => c.id == crew.id);
+    if (index >= 0) {
+      crews[index] = crew;
+    }
+    return Success(crew);
+  }
+
+  @override
+  Future<Result<void>> deleteCrew(String crewId) async {
+    crews.removeWhere((c) => c.id == crewId);
+    return const Success(null);
+  }
 
   @override
   Future<Result<ReportEntity>> assignReportToCrew({
@@ -222,5 +245,62 @@ void main() {
 
     // Modal se cierra
     expect(find.byType(AdminCrewEditModal), findsNothing);
+  });
+
+  testWidgets('Abre modal de creación con FAB y permite registrar una nueva cuadrilla', (tester) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final mockRepo = MockAdminCrewsRepository()..crews = List.from(testCrews);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authViewModelProvider.overrideWith(() => MockAdminAuthViewModel(testAdminUser)),
+          adminRepositoryProvider.overrideWithValue(mockRepo),
+        ],
+        child: const MaterialApp(
+          home: AdminCrewsScreen(),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // 1. Verificar FAB
+    final fab = find.byType(FloatingActionButton);
+    expect(fab, findsOneWidget);
+    expect(find.text('Nueva Cuadrilla'), findsOneWidget);
+
+    // 2. Tocar FAB
+    await tester.tap(fab);
+    await tester.pumpAndSettle();
+
+    // 3. Modal abierto
+    expect(find.byType(AdminCrewCreateModal), findsOneWidget);
+    expect(find.text('Registrar Nueva Cuadrilla'), findsOneWidget);
+
+    // 4. Llenar formulario
+    final textFields = find.byType(TextFormField);
+    expect(textFields, findsNWidgets(5));
+
+    await tester.enterText(textFields.at(0), 'Cuadrilla Surquillo');
+    await tester.enterText(textFields.at(1), 'Sector 6 (Av. Principal)');
+    await tester.enterText(textFields.at(2), 'Roberto Gómez');
+    await tester.enterText(textFields.at(3), 'Camión #07');
+    await tester.enterText(textFields.at(4), 'ECR-999');
+    await tester.pumpAndSettle();
+
+    // 5. Presionar guardar
+    final registerButton = find.text('Registrar Cuadrilla en Firestore');
+    expect(registerButton, findsOneWidget);
+    await tester.tap(registerButton);
+    await tester.pumpAndSettle();
+
+    // 6. Modal cerrado y cuadrilla agregada a la lista
+    expect(find.byType(AdminCrewCreateModal), findsNothing);
+    expect(find.text('Cuadrilla Surquillo'), findsOneWidget);
   });
 }

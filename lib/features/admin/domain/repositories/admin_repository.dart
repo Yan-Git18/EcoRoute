@@ -16,6 +16,15 @@ abstract class AdminRepository {
   /// Obtiene la lista de cuadrillas municipales registradas y su disponibilidad.
   Future<Result<List<MunicipalCrewEntity>>> getAvailableCrews();
 
+  /// Registra una nueva cuadrilla municipal y su vehículo en Cloud Firestore.
+  Future<Result<MunicipalCrewEntity>> createCrew(MunicipalCrewEntity crew);
+
+  /// Actualiza los datos operativos, sector o estado de una cuadrilla municipal.
+  Future<Result<MunicipalCrewEntity>> updateCrew(MunicipalCrewEntity crew);
+
+  /// Elimina una cuadrilla municipal del registro del sistema.
+  Future<Result<void>> deleteCrew(String crewId);
+
   /// Asigna un reporte ciudadano a una cuadrilla y unidad vehicular determinada.
   Future<Result<ReportEntity>> assignReportToCrew({
     required String reportId,

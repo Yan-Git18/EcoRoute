@@ -15,6 +15,7 @@ class AdminRepositoryImpl implements AdminRepository {
   final AdminRemoteDataSource _remoteDataSource;
 
   static final Map<String, ReportEntity> _adminReportsCache = {};
+  static final Map<String, MunicipalCrewEntity> _adminCrewsCache = {};
 
   AdminRepositoryImpl({AdminRemoteDataSource? remoteDataSource})
       : _remoteDataSource = remoteDataSource ?? FirebaseAdminRemoteDataSourceImpl();
@@ -52,10 +53,57 @@ class AdminRepositoryImpl implements AdminRepository {
   @override
   Future<Result<List<MunicipalCrewEntity>>> getAvailableCrews() async {
     try {
-      final crews = await _remoteDataSource.getAvailableCrews();
-      return Success(crews);
+      final dtos = await _remoteDataSource.getAvailableCrews();
+      for (final dto in dtos) {
+        final entity = dto.toDomain();
+        _adminCrewsCache[entity.id] = entity;
+      }
+      return Success(_adminCrewsCache.values.toList());
     } catch (e) {
+      if (_adminCrewsCache.isNotEmpty) {
+        return Success(_adminCrewsCache.values.toList());
+      }
       return FailureResult(ServerFailure(message: 'Error al consultar cuadrillas: $e'));
+    }
+  }
+
+  @override
+  Future<Result<MunicipalCrewEntity>> createCrew(MunicipalCrewEntity crew) async {
+    try {
+      final dto = await _remoteDataSource.createCrew(crew);
+      final entity = dto.toDomain();
+      _adminCrewsCache[entity.id] = entity;
+      return Success(entity);
+    } on ServerException catch (e) {
+      return FailureResult(ServerFailure(message: e.message, code: e.code));
+    } catch (e) {
+      return FailureResult(ServerFailure(message: 'Error al registrar cuadrilla: $e'));
+    }
+  }
+
+  @override
+  Future<Result<MunicipalCrewEntity>> updateCrew(MunicipalCrewEntity crew) async {
+    try {
+      await _remoteDataSource.updateCrew(crew);
+      _adminCrewsCache[crew.id] = crew;
+      return Success(crew);
+    } on ServerException catch (e) {
+      return FailureResult(ServerFailure(message: e.message, code: e.code));
+    } catch (e) {
+      return FailureResult(ServerFailure(message: 'Error al actualizar cuadrilla: $e'));
+    }
+  }
+
+  @override
+  Future<Result<void>> deleteCrew(String crewId) async {
+    try {
+      await _remoteDataSource.deleteCrew(crewId);
+      _adminCrewsCache.remove(crewId);
+      return const Success(null);
+    } on ServerException catch (e) {
+      return FailureResult(ServerFailure(message: e.message, code: e.code));
+    } catch (e) {
+      return FailureResult(ServerFailure(message: 'Error al eliminar cuadrilla: $e'));
     }
   }
 

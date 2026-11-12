@@ -38,6 +38,15 @@ class MockAdminMapRepository implements AdminRepository {
   Future<Result<List<MunicipalCrewEntity>>> getAvailableCrews() async => Success(crews);
 
   @override
+  Future<Result<MunicipalCrewEntity>> createCrew(MunicipalCrewEntity crew) async => Success(crew);
+
+  @override
+  Future<Result<MunicipalCrewEntity>> updateCrew(MunicipalCrewEntity crew) async => Success(crew);
+
+  @override
+  Future<Result<void>> deleteCrew(String crewId) async => const Success(null);
+
+  @override
   Future<Result<ReportEntity>> assignReportToCrew({
     required String reportId,
     required MunicipalCrewEntity crew,

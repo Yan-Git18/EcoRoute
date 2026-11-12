@@ -6,11 +6,15 @@ import '../../../auth/domain/entities/user_entity.dart';
 import '../../../citizen/data/models/report_dto.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../domain/entities/municipal_crew_entity.dart';
+import '../models/municipal_crew_dto.dart';
 
 /// Contrato para la fuente remota de datos del administrador municipal.
 abstract class AdminRemoteDataSource {
   Future<List<ReportDto>> getAllReports();
-  Future<List<MunicipalCrewEntity>> getAvailableCrews();
+  Future<List<MunicipalCrewDto>> getAvailableCrews();
+  Future<MunicipalCrewDto> createCrew(MunicipalCrewEntity crew);
+  Future<void> updateCrew(MunicipalCrewEntity crew);
+  Future<void> deleteCrew(String crewId);
   Future<ReportDto> assignReportToCrew({
     required String reportId,
     required MunicipalCrewEntity crew,
@@ -133,9 +137,80 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
   }
 
   @override
-  Future<List<MunicipalCrewEntity>> getAvailableCrews() async {
-    // Si en el futuro existe la colección 'crews' en Firestore, se puede consultar aquí.
-    return _defaultMunicipalCrews;
+  Future<List<MunicipalCrewDto>> getAvailableCrews() async {
+    if (!_isFirebaseReady && _customFirestore == null) {
+      return _defaultMunicipalCrews
+          .map((c) => MunicipalCrewDto.fromDomain(c))
+          .toList();
+    }
+
+    try {
+      final snapshot = await _firestore.collection('crews').get();
+      if (snapshot.docs.isEmpty) {
+        // Inicialización transparente (seeding) en Firestore al primer arranque
+        for (final crew in _defaultMunicipalCrews) {
+          final dto = MunicipalCrewDto.fromDomain(crew);
+          await _firestore.collection('crews').doc(crew.id).set(dto.toMap());
+        }
+        return _defaultMunicipalCrews
+            .map((c) => MunicipalCrewDto.fromDomain(c))
+            .toList();
+      }
+
+      return snapshot.docs
+          .map((doc) => MunicipalCrewDto.fromMap(doc.data(), doc.id))
+          .toList();
+    } catch (_) {
+      // Resiliencia: si Firestore falla o no hay conexión, mantener continuidad de servicio
+      return _defaultMunicipalCrews
+          .map((c) => MunicipalCrewDto.fromDomain(c))
+          .toList();
+    }
+  }
+
+  @override
+  Future<MunicipalCrewDto> createCrew(MunicipalCrewEntity crew) async {
+    if (!_isFirebaseReady && _customFirestore == null) {
+      return MunicipalCrewDto.fromDomain(crew);
+    }
+
+    try {
+      final docRef = crew.id.isNotEmpty
+          ? _firestore.collection('crews').doc(crew.id)
+          : _firestore.collection('crews').doc();
+      final crewWithId = crew.copyWith(id: docRef.id);
+      final dto = MunicipalCrewDto.fromDomain(crewWithId);
+      await docRef.set(dto.toMap());
+      return dto;
+    } catch (e) {
+      throw ServerException(message: 'Error al registrar cuadrilla en Firestore: $e');
+    }
+  }
+
+  @override
+  Future<void> updateCrew(MunicipalCrewEntity crew) async {
+    if (!_isFirebaseReady && _customFirestore == null) return;
+
+    try {
+      final dto = MunicipalCrewDto.fromDomain(crew);
+      await _firestore.collection('crews').doc(crew.id).set(
+        dto.toMap(),
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      throw ServerException(message: 'Error al actualizar cuadrilla en Firestore: $e');
+    }
+  }
+
+  @override
+  Future<void> deleteCrew(String crewId) async {
+    if (!_isFirebaseReady && _customFirestore == null) return;
+
+    try {
+      await _firestore.collection('crews').doc(crewId).delete();
+    } catch (e) {
+      throw ServerException(message: 'Error al eliminar cuadrilla en Firestore: $e');
+    }
   }
 
   @override

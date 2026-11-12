@@ -6,6 +6,7 @@ import '../../domain/entities/municipal_crew_entity.dart';
 import '../viewmodels/admin_reports_viewmodel.dart';
 import '../widgets/admin_bottom_nav_bar.dart';
 import '../widgets/admin_crew_card.dart';
+import '../widgets/admin_crew_create_modal.dart';
 import '../widgets/admin_crew_edit_modal.dart';
 
 /// Pantalla de Gestión de Cuadrillas y Flota Municipal (Admin Fase 3).
@@ -318,6 +319,41 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
                   ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          AdminCrewCreateModal.show(
+            context: context,
+            onConfirm: (newCrew) async {
+              final messenger = ScaffoldMessenger.of(context);
+              final success = await viewModel.createCrew(newCrew);
+              if (mounted) {
+                if (success) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text('Cuadrilla ${newCrew.name} registrada correctamente.'),
+                      backgroundColor: const Color(0xFF047857),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                } else if (adminReportsState.errorMessage != null) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(adminReportsState.errorMessage!),
+                      backgroundColor: const Color(0xFFDC2626),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              }
+              return success;
+            },
+          );
+        },
+        backgroundColor: const Color(0xFF0A5835),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('Nueva Cuadrilla', style: TextStyle(fontWeight: FontWeight.w700)),
       ),
       bottomNavigationBar: const AdminBottomNavBar(currentIndex: 3),
     );

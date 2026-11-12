@@ -6,6 +6,21 @@ enum MunicipalCrewStatus {
 
   final String label;
   const MunicipalCrewStatus(this.label);
+
+  String toDbString() => name;
+
+  static MunicipalCrewStatus fromString(String? value) {
+    switch (value) {
+      case 'onRoute':
+      case 'on_route':
+        return MunicipalCrewStatus.onRoute;
+      case 'maintenance':
+        return MunicipalCrewStatus.maintenance;
+      case 'available':
+      default:
+        return MunicipalCrewStatus.available;
+    }
+  }
 }
 
 /// Entidad inmutable que representa una Cuadrilla de Limpieza Municipal y su unidad vehicular.
@@ -74,4 +89,39 @@ class MunicipalCrewEntity {
       longitude: longitude ?? this.longitude,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MunicipalCrewEntity &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          zone == other.zone &&
+          leadStaffName == other.leadStaffName &&
+          vehicleCode == other.vehicleCode &&
+          vehiclePlate == other.vehiclePlate &&
+          vehicleType == other.vehicleType &&
+          crewMembersCount == other.crewMembersCount &&
+          activeTasksCount == other.activeTasksCount &&
+          isAvailable == other.isAvailable &&
+          status == other.status &&
+          latitude == other.latitude &&
+          longitude == other.longitude;
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      zone.hashCode ^
+      leadStaffName.hashCode ^
+      vehicleCode.hashCode ^
+      vehiclePlate.hashCode ^
+      vehicleType.hashCode ^
+      crewMembersCount.hashCode ^
+      activeTasksCount.hashCode ^
+      isAvailable.hashCode ^
+      status.hashCode ^
+      latitude.hashCode ^
+      longitude.hashCode;
 }
