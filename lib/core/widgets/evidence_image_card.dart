@@ -1,12 +1,10 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
+import 'report_thumbnail.dart';
 
 /// Visor interactivo y tarjeta de evidencia fotográfica de resolución de incidencias.
 ///
 /// Principio DRY y SRP: Reutilizado en StaffEvidenceDetailSheet y ReportDetailScreen.
-/// Soporta imágenes HTTP/HTTPS, Base64 (Data URI) y archivos locales en dispositivo,
-/// con badge de verificación, control de zoom interactivo y visor a pantalla completa.
+/// Delega la carga y renderizado de la imagen en [ReportThumbnail].
 /// Ubicación: `lib/core/widgets/evidence_image_card.dart`
 /// Capa: Core (Widgets)
 class EvidenceImageCard extends StatelessWidget {
@@ -48,7 +46,13 @@ class EvidenceImageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final imageWidget = _buildRawImage();
+    final imageWidget = ReportThumbnail(
+      imageUrl: imageUrl,
+      width: double.infinity,
+      height: height,
+      fit: BoxFit.cover,
+      borderRadius: 0,
+    );
 
     return Container(
       width: double.infinity,
@@ -126,80 +130,4 @@ class EvidenceImageCard extends StatelessWidget {
       ),
     );
   }
-
-  Widget _buildRawImage() {
-    final url = imageUrl.trim();
-
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return Image.network(
-        url,
-        width: double.infinity,
-        height: height,
-        fit: BoxFit.cover,
-        loadingBuilder: (context, child, progress) {
-          if (progress == null) return child;
-          return SizedBox(
-            height: height,
-            child: const Center(
-              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF047857)),
-            ),
-          );
-        },
-        errorBuilder: (_, __, ___) => _buildErrorImagePlaceholder(),
-      );
-    } else if (url.startsWith('data:image')) {
-      try {
-        final commaIdx = url.indexOf(',');
-        final base64Str = commaIdx != -1 ? url.substring(commaIdx + 1) : url;
-        final bytes = base64Decode(base64Str);
-        return Image.memory(
-          bytes,
-          width: double.infinity,
-          height: height,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _buildErrorImagePlaceholder(),
-        );
-      } catch (_) {
-        return _buildErrorImagePlaceholder();
-      }
-    } else {
-      final file = File(url);
-      if (file.existsSync()) {
-        return Image.file(
-          file,
-          width: double.infinity,
-          height: height,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _buildErrorImagePlaceholder(),
-        );
-      }
-      return _buildErrorImagePlaceholder();
-    }
-  }
-
-  Widget _buildErrorImagePlaceholder() {
-    return Container(
-      height: height,
-      width: double.infinity,
-      color: const Color(0xFFF8FAFC),
-      child: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.broken_image_rounded, size: 42, color: Color(0xFF94A3B8)),
-            SizedBox(height: 8),
-            Text(
-              'No se pudo cargar la imagen de evidencia',
-              style: TextStyle(
-                fontSize: 12,
-                color: Color(0xFF64748B),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
-
