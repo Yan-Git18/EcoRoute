@@ -65,3 +65,13 @@ class FirebaseStorageServiceImpl implements StorageService {
     }
   }
 }
+
+/// Base abstracta para DataSources que delegan almacenamiento en [StorageService].
+abstract class BaseFirebaseStorageDataSource {
+  final StorageService storageService;
+
+  BaseFirebaseStorageDataSource({
+    StorageService? storageService,
+    FirebaseStorage? storage,
+  }) : storageService = storageService ?? FirebaseStorageServiceImpl(storage: storage);
+}

@@ -1,9 +1,6 @@
-import 'package:firebase_storage/firebase_storage.dart';
 import '../../../../core/services/firebase_storage_service.dart';
 
 /// Contrato abstracto para la fuente de datos de almacenamiento de archivos multimedia de reportes.
-///
-/// Principio SRP: Responsabilidad única de gestionar la subida de imágenes de incidencias ciudadanas.
 abstract class ReportStorageDataSource {
   Future<String?> uploadReportImage({
     required List<int> imageBytes,
@@ -12,20 +9,16 @@ abstract class ReportStorageDataSource {
 }
 
 /// Implementación concreta de [ReportStorageDataSource] delegando en [StorageService].
-class FirebaseReportStorageDataSourceImpl implements ReportStorageDataSource {
-  final StorageService _storageService;
-
-  FirebaseReportStorageDataSourceImpl({
-    StorageService? storageService,
-    FirebaseStorage? storage,
-  }) : _storageService = storageService ?? FirebaseStorageServiceImpl(storage: storage);
+class FirebaseReportStorageDataSourceImpl extends BaseFirebaseStorageDataSource
+    implements ReportStorageDataSource {
+  FirebaseReportStorageDataSourceImpl({super.storageService, super.storage});
 
   @override
   Future<String?> uploadReportImage({
     required List<int> imageBytes,
     required String fileName,
   }) {
-    return _storageService.uploadFile(
+    return storageService.uploadFile(
       bytes: imageBytes,
       path: 'reports/$fileName',
     );
