@@ -77,9 +77,9 @@ class AdminBottomNavBar extends ConsumerWidget {
           onTap: () => _handleTap(context, 2),
         ),
         EcoBottomNavItem(
-          label: 'Personal',
-          activeIcon: Icons.local_shipping_rounded,
-          inactiveIcon: Icons.local_shipping_outlined,
+          label: 'Cuadrillas',
+          activeIcon: Icons.groups_rounded,
+          inactiveIcon: Icons.groups_outlined,
           onTap: () => _handleTap(context, 3),
         ),
       ],

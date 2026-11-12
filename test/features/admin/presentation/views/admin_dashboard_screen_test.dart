@@ -160,7 +160,8 @@ void main() {
     expect(find.text('Módulos de Gestión'), findsOneWidget);
     expect(find.text('Gestión y Asignación de Reportes'), findsOneWidget);
     expect(find.text('Monitoreo en Mapa en Tiempo Real'), findsOneWidget);
-    expect(find.text('Gestión de Personal y Flota'), findsOneWidget);
+    expect(find.text('Cuadrillas y Zonas de Operación'), findsOneWidget);
+    expect(find.text('Flota y Camiones Municipales'), findsOneWidget);
 
     // 4. Incidencia urgente destacada
     expect(find.text('Incidencias Pendientes Urgentes'), findsOneWidget);
@@ -171,6 +172,6 @@ void main() {
     expect(find.text('Inicio'), findsOneWidget);
     expect(find.text('Reportes'), findsOneWidget);
     expect(find.text('Mapa'), findsOneWidget);
-    expect(find.text('Personal'), findsOneWidget);
+    expect(find.text('Cuadrillas'), findsOneWidget);
   });
 }

@@ -160,14 +160,14 @@ void main() {
     await tester.pumpAndSettle();
 
     // 1. Título y encabezado
-    expect(find.text('Personal y Flota Municipal'), findsOneWidget);
-    expect(find.textContaining('unidades registradas'), findsOneWidget);
+    expect(find.text('Cuadrillas Operativas'), findsOneWidget);
+    expect(find.textContaining('equipos registrados'), findsOneWidget);
 
-    // 2. Métricas de flota
-    expect(find.text('Total Flota'), findsOneWidget);
+    // 2. Métricas de cuadrillas
+    expect(find.text('Total Equipos'), findsOneWidget);
     expect(find.text('En Ruta'), findsWidgets);
     expect(find.text('Disponibles'), findsWidgets);
-    expect(find.text('Taller'), findsOneWidget);
+    expect(find.text('Incidencias'), findsWidgets);
 
     // 3. Tarjetas de Cuadrilla
     expect(find.byType(AdminCrewCard), findsNWidgets(2));
@@ -178,7 +178,7 @@ void main() {
 
     // 4. Barra inferior de navegación
     expect(find.byType(AdminBottomNavBar), findsOneWidget);
-    expect(find.text('Personal'), findsOneWidget);
+    expect(find.text('Cuadrillas'), findsOneWidget);
   });
 
   testWidgets('Filtra cuadrillas al escribir en el buscador de AdminCrewsScreen', (tester) async {
@@ -302,5 +302,52 @@ void main() {
     // 6. Modal cerrado y cuadrilla agregada a la lista
     expect(find.byType(AdminCrewCreateModal), findsNothing);
     expect(find.text('Cuadrilla Surquillo'), findsOneWidget);
+  });
+
+  testWidgets('Abre modal de gestión y permite dar de baja una cuadrilla con diálogo de confirmación', (tester) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final mockRepo = MockAdminCrewsRepository()..crews = List.from(testCrews);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authViewModelProvider.overrideWith(() => MockAdminAuthViewModel(testAdminUser)),
+          adminRepositoryProvider.overrideWithValue(mockRepo),
+        ],
+        child: const MaterialApp(
+          home: AdminCrewsScreen(),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // 1. Abrir modal de gestión
+    final manageButtons = find.text('Gestionar');
+    expect(manageButtons, findsWidgets);
+    await tester.tap(manageButtons.first);
+    await tester.pumpAndSettle();
+
+    // 2. Presionar "Dar de baja cuadrilla"
+    final deleteButton = find.text('Dar de baja cuadrilla');
+    expect(deleteButton, findsOneWidget);
+    await tester.tap(deleteButton);
+    await tester.pumpAndSettle();
+
+    // 3. Verificar diálogo de confirmación
+    expect(find.text('Confirmar baja de unidad'), findsOneWidget);
+    final confirmDeleteButton = find.widgetWithText(ElevatedButton, 'Eliminar');
+    expect(confirmDeleteButton, findsOneWidget);
+    await tester.tap(confirmDeleteButton);
+    await tester.pumpAndSettle();
+
+    // 4. Se eliminó de la lista
+    expect(find.byType(AdminCrewEditModal), findsNothing);
+    expect(find.text('Cuadrilla Zona Norte'), findsNothing);
+    expect(find.text('Cuadrilla Especial Desbordes'), findsOneWidget);
   });
 }

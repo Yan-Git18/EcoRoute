@@ -185,7 +185,7 @@ void main() {
     expect(find.text('Mapa'), findsOneWidget);
     expect(find.text('Inicio'), findsOneWidget);
     expect(find.text('Reportes'), findsOneWidget);
-    expect(find.text('Personal'), findsOneWidget);
+    expect(find.text('Cuadrillas'), findsOneWidget);
   });
 
   testWidgets('Permite alternar filtros y seleccionar reporte para ver tarjeta emergente',

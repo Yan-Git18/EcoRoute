@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/router/route_names.dart';
 import '../../domain/entities/municipal_crew_entity.dart';
+import '../viewmodels/admin_reports_state.dart';
 import '../viewmodels/admin_reports_viewmodel.dart';
 import '../widgets/admin_bottom_nav_bar.dart';
 import '../widgets/admin_crew_card.dart';
@@ -94,7 +95,7 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Personal y Flota Municipal',
+              'Cuadrillas Operativas',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
@@ -103,7 +104,7 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
               ),
             ),
             Text(
-              '${crews.length} unidades registradas • $onRouteCount en circuito',
+              '${crews.length} equipos registrados • $onRouteCount en servicio',
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
@@ -114,13 +115,23 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.people_alt_rounded, color: Color(0xFF0A5835)),
+            icon: const Icon(Icons.add_business_rounded, color: Color(0xFF0A5835)),
+            tooltip: 'Registrar Cuadrilla',
+            onPressed: () => _openCreateCrewModal(context, viewModel, adminReportsState),
+          ),
+          IconButton(
+            icon: const Icon(Icons.local_shipping_outlined, color: Color(0xFF0A5835)),
+            tooltip: 'Flota Vehicular',
+            onPressed: () => context.push(RouteNames.adminFleet),
+          ),
+          IconButton(
+            icon: const Icon(Icons.badge_outlined, color: Color(0xFF0A5835)),
             tooltip: 'Gestión de Personal',
             onPressed: () => context.push(RouteNames.adminStaff),
           ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Color(0xFF475569)),
-            tooltip: 'Actualizar personal',
+            tooltip: 'Actualizar cuadrillas',
             onPressed: () => viewModel.refresh(),
           ),
           const SizedBox(width: 4),
@@ -128,7 +139,7 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
       ),
       body: Column(
         children: [
-          // 1. Resumen de Métricas de Flota y Buscador
+          // 1. Resumen de Métricas de Cuadrillas y Buscador
           Container(
             color: Colors.white,
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
@@ -139,10 +150,10 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
                   children: [
                     Expanded(
                       child: _FleetStatPill(
-                        label: 'Total Flota',
+                        label: 'Total Equipos',
                         count: '${crews.length}',
                         color: const Color(0xFF0A5835),
-                        icon: Icons.local_shipping_rounded,
+                        icon: Icons.groups_rounded,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -166,10 +177,10 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: _FleetStatPill(
-                        label: 'Taller',
-                        count: '$maintenanceCount',
-                        color: const Color(0xFFDC2626),
-                        icon: Icons.build_circle_outlined,
+                        label: 'Incidencias',
+                        count: '${crews.fold(0, (acc, c) => acc + c.activeTasksCount)}',
+                        color: const Color(0xFFD97706),
+                        icon: Icons.assignment_turned_in_rounded,
                       ),
                     ),
                   ],
@@ -181,7 +192,7 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
                   controller: _searchController,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
-                    hintText: 'Buscar por personal, placa, líder o zona...',
+                    hintText: 'Buscar por cuadrilla, zona, responsable o unidad...',
                     hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
                     prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF64748B)),
                     suffixIcon: _searchController.text.isNotEmpty
@@ -263,16 +274,16 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
                               color: const Color(0xFF0A5835).withAlpha(15),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.local_shipping_outlined, size: 48, color: Color(0xFF0A5835)),
+                            child: const Icon(Icons.groups_outlined, size: 48, color: Color(0xFF0A5835)),
                           ),
                           const SizedBox(height: 14),
                           const Text(
-                            'No se encontró personal',
+                            'No se encontraron cuadrillas',
                             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
                           ),
                           const SizedBox(height: 6),
                           const Text(
-                            'Intenta con otro término de búsqueda o ajusta el filtro.',
+                            'Intenta con otro término de búsqueda o registra una nueva cuadrilla.',
                             style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
                             textAlign: TextAlign.center,
                           ),
@@ -294,22 +305,65 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
                           AdminCrewEditModal.show(
                             context: context,
                             crew: crew,
-                            onConfirm: ({required status, required zone, required isAvailable}) async {
+                            onConfirm: ({
+                              required status,
+                              required zone,
+                              required isAvailable,
+                              leadStaffName,
+                              vehicleCode,
+                              vehiclePlate,
+                            }) async {
                               final messenger = ScaffoldMessenger.of(context);
-                              await viewModel.updateCrew(
+                              final success = await viewModel.updateCrew(
                                 crewId: crew.id,
                                 status: status,
                                 zone: zone,
                                 isAvailable: isAvailable,
+                                leadStaffName: leadStaffName,
+                                vehicleCode: vehicleCode,
+                                vehiclePlate: vehiclePlate,
                               );
                               if (mounted) {
-                                messenger.showSnackBar(
-                                  SnackBar(
-                                    content: Text('Unidad ${crew.vehicleCode} actualizada correctamente.'),
-                                    backgroundColor: const Color(0xFF047857),
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
+                                if (success) {
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text('Unidad ${crew.vehicleCode} actualizada correctamente.'),
+                                      backgroundColor: const Color(0xFF047857),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                } else {
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text(adminReportsState.errorMessage ?? 'Error al actualizar cuadrilla.'),
+                                      backgroundColor: const Color(0xFFDC2626),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            onDelete: () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              final success = await viewModel.deleteCrew(crew.id);
+                              if (mounted) {
+                                if (success) {
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text('Cuadrilla ${crew.name} eliminada correctamente.'),
+                                      backgroundColor: const Color(0xFF047857),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                } else {
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text(adminReportsState.errorMessage ?? 'Error al eliminar cuadrilla.'),
+                                      backgroundColor: const Color(0xFFDC2626),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
                               }
                             },
                           );
@@ -321,41 +375,47 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          AdminCrewCreateModal.show(
-            context: context,
-            onConfirm: (newCrew) async {
-              final messenger = ScaffoldMessenger.of(context);
-              final success = await viewModel.createCrew(newCrew);
-              if (mounted) {
-                if (success) {
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text('Cuadrilla ${newCrew.name} registrada correctamente.'),
-                      backgroundColor: const Color(0xFF047857),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                } else if (adminReportsState.errorMessage != null) {
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text(adminReportsState.errorMessage!),
-                      backgroundColor: const Color(0xFFDC2626),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                }
-              }
-              return success;
-            },
-          );
-        },
+        onPressed: () => _openCreateCrewModal(context, viewModel, adminReportsState),
         backgroundColor: const Color(0xFF0A5835),
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add_rounded),
         label: const Text('Nueva Cuadrilla', style: TextStyle(fontWeight: FontWeight.w700)),
       ),
       bottomNavigationBar: const AdminBottomNavBar(currentIndex: 3),
+    );
+  }
+
+  void _openCreateCrewModal(
+    BuildContext context,
+    AdminReportsViewModel viewModel,
+    AdminReportsState adminReportsState,
+  ) {
+    AdminCrewCreateModal.show(
+      context: context,
+      onConfirm: (newCrew) async {
+        final messenger = ScaffoldMessenger.of(context);
+        final success = await viewModel.createCrew(newCrew);
+        if (mounted) {
+          if (success) {
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text('Cuadrilla ${newCrew.name} registrada correctamente.'),
+                backgroundColor: const Color(0xFF047857),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          } else if (adminReportsState.errorMessage != null) {
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text(adminReportsState.errorMessage!),
+                backgroundColor: const Color(0xFFDC2626),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+        return success;
+      },
     );
   }
 }
