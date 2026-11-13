@@ -8,6 +8,7 @@ import '../../domain/entities/staff_task_entity.dart';
 class StaffTaskItemCard extends StatelessWidget {
   final StaffTaskEntity task;
   final bool isNextTask;
+  final String? pendingActionLabel;
   final VoidCallback onStart;
   final VoidCallback onResolve;
   final VoidCallback? onViewEvidence;
@@ -17,6 +18,7 @@ class StaffTaskItemCard extends StatelessWidget {
     super.key,
     required this.task,
     this.isNextTask = false,
+    this.pendingActionLabel,
     required this.onStart,
     required this.onResolve,
     this.onViewEvidence,
@@ -127,7 +129,7 @@ class StaffTaskItemCard extends StatelessWidget {
     if (task.isPending) {
       if (isNextTask) {
         return EcoActionPill(
-          label: 'Atender',
+          label: pendingActionLabel ?? 'Atender',
           textColor: const Color(0xFFB45309), // Ámbar oscuro
           backgroundColor: const Color(0xFFFEF3C7), // Ámbar suave
           icon: Icons.chevron_right_rounded,
@@ -136,7 +138,7 @@ class StaffTaskItemCard extends StatelessWidget {
         );
       }
       return EcoActionPill(
-        label: 'Iniciar',
+        label: pendingActionLabel ?? 'Iniciar',
         textColor: const Color(0xFFB45309), // Ámbar oscuro
         backgroundColor: const Color(0xFFFEF3C7), // Ámbar suave
         icon: Icons.chevron_right_rounded,

@@ -210,5 +210,70 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Parada 1'), findsOneWidget);
   });
+
+  testWidgets(
+      'Iniciar tarea desde el mapa pide confirmación y al aceptar muestra solo la ruta de esa tarea ocultando las demás',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final mockRepo = MockStaffRepository();
+    mockRepo.tasks = []; // Usa el fallback con varias paradas pendientes
+    final mockLoc = MockStaffLocationService();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authViewModelProvider.overrideWith(() => MockStaffAuthViewModel(testStaff)),
+          staffRepositoryProvider.overrideWithValue(mockRepo),
+          locationServiceProvider.overrideWithValue(mockLoc),
+        ],
+        child: const MaterialApp(
+          home: StaffRouteMapScreen(),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    // 1. Inicialmente se muestran múltiples paradas pendientes y ninguna ruta activa
+    expect(find.text('#0102 • Contenedor lleno'), findsOneWidget);
+    expect(find.text('#0103 • Residuos en vía pública'), findsOneWidget);
+    expect(find.text('Ruta óptima activa'), findsNothing);
+
+    // 2. Tocar una parada pendiente en el mapa abre su tarjeta inferior sin activar ruta aún
+    await tester.tap(find.text('#0102 • Contenedor lleno'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Iniciar'), findsOneWidget);
+    expect(find.text('Ruta óptima activa'), findsNothing);
+    expect(find.text('#0103 • Residuos en vía pública'), findsOneWidget);
+
+    // 3. Presionar "Iniciar" desde la tarjeta del mapa muestra el diálogo de confirmación
+    await tester.tap(find.text('Iniciar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Iniciar atención de tarea'), findsOneWidget);
+    expect(find.text('¿Está seguro de que desea iniciar esta tarea?'), findsOneWidget);
+
+    // 4. Si cancela, no inicia la ruta y mantiene todas las paradas visibles
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ruta óptima activa'), findsNothing);
+    expect(find.text('#0103 • Residuos en vía pública'), findsOneWidget);
+
+    // 5. Presionar "Iniciar" y confirmar "Sí, iniciar" activa la ruta y limpia las demás paradas
+    await tester.tap(find.text('Iniciar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sí, iniciar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ruta hacia #0102'), findsOneWidget);
+    expect(find.text('Ruta óptima activa'), findsOneWidget);
+    expect(find.text('#0103 • Residuos en vía pública'), findsNothing);
+    expect(find.text('Completar con evidencia'), findsOneWidget);
+  });
 }
 

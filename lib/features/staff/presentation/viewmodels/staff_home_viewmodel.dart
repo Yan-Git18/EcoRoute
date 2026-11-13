@@ -1,10 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/services/location_service.dart';
 import '../../../../core/services/media_picker_service.dart';
+import '../../../../core/services/route_navigation_service.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../../../core/enums/report_filter.dart';
 import '../../data/datasources/staff_remote_datasource.dart';
 import '../../data/datasources/staff_storage_datasource.dart';
+import '../../data/fixtures/staff_tasks_fixtures.dart';
 import '../../data/repositories/staff_repository_impl.dart';
 import '../../domain/entities/staff_task_entity.dart';
 import '../../domain/repositories/staff_repository.dart';
@@ -60,6 +63,8 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
   late final UpdateTaskStatusUseCase _updateStatusUseCase;
   late final CompleteTaskWithEvidenceUseCase _completeTaskUseCase;
   late final MediaPickerService _mediaPickerService;
+  late final LocationService _locationService;
+  late final RouteNavigationService _routeNavigationService;
 
   @override
   StaffHomeState build() {
@@ -67,6 +72,8 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
     _updateStatusUseCase = ref.watch(updateTaskStatusUseCaseProvider);
     _completeTaskUseCase = ref.watch(completeTaskWithEvidenceUseCaseProvider);
     _mediaPickerService = ref.watch(mediaPickerServiceProvider);
+    _locationService = ref.watch(locationServiceProvider);
+    _routeNavigationService = ref.watch(routeNavigationServiceProvider);
 
     Future.microtask(() => loadTasks());
 
@@ -84,7 +91,21 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
 
     result.fold(
       onSuccess: (tasks) {
-        state = state.copyWith(tasks: tasks, isLoading: false);
+        StaffTaskEntity? inProgressTask;
+        for (final t in tasks) {
+          if (t.isInProgress) {
+            inProgressTask = t;
+            break;
+          }
+        }
+        state = state.copyWith(
+          tasks: tasks,
+          isLoading: false,
+          activeNavigationTask: inProgressTask ?? state.activeNavigationTask,
+        );
+        if (inProgressTask != null && state.activeRoute == null) {
+          Future.microtask(() => focusTaskRouteOnMap(inProgressTask!));
+        }
       },
       onFailure: (failure) {
         state = state.copyWith(
@@ -96,8 +117,18 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
     );
   }
 
-  /// Iniciar la atención de una tarea (Cambia estado a 'inProgress')
+  /// Iniciar la atención de una tarea (Cambia estado a 'inProgress').
+  /// Respeta la regla de negocio de solo 1 tarea en curso a la vez.
   Future<bool> startTask(String taskId) async {
+    final existingActive = state.currentInProgressTask;
+    if (existingActive != null && existingActive.id != taskId) {
+      state = state.copyWith(
+        errorMessage:
+            'Ya tienes la tarea ${existingActive.reportNumber} en curso. Debes resolverla antes de iniciar otra.',
+      );
+      return false;
+    }
+
     final authState = ref.read(authViewModelProvider);
     final user = authState.user;
 
@@ -126,6 +157,137 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
         return false;
       },
     );
+  }
+
+  /// Flujo completo al confirmar «Sí, iniciar» sobre una tarea pendiente:
+  /// 1. Valida que no exista otra tarea en progreso (solo 1 tarea activa a la vez).
+  /// 2. Actualiza el estado de la tarea de «Pendiente» a «En progreso» (ReportStatus.inProgress).
+  /// 3. Obtiene la ubicación GPS actual real del trabajador mediante [LocationService].
+  /// 4. Obtiene las coordenadas reales del reporte seleccionado.
+  /// 5. Calcula la ruta óptima por calles desde la ubicación actual hasta el reporte.
+  /// 6. Registra la tarea y la ruta activa en el estado para su visualización limpia en el Mapa.
+  Future<bool> startTaskWithNavigation(StaffTaskEntity task) async {
+    final existingActive = state.currentInProgressTask;
+    if (existingActive != null && existingActive.id != task.id) {
+      state = state.copyWith(
+        isStartingNavigation: false,
+        errorMessage:
+            'Ya tienes la tarea ${existingActive.reportNumber} en curso. Debes resolverla antes de iniciar otra.',
+      );
+      return false;
+    }
+
+    state = state.copyWith(isStartingNavigation: true, clearError: true);
+
+    final authState = ref.read(authViewModelProvider);
+    final user = authState.user;
+
+    // 1. Actualizar el estado de la tarea de Pendiente a En progreso
+    StaffTaskEntity? updatedTask;
+    bool statusUpdated = false;
+
+    if (state.tasks.isEmpty && task.id.startsWith('task-demo-')) {
+      updatedTask = task.copyWith(status: ReportStatus.inProgress);
+      statusUpdated = true;
+    } else {
+      final statusResult = await _updateStatusUseCase(
+        taskId: task.id,
+        staffId: user?.id ?? 'staff_demo',
+        staffName: user?.name ?? 'Personal de Campo',
+        newStatus: ReportStatus.inProgress,
+        notes: 'Cuadrilla de recolección en ruta hacia la ubicación.',
+      );
+
+      statusUpdated = statusResult.fold(
+        onSuccess: (t) {
+          updatedTask = t;
+          return true;
+        },
+        onFailure: (failure) {
+          if (task.id.startsWith('task-demo-')) {
+            updatedTask = task.copyWith(status: ReportStatus.inProgress);
+            return true;
+          }
+          state = state.copyWith(
+            isStartingNavigation: false,
+            errorMessage: failure.message,
+          );
+          return false;
+        },
+      );
+    }
+
+    if (!statusUpdated || updatedTask == null) {
+      return false;
+    }
+
+    final baseList = state.tasks.isNotEmpty
+        ? List<StaffTaskEntity>.from(state.tasks)
+        : List<StaffTaskEntity>.from(StaffTasksFixtures.defaultDemoTasks);
+    final index = baseList.indexWhere((t) => t.id == task.id);
+    if (index != -1) {
+      baseList[index] = updatedTask!;
+    } else {
+      baseList.insert(0, updatedTask!);
+    }
+
+    // 2. Obtener la ubicación actual del trabajador mediante el servicio de geolocalización
+    final locResult = await _locationService.getCurrentPosition();
+    final workerLat = locResult.latitude;
+    final workerLng = locResult.longitude;
+
+    // 3. Obtener las coordenadas reales del reporte seleccionado
+    final destLat = updatedTask!.latitude;
+    final destLng = updatedTask!.longitude;
+
+    // 4. Calcular la ruta óptima entre la ubicación del trabajador y el reporte
+    final routeInfo = await _routeNavigationService.calculateOptimalRoute(
+      originLat: workerLat,
+      originLng: workerLng,
+      destLat: destLat,
+      destLng: destLng,
+    );
+
+    // 5. Actualizar el estado con la tarea en progreso y la ruta calculada
+    state = state.copyWith(
+      tasks: baseList,
+      isStartingNavigation: false,
+      activeNavigationTask: updatedTask,
+      activeRoute: routeInfo,
+      workerLatitude: workerLat,
+      workerLongitude: workerLng,
+    );
+
+    return true;
+  }
+
+  /// Calcula y muestra en el mapa la ruta óptima hacia una tarea que ya se encuentra «En proceso».
+  /// No traza rutas para tareas pendientes no iniciadas.
+  Future<void> focusTaskRouteOnMap(StaffTaskEntity task) async {
+    if (!task.isInProgress) return;
+
+    final locResult = await _locationService.getCurrentPosition();
+    final workerLat = locResult.latitude;
+    final workerLng = locResult.longitude;
+
+    final routeInfo = await _routeNavigationService.calculateOptimalRoute(
+      originLat: workerLat,
+      originLng: workerLng,
+      destLat: task.latitude,
+      destLng: task.longitude,
+    );
+
+    state = state.copyWith(
+      activeNavigationTask: task,
+      activeRoute: routeInfo,
+      workerLatitude: workerLat,
+      workerLongitude: workerLng,
+    );
+  }
+
+  /// Limpia la navegación individual activa para volver a la vista de circuito general.
+  void clearActiveNavigation() {
+    state = state.copyWith(clearActiveNavigation: true);
   }
 
   /// Capturar o seleccionar foto de evidencia de limpieza y finalizar la tarea
@@ -169,7 +331,11 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
         } else {
           currentTasks.insert(0, resolvedTask);
         }
-        state = state.copyWith(tasks: currentTasks);
+        final isCompletingActiveNav = state.activeNavigationTask?.id == taskId;
+        state = state.copyWith(
+          tasks: currentTasks,
+          clearActiveNavigation: isCompletingActiveNav,
+        );
         return true;
       },
       onFailure: (failure) {

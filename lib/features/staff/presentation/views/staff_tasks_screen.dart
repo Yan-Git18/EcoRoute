@@ -11,8 +11,10 @@ import '../viewmodels/staff_home_viewmodel.dart';
 import '../widgets/staff_bottom_nav_bar.dart';
 import '../widgets/staff_complete_task_sheet.dart';
 import '../widgets/staff_evidence_detail_sheet.dart';
+import '../widgets/staff_start_task_confirm_dialog.dart';
 import '../widgets/staff_task_detail_sheet.dart';
 import '../widgets/staff_task_item_card.dart';
+import 'staff_route_map_screen.dart';
 
 /// Enum para opciones de ordenamiento de tareas en StaffTasksScreen
 enum StaffTaskSortOrder {
@@ -303,6 +305,7 @@ class _StaffTasksScreenState extends ConsumerState<StaffTasksScreen> {
                         return StaffTaskItemCard(
                           task: task,
                           isNextTask: index == 0 && task.isPending && staffState.selectedFilter == ReportFilter.all,
+                          pendingActionLabel: 'Iniciar',
                           onStart: () => _handleStartTask(task),
                           onResolve: () => StaffCompleteTaskSheet.show(context, task),
                           onViewEvidence: () => StaffEvidenceDetailSheet.show(context, task),
@@ -337,15 +340,38 @@ class _StaffTasksScreenState extends ConsumerState<StaffTasksScreen> {
   }
 
   Future<void> _handleStartTask(StaffTaskEntity task) async {
+    final currentActive = ref.read(staffHomeViewModelProvider).currentInProgressTask;
+    if (currentActive != null && currentActive.id != task.id) {
+      final goToMap = await StaffStartTaskConfirmDialog.showActiveTaskConflictDialog(
+        context,
+        activeTask: currentActive,
+      );
+      if (!goToMap || !mounted) return;
+      await ref.read(staffHomeViewModelProvider.notifier).focusTaskRouteOnMap(currentActive);
+      if (!mounted) return;
+      _navigateToRouteMap();
+      return;
+    }
+
+    final confirmed = await StaffStartTaskConfirmDialog.show(
+      context,
+      task: task,
+    );
+    if (!confirmed || !mounted) return;
+
     final viewModel = ref.read(staffHomeViewModelProvider.notifier);
-    final success = await viewModel.startTask(task.id);
-    if (mounted && success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Atención iniciada para ${task.reportNumber}. Estado en proceso.'),
-          backgroundColor: AppColors.info,
-          behavior: SnackBarBehavior.floating,
-        ),
+    final success = await viewModel.startTaskWithNavigation(task);
+    if (!mounted || !success) return;
+
+    _navigateToRouteMap();
+  }
+
+  void _navigateToRouteMap() {
+    if (GoRouter.maybeOf(context) != null) {
+      context.push(RouteNames.staffRouteMap);
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const StaffRouteMapScreen()),
       );
     }
   }
