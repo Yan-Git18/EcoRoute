@@ -78,6 +78,41 @@ final testStaff = UserEntity(
   createdAt: DateTime(2025, 1, 1),
 );
 
+final sampleTasks = [
+  StaffTaskEntity(
+    id: 'task-1',
+    reportNumber: '#0102',
+    citizenId: 'c-1',
+    citizenName: 'Vecino 1',
+    categoryName: 'Contenedor lleno',
+    categoryIcon: 'delete_outline_rounded',
+    description: 'Contenedor saturado.',
+    priority: ReportPriority.high,
+    status: ReportStatus.pending,
+    address: 'Av. Los Próceres 452',
+    latitude: -7.1580,
+    longitude: -78.5180,
+    reportImageUrls: const [],
+    assignedAt: DateTime.now(),
+  ),
+  StaffTaskEntity(
+    id: 'task-2',
+    reportNumber: '#0103',
+    citizenId: 'c-2',
+    citizenName: 'Vecino 2',
+    categoryName: 'Residuos en vía pública',
+    categoryIcon: 'cleaning_services_rounded',
+    description: 'Restos en vereda.',
+    priority: ReportPriority.medium,
+    status: ReportStatus.pending,
+    address: 'Jr. Amazonas 120',
+    latitude: -7.1565,
+    longitude: -78.5160,
+    reportImageUrls: const [],
+    assignedAt: DateTime.now(),
+  ),
+];
+
 void main() {
   testWidgets('Renderiza StaffTasksScreen con buscador, chips de filtro y lista de tareas',
       (tester) async {
@@ -86,7 +121,7 @@ void main() {
     addTearDown(() => tester.view.resetPhysicalSize());
 
     final mockRepo = MockStaffRepository();
-    mockRepo.tasks = []; // Utiliza el fallback de demostración
+    mockRepo.tasks = sampleTasks;
 
     await tester.pumpWidget(
       ProviderScope(
@@ -137,7 +172,7 @@ void main() {
     addTearDown(() => tester.view.resetPhysicalSize());
 
     final mockRepo = MockStaffRepository();
-    mockRepo.tasks = [];
+    mockRepo.tasks = sampleTasks;
 
     await tester.pumpWidget(
       ProviderScope(

@@ -440,8 +440,8 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
   /// Modal interactivo de estadísticas de desempeño del operario
   void _showStatsModal(BuildContext context) {
     final staffState = ref.watch(staffHomeViewModelProvider);
-    final totalResolved = staffState.resolvedCount > 0 ? staffState.resolvedCount : 6;
-    final totalPending = staffState.pendingCount > 0 ? staffState.pendingCount : 3;
+    final totalResolved = staffState.resolvedCount;
+    final totalPending = staffState.pendingCount;
 
     showModalBottomSheet(
       context: context,
@@ -652,6 +652,9 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
 
   /// Modal con historial resumido de tareas recientes
   void _showTaskHistoryModal(BuildContext context) {
+    final staffState = ref.read(staffHomeViewModelProvider);
+    final resolvedTasks = staffState.tasks.where((t) => t.isResolved).toList();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -702,29 +705,42 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
                 style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
               ),
               const SizedBox(height: 16),
-              const _TaskHistoryItem(
-                folio: '#0102',
-                category: 'Contenedor lleno',
-                address: 'Jr. Del Comercio 620, Cajamarca',
-                time: 'Hace 1 hora',
-                isCompleted: true,
-              ),
-              const SizedBox(height: 8),
-              const _TaskHistoryItem(
-                folio: '#0103',
-                category: 'Residuos en vía pública',
-                address: 'Jr. Amazonas 450, Cajamarca',
-                time: 'Hace 2 horas',
-                isCompleted: true,
-              ),
-              const SizedBox(height: 8),
-              const _TaskHistoryItem(
-                folio: '#0104',
-                category: 'Punto de recolección',
-                address: 'Plaza de Armas de Cajamarca',
-                time: 'Hace 3 horas',
-                isCompleted: true,
-              ),
+              if (resolvedTasks.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: const Column(
+                    children: [
+                      Icon(Icons.history_rounded, size: 36, color: Color(0xFF94A3B8)),
+                      SizedBox(height: 8),
+                      Text(
+                        'Aún no hay tareas completadas registradas',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF334155),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                for (int i = 0; i < resolvedTasks.take(3).length; i++) ...[
+                  if (i > 0) const SizedBox(height: 8),
+                  _TaskHistoryItem(
+                    folio: resolvedTasks[i].reportNumber,
+                    category: resolvedTasks[i].categoryName,
+                    address: resolvedTasks[i].address,
+                    time: 'Resuelta',
+                    isCompleted: true,
+                  ),
+                ],
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,

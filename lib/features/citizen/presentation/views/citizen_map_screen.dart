@@ -135,7 +135,73 @@ class _CitizenMapScreenState extends ConsumerState<CitizenMapScreen> {
           ),
         ),
 
-        // 4. Botón flotante de geolocalización / Recentrado en ubicación actual
+        // 4. Banner informativo cuando aún no hay reportes en el área o para el filtro actual
+        if (state.filteredReports.isEmpty)
+          Positioned(
+            bottom: 24,
+            left: 20,
+            right: 76,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(245),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x14000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withAlpha(20),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.info_outline_rounded,
+                      size: 18,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      state.allReports.isEmpty
+                          ? 'No hay incidencias registradas aún en Cajamarca.'
+                          : 'Sin incidencias para el filtro seleccionado.',
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF334155),
+                      ),
+                    ),
+                  ),
+                  if (state.allReports.isEmpty)
+                    TextButton(
+                      onPressed: () => context.push(RouteNames.citizenCreateReport),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text(
+                        'Reportar',
+                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+
+        // 5. Botón flotante de geolocalización / Recentrado en ubicación actual
         Positioned(
           bottom: state.selectedReport != null ? 220 : 20,
           right: 16,
@@ -242,6 +308,8 @@ class _CitizenMapScreenState extends ConsumerState<CitizenMapScreen> {
           child: nearbyReports.isEmpty
               ? _EmptyNearbyReportsView(
                   filter: state.selectedFilter,
+                  hasNoReportsAtAll: state.allReports.isEmpty,
+                  onCreateReport: () => context.push(RouteNames.citizenCreateReport),
                   onClearFilters: () {
                     viewModel.setSearchQuery('');
                     viewModel.setFilter(ReportFilter.all);
@@ -435,10 +503,14 @@ class _FloatingGpsButton extends StatelessWidget {
 
 class _EmptyNearbyReportsView extends StatelessWidget {
   final ReportFilter filter;
+  final bool hasNoReportsAtAll;
+  final VoidCallback onCreateReport;
   final VoidCallback onClearFilters;
 
   const _EmptyNearbyReportsView({
     required this.filter,
+    required this.hasNoReportsAtAll,
+    required this.onCreateReport,
     required this.onClearFilters,
   });
 
@@ -463,10 +535,12 @@ class _EmptyNearbyReportsView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 18),
-            const Text(
-              'No se encontraron reportes cercanos',
+            Text(
+              hasNoReportsAtAll
+                  ? 'Aún no hay reportes registrados'
+                  : 'No se encontraron reportes cercanos',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
                 color: Color(0xFF0F172A),
@@ -474,9 +548,11 @@ class _EmptyNearbyReportsView extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              filter == ReportFilter.all
-                  ? 'No hay incidencias registradas en esta área geográfica o con los términos buscados.'
-                  : 'No hay reportes ${filter.label.toLowerCase()} en tu zona inmediata.',
+              hasNoReportsAtAll
+                  ? 'No existen incidencias reportadas en Cajamarca en este momento. Si detectas acumulación de residuos, puedes registrar un reporte.'
+                  : (filter == ReportFilter.all
+                      ? 'No hay incidencias registradas en esta área geográfica o con los términos buscados.'
+                      : 'No hay reportes ${filter.label.toLowerCase()} en tu zona inmediata.'),
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 13,
@@ -485,18 +561,32 @@ class _EmptyNearbyReportsView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: onClearFilters,
-              icon: const Icon(Icons.refresh_rounded, size: 16),
-              label: const Text('Restablecer filtros'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            if (hasNoReportsAtAll)
+              ElevatedButton.icon(
+                onPressed: onCreateReport,
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Reportar incidencia'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              )
+            else
+              ElevatedButton.icon(
+                onPressed: onClearFilters,
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                label: const Text('Restablecer filtros'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),

@@ -1,6 +1,69 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../domain/entities/report_entity.dart';
 
+/// DTO para serialización de eventos de auditoría de un reporte en Firestore (`reports/{id}/history`).
+class ReportHistoryItemDto {
+  final String previousStatus;
+  final String newStatus;
+  final String? changedByUserId;
+  final String? changedByUserName;
+  final String? changedByUserRole;
+  final String? comment;
+  final DateTime timestamp;
+
+  const ReportHistoryItemDto({
+    required this.previousStatus,
+    required this.newStatus,
+    this.changedByUserId,
+    this.changedByUserName,
+    this.changedByUserRole,
+    this.comment,
+    required this.timestamp,
+  });
+
+  factory ReportHistoryItemDto.fromMap(Map<String, dynamic> map) {
+    DateTime parseDate(dynamic val) {
+      if (val is Timestamp) return val.toDate();
+      if (val is String) return DateTime.tryParse(val) ?? DateTime.now();
+      return DateTime.now();
+    }
+
+    return ReportHistoryItemDto(
+      previousStatus: map['previousStatus'] as String? ?? 'none',
+      newStatus: map['newStatus'] as String? ?? 'pending',
+      changedByUserId: map['changedByUserId'] as String?,
+      changedByUserName: map['changedByUserName'] as String?,
+      changedByUserRole: map['changedByUserRole'] as String?,
+      comment: map['comment'] as String?,
+      timestamp: parseDate(map['timestamp']),
+    );
+  }
+
+  ReportHistoryItem toDomain() {
+    return ReportHistoryItem(
+      previousStatus: previousStatus,
+      newStatus: newStatus,
+      changedByUserId: changedByUserId,
+      changedByUserName: changedByUserName,
+      changedByUserRole: changedByUserRole,
+      comment: comment,
+      timestamp: timestamp,
+    );
+  }
+
+  factory ReportHistoryItemDto.fromDomain(ReportHistoryItem item) {
+    return ReportHistoryItemDto(
+      previousStatus: item.previousStatus,
+      newStatus: item.newStatus,
+      changedByUserId: item.changedByUserId,
+      changedByUserName: item.changedByUserName,
+      changedByUserRole: item.changedByUserRole,
+      comment: item.comment,
+      timestamp: item.timestamp,
+    );
+  }
+}
+
 /// DTO para serialización y deserialización de reportes ciudadanos en Cloud Firestore.
 ///
 /// Ubicación: `lib/features/citizen/data/models/report_dto.dart`
@@ -24,9 +87,13 @@ class ReportDto {
   final List<String> imageUrls;
   final DateTime createdAt;
   final DateTime? updatedAt;
+  final String? assignedToTeamId;
+  final String? assignedToTeamName;
+  final String? assignedStaffName;
+  final String? assignedVehicle;
   final String? evidenceImageUrl;
   final String? resolutionNotes;
-  final String? assignedStaffName;
+  final List<ReportHistoryItemDto> history;
 
   const ReportDto({
     required this.id,
@@ -47,12 +114,20 @@ class ReportDto {
     required this.imageUrls,
     required this.createdAt,
     this.updatedAt,
+    this.assignedToTeamId,
+    this.assignedToTeamName,
+    this.assignedStaffName,
+    this.assignedVehicle,
     this.evidenceImageUrl,
     this.resolutionNotes,
-    this.assignedStaffName,
+    this.history = const [],
   });
 
-  factory ReportDto.fromMap(Map<String, dynamic> map, String documentId) {
+  factory ReportDto.fromMap(
+    Map<String, dynamic> map,
+    String documentId, {
+    List<ReportHistoryItemDto> history = const [],
+  }) {
     DateTime parseDate(dynamic val) {
       if (val is Timestamp) return val.toDate();
       if (val is String) return DateTime.tryParse(val) ?? DateTime.now();
@@ -60,6 +135,17 @@ class ReportDto {
     }
 
     final locationMap = map['location'] as Map<String, dynamic>? ?? {};
+    final rawLat = (locationMap['latitude'] as num?)?.toDouble() ??
+        (map['latitude'] as num?)?.toDouble() ??
+        0.0;
+    final rawLng = (locationMap['longitude'] as num?)?.toDouble() ??
+        (map['longitude'] as num?)?.toDouble() ??
+        0.0;
+    final rawAddr = (locationMap['address'] as String?) ??
+        (map['address'] as String?) ??
+        '';
+    final rawRef = (locationMap['reference'] as String?) ??
+        (map['reference'] as String?);
 
     return ReportDto(
       id: documentId,
@@ -73,20 +159,28 @@ class ReportDto {
       description: map['description'] as String? ?? '',
       priority: map['priority'] as String? ?? 'low',
       status: map['status'] as String? ?? 'pending',
-      latitude: (locationMap['latitude'] as num?)?.toDouble() ?? 0.0,
-      longitude: (locationMap['longitude'] as num?)?.toDouble() ?? 0.0,
-      address: locationMap['address'] as String? ?? '',
-      reference: locationMap['reference'] as String?,
+      latitude: rawLat,
+      longitude: rawLng,
+      address: rawAddr,
+      reference: rawRef,
       imageUrls: (map['images'] as List<dynamic>?)
               ?.map((e) => e is Map ? (e['url'] as String? ?? '') : e.toString())
+              .where((url) => url.isNotEmpty)
+              .toList() ??
+          (map['imageUrls'] as List<dynamic>?)
+              ?.map((e) => e.toString())
               .where((url) => url.isNotEmpty)
               .toList() ??
           [],
       createdAt: parseDate(map['createdAt']),
       updatedAt: map['updatedAt'] != null ? parseDate(map['updatedAt']) : null,
+      assignedToTeamId: map['assignedToTeamId'] as String?,
+      assignedToTeamName: map['assignedToTeamName'] as String?,
+      assignedStaffName: map['assignedStaffName'] as String? ?? (map['assignedToTeamName'] as String?),
+      assignedVehicle: map['assignedVehicle'] as String?,
       evidenceImageUrl: map['evidenceImageUrl'] as String? ?? (map['evidencePhoto'] as String?),
       resolutionNotes: map['resolutionNotes'] as String? ?? (map['resolutionComment'] as String?),
-      assignedStaffName: map['assignedStaffName'] as String? ?? (map['assignedToTeamName'] as String?),
+      history: history,
     );
   }
 
@@ -103,6 +197,10 @@ class ReportDto {
       'description': description,
       'priority': priority,
       'status': status,
+      'latitude': latitude,
+      'longitude': longitude,
+      'address': address,
+      if (reference != null) 'reference': reference,
       'location': {
         'latitude': latitude,
         'longitude': longitude,
@@ -110,11 +208,15 @@ class ReportDto {
         'reference': reference,
       },
       'images': imageUrls.map((url) => {'url': url, 'uploadedAt': Timestamp.now()}).toList(),
+      'imageUrls': imageUrls,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': FieldValue.serverTimestamp(),
+      if (assignedToTeamId != null) 'assignedToTeamId': assignedToTeamId,
+      if (assignedToTeamName != null) 'assignedToTeamName': assignedToTeamName,
+      if (assignedStaffName != null) 'assignedStaffName': assignedStaffName,
+      if (assignedVehicle != null) 'assignedVehicle': assignedVehicle,
       if (evidenceImageUrl != null) 'evidenceImageUrl': evidenceImageUrl,
       if (resolutionNotes != null) 'resolutionNotes': resolutionNotes,
-      if (assignedStaffName != null) 'assignedStaffName': assignedStaffName,
     };
   }
 
@@ -138,9 +240,13 @@ class ReportDto {
       imageUrls: imageUrls,
       createdAt: createdAt,
       updatedAt: updatedAt,
+      assignedToTeamId: assignedToTeamId,
+      assignedToTeamName: assignedToTeamName,
       assignedStaffName: assignedStaffName,
+      assignedVehicle: assignedVehicle,
       evidenceImageUrl: evidenceImageUrl,
       resolutionNotes: resolutionNotes,
+      history: history.map((h) => h.toDomain()).toList(),
     );
   }
 
@@ -164,9 +270,13 @@ class ReportDto {
       imageUrls: entity.imageUrls,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
+      assignedToTeamId: entity.assignedToTeamId,
+      assignedToTeamName: entity.assignedToTeamName,
+      assignedStaffName: entity.assignedStaffName,
+      assignedVehicle: entity.assignedVehicle,
       evidenceImageUrl: entity.evidenceImageUrl,
       resolutionNotes: entity.resolutionNotes,
-      assignedStaffName: entity.assignedStaffName,
+      history: entity.history.map(ReportHistoryItemDto.fromDomain).toList(),
     );
   }
 }

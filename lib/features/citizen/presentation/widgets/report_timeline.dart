@@ -44,10 +44,67 @@ class ReportTimeline extends StatelessWidget {
     return '${date.day} $monthName ${date.year} - $hour:$minute $period';
   }
 
+  String _statusTitle(ReportStatus status) {
+    switch (status) {
+      case ReportStatus.pending:
+        return 'Reporte creado';
+      case ReportStatus.assigned:
+        return 'En revisión';
+      case ReportStatus.inProgress:
+        return 'En proceso';
+      case ReportStatus.resolved:
+        return 'Resuelto';
+      case ReportStatus.cancelled:
+        return 'Cancelado';
+    }
+  }
+
+  String _statusSubtitle(ReportHistoryItem item, ReportStatus status) {
+    final comment = item.comment?.trim();
+    if (comment != null && comment.isNotEmpty) {
+      return '• $comment';
+    }
+    switch (status) {
+      case ReportStatus.pending:
+        return 'por ti';
+      case ReportStatus.assigned:
+        return item.changedByUserName != null && item.changedByUserName!.isNotEmpty
+            ? 'por ${item.changedByUserName}'
+            : 'por la municipalidad';
+      case ReportStatus.inProgress:
+        return item.changedByUserName != null && item.changedByUserName!.isNotEmpty
+            ? 'atendido por ${item.changedByUserName}'
+            : 'personal de limpieza asignado';
+      case ReportStatus.resolved:
+        return 'limpieza completada con evidencia';
+      case ReportStatus.cancelled:
+        return 'reporte cancelado por el ciudadano';
+    }
+  }
+
   List<TimelineEvent> _buildEvents() {
+    if (report.history.isNotEmpty) {
+      final sortedHistory = List<ReportHistoryItem>.from(report.history)
+        ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+      return List.generate(sortedHistory.length, (index) {
+        final item = sortedHistory[index];
+        final itemStatus = ReportStatus.fromString(item.newStatus);
+        final isLast = index == sortedHistory.length - 1;
+
+        return TimelineEvent(
+          title: _statusTitle(itemStatus),
+          subtitle: _statusSubtitle(item, itemStatus),
+          time: _formatDateTime(item.timestamp),
+          isCompleted: true,
+          isCurrent: isLast,
+        );
+      });
+    }
+
     final events = <TimelineEvent>[];
 
-    // Evento 1: Creación
+    // Evento 1: Creación (fecha real de creación)
     events.add(
       TimelineEvent(
         title: 'Reporte creado',
@@ -58,6 +115,21 @@ class ReportTimeline extends StatelessWidget {
       ),
     );
 
+    if (report.status == ReportStatus.cancelled) {
+      events.add(
+        TimelineEvent(
+          title: 'Cancelado',
+          subtitle: 'reporte cancelado por el ciudadano',
+          time: report.updatedAt != null
+              ? _formatDateTime(report.updatedAt!)
+              : _formatDateTime(report.createdAt),
+          isCompleted: true,
+          isCurrent: true,
+        ),
+      );
+      return events;
+    }
+
     // Evento 2: En revisión / Asignación municipal
     final hasPassedPending = report.status == ReportStatus.assigned ||
         report.status == ReportStatus.inProgress ||
@@ -66,8 +138,14 @@ class ReportTimeline extends StatelessWidget {
     events.add(
       TimelineEvent(
         title: 'En revisión',
-        subtitle: 'por la municipalidad',
-        time: _formatDateTime(report.createdAt.add(const Duration(minutes: 45))),
+        subtitle: report.assignedToTeamName != null && report.assignedToTeamName!.isNotEmpty
+            ? 'asignado a ${report.assignedToTeamName}'
+            : 'por la municipalidad',
+        time: hasPassedPending
+            ? (report.status == ReportStatus.assigned && report.updatedAt != null
+                ? _formatDateTime(report.updatedAt!)
+                : 'Completado')
+            : 'Pendiente de revisión',
         isCompleted: hasPassedPending,
         isCurrent: report.status == ReportStatus.assigned,
       ),
@@ -77,40 +155,36 @@ class ReportTimeline extends StatelessWidget {
     final isInProgressOrResolved = report.status == ReportStatus.inProgress ||
         report.status == ReportStatus.resolved;
 
-    if (report.status != ReportStatus.cancelled) {
-      events.add(
-        TimelineEvent(
-          title: 'En proceso',
-          subtitle: 'personal de limpieza asignado',
-          time: _formatDateTime(report.createdAt.add(const Duration(hours: 2))),
-          isCompleted: isInProgressOrResolved,
-          isCurrent: report.status == ReportStatus.inProgress,
-        ),
-      );
-    }
+    events.add(
+      TimelineEvent(
+        title: 'En proceso',
+        subtitle: report.assignedStaffName != null && report.assignedStaffName!.isNotEmpty
+            ? 'atendido por ${report.assignedStaffName}'
+            : 'personal de limpieza asignado',
+        time: isInProgressOrResolved
+            ? (report.status == ReportStatus.inProgress && report.updatedAt != null
+                ? _formatDateTime(report.updatedAt!)
+                : 'Completado')
+            : 'Pendiente de atención',
+        isCompleted: isInProgressOrResolved,
+        isCurrent: report.status == ReportStatus.inProgress,
+      ),
+    );
 
     // Evento 4: Resuelto
-    if (report.status == ReportStatus.resolved) {
-      events.add(
-        TimelineEvent(
-          title: 'Resuelto',
-          subtitle: 'limpieza completada con evidencia',
-          time: _formatDateTime(report.updatedAt ?? report.createdAt.add(const Duration(hours: 4))),
-          isCompleted: true,
-          isCurrent: true,
-        ),
-      );
-    } else if (report.status == ReportStatus.cancelled) {
-      events.add(
-        TimelineEvent(
-          title: 'Cancelado',
-          subtitle: 'reporte cancelado por el ciudadano',
-          time: _formatDateTime(report.updatedAt ?? DateTime.now()),
-          isCompleted: true,
-          isCurrent: true,
-        ),
-      );
-    }
+    events.add(
+      TimelineEvent(
+        title: 'Resuelto',
+        subtitle: 'limpieza completada con evidencia',
+        time: report.status == ReportStatus.resolved
+            ? (report.updatedAt != null
+                ? _formatDateTime(report.updatedAt!)
+                : _formatDateTime(report.createdAt))
+            : 'Pendiente de resolución',
+        isCompleted: report.status == ReportStatus.resolved,
+        isCurrent: report.status == ReportStatus.resolved,
+      ),
+    );
 
     return events;
   }

@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart' hide Path;
+import '../../../../core/constants/geo_constants.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
@@ -49,9 +50,9 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
   MunicipalCrewEntity? _selectedCrew;
   bool _showLegend = false;
 
-  // Centro urbano de referencia (Lima Peatonal / Municipalidad)
-  static const double _cityCenterLat = -12.046374;
-  static const double _cityCenterLng = -77.042793;
+  // Centro urbano de referencia (Cajamarca / Municipalidad)
+  static const double _cityCenterLat = AppGeoConstants.cajamarcaCenterLat;
+  static const double _cityCenterLng = AppGeoConstants.cajamarcaCenterLng;
 
   bool get _isFlutterTest {
     return !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');

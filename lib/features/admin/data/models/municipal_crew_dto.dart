@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../../core/constants/geo_constants.dart';
 import '../../domain/entities/municipal_crew_entity.dart';
 
 /// DTO para la serialización y persistencia de Cuadrillas Municipales en Cloud Firestore.
@@ -35,8 +36,8 @@ class MunicipalCrewDto {
     this.activeTasksCount = 0,
     this.isAvailable = true,
     this.status = 'available',
-    this.latitude = -12.0463,
-    this.longitude = -77.0427,
+    this.latitude = AppGeoConstants.cajamarcaCenterLat,
+    this.longitude = AppGeoConstants.cajamarcaCenterLng,
     this.createdAt,
     this.updatedAt,
   });
@@ -63,8 +64,10 @@ class MunicipalCrewDto {
       activeTasksCount: (map['activeTasksCount'] as num?)?.toInt() ?? 0,
       isAvailable: map['isAvailable'] as bool? ?? true,
       status: map['status'] as String? ?? 'available',
-      latitude: (locationMap != null ? locationMap['latitude'] as num? : map['latitude'] as num?)?.toDouble() ?? -12.0463,
-      longitude: (locationMap != null ? locationMap['longitude'] as num? : map['longitude'] as num?)?.toDouble() ?? -77.0427,
+      latitude: (locationMap != null ? locationMap['latitude'] as num? : map['latitude'] as num?)?.toDouble() ??
+          AppGeoConstants.cajamarcaCenterLat,
+      longitude: (locationMap != null ? locationMap['longitude'] as num? : map['longitude'] as num?)?.toDouble() ??
+          AppGeoConstants.cajamarcaCenterLng,
       createdAt: parseDate(map['createdAt']),
       updatedAt: parseDate(map['updatedAt']),
     );

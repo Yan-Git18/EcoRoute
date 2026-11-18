@@ -29,10 +29,10 @@ class CitizenProfileScreen extends ConsumerWidget {
 
     final displayName = user?.name.isNotEmpty == true
         ? user!.name
-        : 'Alejandro Rabanal';
+        : 'Ciudadano EcoRoute';
     final displayEmail = user?.email.isNotEmpty == true
         ? user!.email
-        : 'alejandro@gmail.com';
+        : 'Sin correo registrado';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -233,9 +233,11 @@ class CitizenProfileScreen extends ConsumerWidget {
   void _openMyDataModal(BuildContext context, UserEntity? user) {
     ProfileDataModal.show(
       context,
-      name: user?.name.isNotEmpty == true ? user!.name : 'Alejandro Rabanal',
-      email: user?.email.isNotEmpty == true ? user!.email : 'alejandro@gmail.com',
-      phone: user?.phoneNumber ?? '+51 987 654 321',
+      name: user?.name.isNotEmpty == true ? user!.name : 'Ciudadano EcoRoute',
+      email: user?.email.isNotEmpty == true ? user!.email : 'Sin correo registrado',
+      phone: user?.phoneNumber != null && user!.phoneNumber!.trim().isNotEmpty
+          ? user.phoneNumber!
+          : 'No registrado',
       roleLabel: 'Ciudadano Activo',
     );
   }

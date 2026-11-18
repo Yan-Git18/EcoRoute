@@ -12,7 +12,6 @@ import '../../../../core/services/location_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/map/map_widgets.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
-import '../../data/fixtures/staff_tasks_fixtures.dart';
 import '../../domain/entities/staff_task_entity.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
 import '../widgets/staff_bottom_nav_bar.dart';
@@ -42,8 +41,6 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
   double _userLng = AppGeoConstants.cajamarcaCenterLng;
   bool _isLocating = false;
   StaffTaskEntity? _selectedTask;
-
-  static List<StaffTaskEntity> get _defaultDemoTasks => StaffTasksFixtures.defaultDemoTasks;
 
   bool get _isFlutterTest {
     return !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
@@ -133,7 +130,7 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
     final staffState = ref.watch(staffHomeViewModelProvider);
     final viewModel = ref.read(staffHomeViewModelProvider.notifier);
 
-    final tasks = staffState.tasks.isNotEmpty ? staffState.tasks : _defaultDemoTasks;
+    final tasks = staffState.tasks;
     final activeTasks = tasks.where((t) => !t.isResolved).toList();
 
     return Scaffold(

@@ -13,23 +13,23 @@ class FakeLocationService implements LocationService {
   @override
   Future<LocationDataResult> getCurrentPosition() async {
     return const LocationDataResult(
-      latitude: -12.046374,
-      longitude: -77.042793,
-      address: 'Plaza Mayor de Lima',
+      latitude: -7.1580,
+      longitude: -78.5180,
+      address: 'Plaza de Armas de Cajamarca',
     );
   }
 
   @override
   Future<String> getAddressFromCoordinates(double lat, double lng) async {
-    return 'Plaza Mayor de Lima';
+    return 'Plaza de Armas de Cajamarca';
   }
 
   @override
   Future<LocationDataResult?> getCoordinatesFromAddress(String address) async {
     return const LocationDataResult(
-      latitude: -12.046374,
-      longitude: -77.042793,
-      address: 'Plaza Mayor de Lima',
+      latitude: -7.1580,
+      longitude: -78.5180,
+      address: 'Plaza de Armas de Cajamarca',
     );
   }
 }
@@ -159,7 +159,7 @@ void main() {
 
     expect(state.isLoading, isFalse);
     expect(state.allReports.length, equals(3));
-    expect(state.userAddress, equals('Plaza Mayor de Lima'));
+    expect(state.userAddress, equals('Plaza de Armas de Cajamarca'));
   });
 
   test('filtra adecuadamente por estado de reporte (Pending, InProgress, Resolved)', () async {

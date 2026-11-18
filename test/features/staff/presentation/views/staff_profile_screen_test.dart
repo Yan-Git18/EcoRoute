@@ -195,7 +195,7 @@ void main() {
     expect(find.text('Estado de turno operativo'), findsOneWidget);
   });
 
-  testWidgets('Historial de tareas abre modal con paradas recientes', (tester) async {
+  testWidgets('Historial de tareas abre modal mostrando estado vacío si no hay tareas resueltas', (tester) async {
     final mockAuth = MockStaffAuthViewModel(testStaffUser);
     final mockRepo = MockStaffRepository();
 
@@ -217,7 +217,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Ver todas las tareas en el panel'), findsOneWidget);
-    expect(find.textContaining('Contenedor lleno'), findsOneWidget);
+    expect(find.text('Aún no hay tareas completadas registradas'), findsOneWidget);
   });
 
   testWidgets('Muestra dialogo de confirmacion y permite cerrar sesion', (tester) async {

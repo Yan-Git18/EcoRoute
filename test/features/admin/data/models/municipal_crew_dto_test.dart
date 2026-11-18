@@ -83,8 +83,8 @@ void main() {
       expect(dto.activeTasksCount, 0);
       expect(dto.isAvailable, true);
       expect(dto.status, 'available');
-      expect(dto.latitude, -12.0463);
-      expect(dto.longitude, -77.0427);
+      expect(dto.latitude, -7.1580);
+      expect(dto.longitude, -78.5180);
     });
 
     test('toMap genera mapa con timestamps y estructura adecuada para Firestore', () {

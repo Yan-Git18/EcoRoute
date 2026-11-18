@@ -38,19 +38,55 @@ class FirebaseReportRemoteDataSourceImpl implements ReportRemoteDataSource {
       await docRef.set(report.toMap());
 
       // Registrar auditoría inicial en la subcolección 'history'
+      final initialHistoryItem = ReportHistoryItemDto(
+        previousStatus: 'none',
+        newStatus: report.status,
+        changedByUserId: report.citizenId,
+        changedByUserName: report.citizenName,
+        changedByUserRole: 'citizen',
+        comment: 'Reporte registrado por el ciudadano.',
+        timestamp: report.createdAt,
+      );
+
       try {
         await docRef.collection('history').add({
-          'previousStatus': 'none',
-          'newStatus': report.status,
-          'changedByUserId': report.citizenId,
-          'changedByUserName': report.citizenName,
-          'changedByUserRole': 'citizen',
-          'comment': 'Reporte registrado por el ciudadano.',
+          'previousStatus': initialHistoryItem.previousStatus,
+          'newStatus': initialHistoryItem.newStatus,
+          'changedByUserId': initialHistoryItem.changedByUserId,
+          'changedByUserName': initialHistoryItem.changedByUserName,
+          'changedByUserRole': initialHistoryItem.changedByUserRole,
+          'comment': initialHistoryItem.comment,
           'timestamp': FieldValue.serverTimestamp(),
         });
       } catch (_) {}
 
-      return report;
+      return ReportDto(
+        id: report.id,
+        reportNumber: report.reportNumber,
+        citizenId: report.citizenId,
+        citizenName: report.citizenName,
+        citizenPhone: report.citizenPhone,
+        categoryId: report.categoryId,
+        categoryName: report.categoryName,
+        categoryIcon: report.categoryIcon,
+        description: report.description,
+        priority: report.priority,
+        status: report.status,
+        latitude: report.latitude,
+        longitude: report.longitude,
+        address: report.address,
+        reference: report.reference,
+        imageUrls: report.imageUrls,
+        createdAt: report.createdAt,
+        updatedAt: report.updatedAt,
+        assignedToTeamId: report.assignedToTeamId,
+        assignedToTeamName: report.assignedToTeamName,
+        assignedStaffName: report.assignedStaffName,
+        assignedVehicle: report.assignedVehicle,
+        evidenceImageUrl: report.evidenceImageUrl,
+        resolutionNotes: report.resolutionNotes,
+        history: [initialHistoryItem],
+      );
     } on FirebaseException catch (e) {
       if (e.code == 'permission-denied') {
         throw const ServerException(
@@ -94,12 +130,26 @@ class FirebaseReportRemoteDataSourceImpl implements ReportRemoteDataSource {
     }
 
     try {
-      final doc = await _firestore.collection('reports').doc(reportId).get();
+      final docRef = _firestore.collection('reports').doc(reportId);
+      final doc = await docRef.get();
       if (!doc.exists || doc.data() == null) {
         throw const ServerException(message: 'El reporte solicitado no existe.');
       }
 
-      return ReportDto.fromMap(doc.data()!, doc.id);
+      List<ReportHistoryItemDto> historyList = [];
+      try {
+        final historySnapshot = await docRef.collection('history').get();
+        historyList = historySnapshot.docs
+            .map((hDoc) => ReportHistoryItemDto.fromMap(hDoc.data()))
+            .toList();
+        historyList.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      } catch (_) {}
+
+      return ReportDto.fromMap(
+        doc.data()!,
+        doc.id,
+        history: historyList,
+      );
     } catch (e) {
       throw ServerException(message: 'Error al consultar el reporte: $e');
     }

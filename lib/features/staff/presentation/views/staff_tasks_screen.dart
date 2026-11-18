@@ -5,7 +5,6 @@ import '../../../../core/enums/report_filter.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
-import '../../data/fixtures/staff_tasks_fixtures.dart';
 import '../../domain/entities/staff_task_entity.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
 import '../widgets/staff_bottom_nav_bar.dart';
@@ -40,8 +39,6 @@ class _StaffTasksScreenState extends ConsumerState<StaffTasksScreen> {
   final TextEditingController _searchController = TextEditingController();
   StaffTaskSortOrder _sortOrder = StaffTaskSortOrder.priority;
 
-  static List<StaffTaskEntity> get _defaultDemoTasks => StaffTasksFixtures.defaultDemoTasks;
-
   @override
   void dispose() {
     _searchController.dispose();
@@ -53,7 +50,7 @@ class _StaffTasksScreenState extends ConsumerState<StaffTasksScreen> {
     final staffState = ref.watch(staffHomeViewModelProvider);
     final viewModel = ref.read(staffHomeViewModelProvider.notifier);
 
-    final allTasks = staffState.tasks.isNotEmpty ? staffState.tasks : _defaultDemoTasks;
+    final allTasks = staffState.tasks;
 
     final pendingCount = allTasks.where((t) => t.isPending).length;
     final inProgressCount = allTasks.where((t) => t.isInProgress).length;

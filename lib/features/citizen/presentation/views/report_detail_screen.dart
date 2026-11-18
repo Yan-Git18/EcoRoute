@@ -36,16 +36,17 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
   void initState() {
     super.initState();
     _report = widget.initialReport;
-    if (_report == null) {
-      _fetchReport();
-    }
+    _fetchReport();
   }
 
   Future<void> _fetchReport() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    final hadInitialReport = _report != null;
+    if (!hadInitialReport) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
 
     final getReportById = ref.read(getReportByIdUseCaseProvider);
     final result = await getReportById(widget.reportId);
@@ -59,10 +60,14 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
           });
         },
         onFailure: (failure) {
-          setState(() {
-            _errorMessage = failure.message;
-            _isLoading = false;
-          });
+          if (!hadInitialReport) {
+            setState(() {
+              _errorMessage = failure.message;
+              _isLoading = false;
+            });
+          } else {
+            setState(() => _isLoading = false);
+          }
         },
       );
     }

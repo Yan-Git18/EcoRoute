@@ -1,3 +1,5 @@
+import '../../../../core/constants/geo_constants.dart';
+
 /// Estado operativo de una cuadrilla municipal.
 enum MunicipalCrewStatus {
   available('Disponible'),
@@ -54,8 +56,8 @@ class MunicipalCrewEntity {
     this.activeTasksCount = 0,
     this.isAvailable = true,
     this.status = MunicipalCrewStatus.available,
-    this.latitude = -12.0463,
-    this.longitude = -77.0427,
+    this.latitude = AppGeoConstants.cajamarcaCenterLat,
+    this.longitude = AppGeoConstants.cajamarcaCenterLng,
   });
 
   MunicipalCrewEntity copyWith({

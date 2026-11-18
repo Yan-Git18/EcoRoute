@@ -212,6 +212,27 @@ extension ReportStatusX on ReportStatus {
   }
 }
 
+/// Evento real en el historial de auditoría y cambios de estado de un reporte.
+class ReportHistoryItem {
+  final String previousStatus;
+  final String newStatus;
+  final String? changedByUserId;
+  final String? changedByUserName;
+  final String? changedByUserRole;
+  final String? comment;
+  final DateTime timestamp;
+
+  const ReportHistoryItem({
+    required this.previousStatus,
+    required this.newStatus,
+    this.changedByUserId,
+    this.changedByUserName,
+    this.changedByUserRole,
+    this.comment,
+    required this.timestamp,
+  });
+}
+
 /// Entidad inmutable de Reporte Ciudadano en EcoRoute.
 ///
 /// Ubicación: `lib/features/citizen/domain/entities/report_entity.dart`
@@ -241,6 +262,7 @@ class ReportEntity {
   final String? assignedVehicle;
   final String? evidenceImageUrl;
   final String? resolutionNotes;
+  final List<ReportHistoryItem> history;
 
   const ReportEntity({
     required this.id,
@@ -267,6 +289,7 @@ class ReportEntity {
     this.assignedVehicle,
     this.evidenceImageUrl,
     this.resolutionNotes,
+    this.history = const [],
   });
 
   bool get isResolved => status == ReportStatus.resolved;
@@ -297,6 +320,7 @@ class ReportEntity {
     String? assignedVehicle,
     String? evidenceImageUrl,
     String? resolutionNotes,
+    List<ReportHistoryItem>? history,
   }) {
     return ReportEntity(
       id: id ?? this.id,
@@ -323,6 +347,7 @@ class ReportEntity {
       assignedVehicle: assignedVehicle ?? this.assignedVehicle,
       evidenceImageUrl: evidenceImageUrl ?? this.evidenceImageUrl,
       resolutionNotes: resolutionNotes ?? this.resolutionNotes,
+      history: history ?? this.history,
     );
   }
 }

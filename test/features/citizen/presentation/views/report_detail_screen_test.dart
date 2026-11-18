@@ -117,8 +117,9 @@ void main() {
 
     // 5. Historial de estados (Timeline)
     expect(find.text('Historial de estados'), findsOneWidget);
-    expect(find.text('15 oct. 2026 - 3:54 a. m.'), findsOneWidget);
-    expect(find.text('15 oct. 2026 - 5:09 a. m.'), findsOneWidget);
+    expect(find.text('Pendiente de revisión'), findsOneWidget);
+    expect(find.text('Pendiente de atención'), findsOneWidget);
+    expect(find.text('Pendiente de resolución'), findsOneWidget);
   });
 
   testWidgets('Muestra botón Cancelar reporte en estado pendiente y abre diálogo de confirmación', (WidgetTester tester) async {

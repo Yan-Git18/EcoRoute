@@ -10,7 +10,6 @@ import '../../../../core/widgets/eco_section_header.dart';
 import '../../../../core/widgets/eco_status_summary_card.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
-import '../../data/fixtures/staff_tasks_fixtures.dart';
 import '../../domain/entities/staff_task_entity.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
 import '../widgets/staff_bottom_nav_bar.dart';
@@ -29,18 +28,16 @@ class StaffHomeScreen extends ConsumerStatefulWidget {
 class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
   final int _currentNavIndex = 0; // 'Inicio' activo en la pantalla principal
 
-  static List<StaffTaskEntity> get _defaultDemoTasks => StaffTasksFixtures.defaultDemoTasks;
-
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authViewModelProvider);
     final user = authState.user;
-    final staffName = user?.name ?? 'Mario Limpieza';
+    final staffName = user?.name.isNotEmpty == true ? user!.name : 'Personal de Limpieza';
 
     final staffState = ref.watch(staffHomeViewModelProvider);
     final viewModel = ref.read(staffHomeViewModelProvider.notifier);
 
-    final allTasks = staffState.tasks.isNotEmpty ? staffState.tasks : _defaultDemoTasks;
+    final allTasks = staffState.tasks;
 
     final pendingCount = allTasks.where((t) => t.isPending).length;
     final inProgressCount = allTasks.where((t) => t.isInProgress).length;
@@ -252,17 +249,51 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
               const SizedBox(height: 24),
 
               // 6. Sección "Siguiente tarea"
-              if (nextTask != null) ...[
-                const EcoSectionHeader(title: 'Siguiente tarea'),
-                const SizedBox(height: 12),
+              const EcoSectionHeader(title: 'Siguiente tarea'),
+              const SizedBox(height: 12),
+              if (nextTask != null)
                 StaffTaskItemCard(
                   task: nextTask,
                   isNextTask: true,
                   onStart: () => _handleStartTask(nextTask!),
                   onResolve: () => StaffCompleteTaskSheet.show(context, nextTask!),
+                )
+              else
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: const Column(
+                    children: [
+                      Icon(
+                        Icons.assignment_turned_in_outlined,
+                        size: 40,
+                        color: Color(0xFF047857),
+                      ),
+                      SizedBox(height: 10),
+                      Text(
+                        'No tienes tareas asignadas en este momento',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Cuando el administrador municipal despache una incidencia a tu cuadrilla, aparecerá aquí.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Color(0xFF64748B), fontSize: 12.5),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 24),
-              ],
+              const SizedBox(height: 24),
 
               // 7. Sección "Otras tareas"
               EcoSectionHeader(

@@ -199,23 +199,6 @@ class AuthViewModel extends Notifier<AuthState> {
       state = state.copyWith(clearError: true);
     }
   }
-
-  /// Método para fines de prueba y demostración rápida de roles en desarrollo
-  void setDemoRole(UserRole role) {
-    final demoUser = UserEntity(
-      id: 'demo-${role.name}-101',
-      name: switch (role) {
-        UserRole.citizen => 'Carlos Ciudadano',
-        UserRole.staff => 'Mario Limpieza',
-        UserRole.admin => 'Ing. Municipal Admin',
-      },
-      email: 'demo.${role.name}@ecoroute.app',
-      role: role,
-      phoneNumber: '+51 987654321',
-      createdAt: DateTime.now(),
-    );
-    state = state.copyWith(user: demoUser, clearError: true);
-  }
 }
 
 final authViewModelProvider = NotifierProvider<AuthViewModel, AuthState>(

@@ -53,69 +53,6 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
   bool get _isFirebaseReady => Firebase.apps.isNotEmpty;
   FirebaseFirestore get _firestore => _customFirestore ?? FirebaseFirestore.instance;
 
-  static const List<MunicipalCrewEntity> _defaultMunicipalCrews = [
-    MunicipalCrewEntity(
-      id: 'crew-north',
-      name: 'Cuadrilla Zona Norte',
-      zone: 'Sector 1 y 2 (Los Próceres / Las Palmas)',
-      leadStaffName: 'Mario Limpieza',
-      vehicleCode: 'Camión #04',
-      vehiclePlate: 'ECR-882',
-      vehicleType: 'Camión Compactador 15m³',
-      crewMembersCount: 3,
-      activeTasksCount: 2,
-      isAvailable: true,
-      status: MunicipalCrewStatus.onRoute,
-      latitude: -12.0410,
-      longitude: -77.0390,
-    ),
-    MunicipalCrewEntity(
-      id: 'crew-south',
-      name: 'Cuadrilla Zona Sur',
-      zone: 'Sector 3 y 4 (Av. Huaylas / Chorrillos)',
-      leadStaffName: 'Carlos Cuadrilla',
-      vehicleCode: 'Camión #02',
-      vehiclePlate: 'ECR-341',
-      vehicleType: 'Furgón Barrendero Ligero',
-      crewMembersCount: 2,
-      activeTasksCount: 1,
-      isAvailable: true,
-      status: MunicipalCrewStatus.onRoute,
-      latitude: -12.0530,
-      longitude: -77.0470,
-    ),
-    MunicipalCrewEntity(
-      id: 'crew-center',
-      name: 'Cuadrilla Centro Histórico',
-      zone: 'Sector Central (Jr. Amazonas / Plaza)',
-      leadStaffName: 'Rosa Recolectora',
-      vehicleCode: 'Camión #01',
-      vehiclePlate: 'ECR-119',
-      vehicleType: 'Camión Recolector Urbano',
-      crewMembersCount: 4,
-      activeTasksCount: 3,
-      isAvailable: true,
-      status: MunicipalCrewStatus.onRoute,
-      latitude: -12.0465,
-      longitude: -77.0430,
-    ),
-    MunicipalCrewEntity(
-      id: 'crew-spec',
-      name: 'Cuadrilla Especial Desbordes',
-      zone: 'Todos los sectores (Respuesta Rápida)',
-      leadStaffName: 'Jorge Parque',
-      vehicleCode: 'Camión #05',
-      vehiclePlate: 'ECR-554',
-      vehicleType: 'Camión Volquete Pesado',
-      crewMembersCount: 3,
-      activeTasksCount: 0,
-      isAvailable: true,
-      status: MunicipalCrewStatus.available,
-      latitude: -12.0480,
-      longitude: -77.0360,
-    ),
-  ];
-
   @override
   Future<List<ReportDto>> getAllReports() async {
     if (!_isFirebaseReady && _customFirestore == null) {
@@ -139,32 +76,16 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
   @override
   Future<List<MunicipalCrewDto>> getAvailableCrews() async {
     if (!_isFirebaseReady && _customFirestore == null) {
-      return _defaultMunicipalCrews
-          .map((c) => MunicipalCrewDto.fromDomain(c))
-          .toList();
+      return [];
     }
 
     try {
       final snapshot = await _firestore.collection('crews').get();
-      if (snapshot.docs.isEmpty) {
-        // Inicialización transparente (seeding) en Firestore al primer arranque
-        for (final crew in _defaultMunicipalCrews) {
-          final dto = MunicipalCrewDto.fromDomain(crew);
-          await _firestore.collection('crews').doc(crew.id).set(dto.toMap());
-        }
-        return _defaultMunicipalCrews
-            .map((c) => MunicipalCrewDto.fromDomain(c))
-            .toList();
-      }
-
       return snapshot.docs
           .map((doc) => MunicipalCrewDto.fromMap(doc.data(), doc.id))
           .toList();
     } catch (_) {
-      // Resiliencia: si Firestore falla o no hay conexión, mantener continuidad de servicio
-      return _defaultMunicipalCrews
-          .map((c) => MunicipalCrewDto.fromDomain(c))
-          .toList();
+      return [];
     }
   }
 

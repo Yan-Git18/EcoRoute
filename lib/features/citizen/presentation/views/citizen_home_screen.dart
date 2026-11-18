@@ -25,7 +25,7 @@ class CitizenHomeScreen extends ConsumerWidget {
     final userName = user?.name.trim();
     final firstName = (userName != null && userName.isNotEmpty)
         ? userName.split(' ').first
-        : 'Carlos';
+        : 'Ciudadano';
 
     final myReportsState = ref.watch(myReportsViewModelProvider);
     final pendingCount = myReportsState.reports

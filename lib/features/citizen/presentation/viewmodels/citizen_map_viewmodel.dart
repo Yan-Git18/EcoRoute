@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/constants/geo_constants.dart';
 import '../../../../core/enums/report_filter.dart';
 import '../../../../core/services/location_service.dart';
 import '../../domain/entities/report_entity.dart';
@@ -88,10 +89,13 @@ class CitizenMapViewModel extends Notifier<CitizenMapState> {
     try {
       final loc = await _locationService.getCurrentPosition();
       if (_isDisposed) return;
+      final isInside = AppGeoConstants.isInsideCajamarca(loc.latitude, loc.longitude);
       state = state.copyWith(
-        userLatitude: loc.latitude,
-        userLongitude: loc.longitude,
-        userAddress: loc.address ?? state.userAddress,
+        userLatitude: isInside ? loc.latitude : AppGeoConstants.cajamarcaCenterLat,
+        userLongitude: isInside ? loc.longitude : AppGeoConstants.cajamarcaCenterLng,
+        userAddress: isInside
+            ? (loc.address ?? state.userAddress)
+            : AppGeoConstants.defaultAddress,
         isLocating: false,
       );
     } catch (_) {
