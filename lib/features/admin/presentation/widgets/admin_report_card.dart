@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
+import '../../../citizen/presentation/widgets/report_community_summary_label.dart';
 
 /// Tarjeta de gestión administrativa de reporte.
 ///
@@ -130,6 +131,8 @@ class AdminReportCard extends StatelessWidget {
                     ),
                   ],
                 ),
+
+                ReportCommunitySummaryLabel(reportId: report.id),
 
                 // Asignación de cuadrilla (si ya está asignada)
                 if (report.assignedToTeamName != null) ...[

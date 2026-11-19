@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/report_thumbnail.dart';
 import '../../domain/entities/report_entity.dart';
+import 'report_community_summary_label.dart';
 import 'report_status_badge.dart';
 
 /// Tarjeta flotante inferior que se despliega al presionar un pin en el mapa interactivo.
@@ -165,6 +167,7 @@ class CitizenMapPreviewCard extends StatelessWidget {
                 ),
               ],
             ),
+            ReportCommunitySummaryLabel(reportId: report.id),
             const SizedBox(height: 14),
 
             // Botón de acción principal: Ver detalle
@@ -174,7 +177,7 @@ class CitizenMapPreviewCard extends StatelessWidget {
               child: ElevatedButton(
                 onPressed: () {
                   context.push(
-                    '/citizen/report/${report.id}',
+                    RouteNames.citizenReportLocation(report.id),
                     extra: report,
                   );
                 },

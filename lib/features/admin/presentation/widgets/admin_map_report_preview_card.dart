@@ -190,7 +190,7 @@ class AdminMapReportPreviewCard extends StatelessWidget {
                     child: OutlinedButton(
                       onPressed: () {
                         context.push(
-                          RouteNames.citizenReportDetail.replaceFirst(':id', report.id),
+                          RouteNames.adminReportLocation(report.id),
                           extra: report,
                         );
                       },

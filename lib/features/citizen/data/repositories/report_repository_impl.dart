@@ -1,13 +1,14 @@
-import 'dart:convert';
+import 'dart:typed_data';
+
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/errors/failures.dart';
+import '../../../../core/services/image_compression.dart';
 import '../../../../core/utils/result.dart';
 import '../../domain/entities/report_category_entity.dart';
 import '../../domain/entities/report_entity.dart';
 import '../../domain/repositories/report_repository.dart';
 import '../datasources/category_remote_datasource.dart';
 import '../datasources/report_remote_datasource.dart';
-import '../datasources/report_storage_datasource.dart';
 import '../models/report_dto.dart';
 
 /// Implementación concreta de ReportRepository en la capa de datos.
@@ -19,7 +20,6 @@ import '../models/report_dto.dart';
 class ReportRepositoryImpl implements ReportRepository {
   final ReportRemoteDataSource _remoteDataSource;
   final CategoryRemoteDataSource _categoryDataSource;
-  final ReportStorageDataSource _storageDataSource;
 
   /// Caché en memoria para garantizar que los reportes creados aparezcan de inmediato
   /// incluso ante latencia de sincronización en Firestore o permisos offline
@@ -28,10 +28,8 @@ class ReportRepositoryImpl implements ReportRepository {
   ReportRepositoryImpl({
     ReportRemoteDataSource? remoteDataSource,
     CategoryRemoteDataSource? categoryDataSource,
-    ReportStorageDataSource? storageDataSource,
   })  : _remoteDataSource = remoteDataSource ?? FirebaseReportRemoteDataSourceImpl(),
-        _categoryDataSource = categoryDataSource ?? FirebaseCategoryRemoteDataSourceImpl(),
-        _storageDataSource = storageDataSource ?? FirebaseReportStorageDataSourceImpl();
+        _categoryDataSource = categoryDataSource ?? FirebaseCategoryRemoteDataSourceImpl();
 
   @override
   Future<Result<List<ReportCategoryEntity>>> getCategories() async {
@@ -49,95 +47,33 @@ class ReportRepositoryImpl implements ReportRepository {
   Future<Result<ReportEntity>> createReport({
     required ReportEntity report,
     List<int>? imageBytes,
-    String? imageFileName,
     List<List<int>>? multipleImageBytes,
-    List<String>? localImagePaths,
   }) async {
-    List<String> finalImageUrls = List.from(report.imageUrls);
-
-    // Determinar la lista de bytes de imágenes a procesar
-    final List<List<int>> bytesToUpload = [];
-    if (multipleImageBytes != null && multipleImageBytes.isNotEmpty) {
-      bytesToUpload.addAll(multipleImageBytes);
-    } else if (imageBytes != null && imageBytes.isNotEmpty) {
-      bytesToUpload.add(imageBytes);
+    final originals = multipleImageBytes?.isNotEmpty == true
+        ? multipleImageBytes!
+        : [if (imageBytes != null && imageBytes.isNotEmpty) imageBytes];
+    if (originals.length > ReportEntity.maxPhotos) {
+      return const FailureResult(ValidationFailure(message: 'Adjunta hasta 4 fotografías.'));
     }
-
-    // Subir cada imagen a Firebase Storage o utilizar respaldo local si falla/offline
-    for (int i = 0; i < bytesToUpload.length; i++) {
-      final bytes = bytesToUpload[i];
-      final fileName = 'evidence_${report.id}_$i.jpg';
-      String? uploadedUrl;
-      try {
-        uploadedUrl = await _storageDataSource.uploadReportImage(
-          imageBytes: bytes,
-          fileName: fileName,
-        );
-      } catch (_) {
-        // En caso de fallo en Storage, se gestiona el fallback local a continuación
-      }
-
-      if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
-        finalImageUrls.add(uploadedUrl);
-      } else {
-        // Respaldo de alta disponibilidad: Si Firebase Storage no está disponible o falla,
-        // se codifican los bytes en Base64 para que la imagen persista en Firestore
-        // y pueda ser visualizada desde cualquier dispositivo y tras reinstalar el APK.
-        final base64Image = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-        finalImageUrls.add(base64Image);
-      }
-    }
-
-    final initialHistory = ReportHistoryItem(
-      previousStatus: 'none',
-      newStatus: report.status.toDbString(),
-      changedByUserId: report.citizenId,
-      changedByUserName: report.citizenName,
-      changedByUserRole: 'citizen',
-      comment: 'Reporte registrado por el ciudadano.',
-      timestamp: report.createdAt,
-    );
-
-    final fullReport = ReportEntity(
-      id: report.id,
-      reportNumber: report.reportNumber,
-      citizenId: report.citizenId,
-      citizenName: report.citizenName,
-      citizenPhone: report.citizenPhone,
-      categoryId: report.categoryId,
-      categoryName: report.categoryName,
-      categoryIcon: report.categoryIcon,
-      description: report.description,
-      priority: report.priority,
-      status: report.status,
-      latitude: report.latitude,
-      longitude: report.longitude,
-      address: report.address,
-      reference: report.reference,
-      imageUrls: finalImageUrls,
-      createdAt: report.createdAt,
-      updatedAt: report.updatedAt,
-      evidenceImageUrl: report.evidenceImageUrl,
-      resolutionNotes: report.resolutionNotes,
-      assignedStaffName: report.assignedStaffName,
-      history: report.history.isNotEmpty ? report.history : [initialHistory],
-    );
-
-    // 1. Guardar de inmediato en la caché de sesión
-    _sessionCache.removeWhere((r) => r.id == fullReport.id);
-    _sessionCache.insert(0, fullReport);
-
-    // 2. Persistir en Cloud Firestore
     try {
-      final reportToSave = ReportDto.fromDomain(fullReport);
-      final savedDto = await _remoteDataSource.createReport(reportToSave);
+      final photos = <Uint8List>[];
+      for (final bytes in originals) {
+        photos.add(await compressPhoto(bytes, PhotoSize.report));
+      }
+      final savedDto = await _remoteDataSource.createReport(
+        ReportDto.fromDomain(report),
+        photos: photos,
+      );
       final domainReport = savedDto.toDomain();
       _sessionCache.removeWhere((r) => r.id == domainReport.id);
       _sessionCache.insert(0, domainReport);
       return Success(domainReport);
+    } on PhotoCompressionException catch (error) {
+      return FailureResult(ValidationFailure(message: error.message));
+    } on ServerException catch (error) {
+      return FailureResult(ServerFailure(message: error.message, code: error.code));
     } catch (_) {
-      // Si la llamada remota falla por reglas o conexión, retornamos el reporte creado para no perderlo
-      return Success(fullReport);
+      return const FailureResult(ServerFailure(message: 'No se pudo guardar el reporte.'));
     }
   }
 

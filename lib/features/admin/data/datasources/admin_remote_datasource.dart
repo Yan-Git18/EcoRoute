@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../../../../core/errors/exceptions.dart';
+import '../../../../core/services/report_status_transaction.dart';
 import '../../../auth/data/models/user_dto.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../citizen/data/models/report_dto.dart';
@@ -156,14 +157,13 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
         'assignedToTeamName': crew.name,
         'assignedStaffName': crew.leadStaffName,
         'assignedVehicle': '${crew.vehicleCode} • ${crew.vehiclePlate}',
-        'updatedAt': FieldValue.serverTimestamp(),
       };
 
       if (priority != null) {
         updateMap['priority'] = priority.toDbString();
       }
 
-      await docRef.update(updateMap);
+      final updated = await writeReportStatus(report: docRef, changes: updateMap);
 
       // Registrar auditoría en historial
       try {
@@ -180,8 +180,7 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
         });
       } catch (_) {}
 
-      final snapshot = await docRef.get();
-      return ReportDto.fromMap(snapshot.data()!, snapshot.id);
+      return ReportDto.fromMap(updated.fields, reportId);
     } catch (e) {
       throw ServerException(message: 'Error al asignar cuadrilla al reporte: $e');
     }

@@ -8,7 +8,6 @@ import '../../../../core/services/media_picker_service.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../data/datasources/category_remote_datasource.dart';
 import '../../data/datasources/report_remote_datasource.dart';
-import '../../data/datasources/report_storage_datasource.dart';
 import '../../data/repositories/report_repository_impl.dart';
 import '../../domain/entities/report_category_entity.dart';
 import '../../domain/entities/report_entity.dart';
@@ -27,19 +26,13 @@ final categoryRemoteDataSourceProvider = Provider<CategoryRemoteDataSource>((ref
   return FirebaseCategoryRemoteDataSourceImpl();
 });
 
-final reportStorageDataSourceProvider = Provider<ReportStorageDataSource>((ref) {
-  return FirebaseReportStorageDataSourceImpl();
-});
-
 final reportRepositoryProvider = Provider<ReportRepository>((ref) {
   final remoteDataSource = ref.watch(reportRemoteDataSourceProvider);
   final categoryDataSource = ref.watch(categoryRemoteDataSourceProvider);
-  final storageDataSource = ref.watch(reportStorageDataSourceProvider);
 
   return ReportRepositoryImpl(
     remoteDataSource: remoteDataSource,
     categoryDataSource: categoryDataSource,
-    storageDataSource: storageDataSource,
   );
 });
 
@@ -130,19 +123,6 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
     _handleSingleMediaResult(result);
   }
 
-  /// Selección de imágenes desde Galería (Paso 2)
-  Future<void> pickImageFromGallery() async {
-    final remaining = CreateReportState.maxImages - state.imagesCount;
-    if (remaining <= 0) {
-      state = state.copyWith(
-        errorMessage: 'Has alcanzado el límite máximo de ${CreateReportState.maxImages} fotografías.',
-      );
-      return;
-    }
-    final results = await _mediaPickerService.pickMultipleImagesFromGallery(limit: remaining);
-    _handleMultipleMediaResults(results);
-  }
-
   void _handleSingleMediaResult(MediaPickResult result) {
     if (result.hasImage) {
       final updatedFiles = List.of(state.imageFiles)..add(result.file!);
@@ -155,28 +135,6 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
     } else if (result.errorMessage != null) {
       state = state.copyWith(errorMessage: result.errorMessage);
     }
-  }
-
-  void _handleMultipleMediaResults(List<MediaPickResult> results) {
-    final updatedFiles = List.of(state.imageFiles);
-    final updatedBytes = List.of(state.imageBytesList);
-    String? error;
-
-    for (final r in results) {
-      if (r.hasImage && updatedFiles.length < CreateReportState.maxImages) {
-        updatedFiles.add(r.file!);
-        updatedBytes.add(r.bytes!);
-      } else if (r.errorMessage != null) {
-        error = r.errorMessage;
-      }
-    }
-
-    state = state.copyWith(
-      imageFiles: updatedFiles,
-      imageBytesList: updatedBytes,
-      errorMessage: error,
-      clearError: error == null,
-    );
   }
 
   /// Eliminar fotografía en un índice específico
@@ -372,6 +330,7 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
 
   /// Enviar y registrar el reporte (Paso 4 -> Paso 5)
   Future<bool> submitReport() async {
+    if (state.isSubmitting) return false;
     if (!state.canAdvanceFromStep4) {
       state = state.copyWith(
         errorMessage: 'Por favor ingrese una descripción de al menos 5 caracteres.',
@@ -410,9 +369,7 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
     final result = await _createReportUseCase(
       report: report,
       imageBytes: state.imageBytes,
-      imageFileName: 'evidence_${reportId}_0.jpg',
       multipleImageBytes: state.imageBytesList,
-      localImagePaths: state.imageFiles.map((f) => f.path).toList(),
     );
 
     return result.fold(
@@ -427,10 +384,9 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
       onFailure: (failure) {
         state = state.copyWith(
           isSubmitting: false,
-          createdReportNumber: reportNumber,
-          currentStep: 5,
+          errorMessage: failure.message,
         );
-        return true;
+        return false;
       },
     );
   }

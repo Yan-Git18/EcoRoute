@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/router/app_router.dart';
+import 'core/services/citizen_push_service.dart';
 import 'core/theme/app_theme.dart';
 
+import 'features/citizen/presentation/widgets/citizen_push_bridge.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -50,6 +52,9 @@ class EcoRouteApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       routerConfig: router,
+      builder: CitizenPushService.isSupported
+          ? (context, child) => CitizenPushBridge(router: router, child: child!)
+          : null,
     );
   }
 }

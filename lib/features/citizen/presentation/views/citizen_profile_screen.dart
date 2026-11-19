@@ -1,24 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/widgets/profile/profile_widgets.dart';
-import '../../../auth/domain/entities/user_entity.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../widgets/citizen_bottom_nav_bar.dart';
+import '../widgets/citizen_notification_preferences_sheet.dart';
+import '../widgets/citizen_profile_editor.dart';
 
 /// Pantalla de Perfil de Usuario para el rol Ciudadano.
 ///
-/// Diseño fiel al mockup de referencia:
-/// - Título centrado "Mi perfil"
-/// - Avatar circular con fondo gris suave y silueta de usuario
-/// - Nombre y correo electrónico centrados
-/// - Tarjeta de opciones: Mis datos, Cambiar contraseña, Notificaciones, Acerca de EcoRoute (sin opción de Idioma)
-/// - Opción destacada en rojo "Cerrar sesión" con confirmación de seguridad
-/// - Barra de navegación inferior `CitizenBottomNavBar` en la pestaña de Perfil
-///
-/// Principios aplicados: DRY y SRP mediante delegación en [ProfileDataModal],
-/// [ProfileChangePasswordModal], [ProfileNotificationsModal] y [ProfileLogoutDialog].
-/// Ubicación: `lib/features/citizen/presentation/views/citizen_profile_screen.dart`
-/// Capa: Presentation (Views)
 class CitizenProfileScreen extends ConsumerWidget {
   const CitizenProfileScreen({super.key});
 
@@ -59,34 +48,7 @@ class CitizenProfileScreen extends ConsumerWidget {
             const SizedBox(height: 12),
 
             // 1. Avatar Circular con silueta gris
-            Center(
-              child: Container(
-                width: 96,
-                height: 96,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFE2E8F0),
-                  shape: BoxShape.circle,
-                ),
-                child: user?.photoUrl != null && user!.photoUrl!.isNotEmpty
-                    ? ClipOval(
-                        child: Image.network(
-                          user.photoUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              const Icon(
-                            Icons.person_rounded,
-                            size: 58,
-                            color: Color(0xFF8C98A9),
-                          ),
-                        ),
-                      )
-                    : const Icon(
-                        Icons.person_rounded,
-                        size: 58,
-                        color: Color(0xFF8C98A9),
-                      ),
-              ),
-            ),
+            Center(child: CitizenProfileAvatar(url: user?.photoUrl, size: 96)),
             const SizedBox(height: 14),
 
             // 2. Nombre del usuario
@@ -134,7 +96,9 @@ class CitizenProfileScreen extends ConsumerWidget {
                   EcoProfileMenuItem(
                     icon: Icons.person_outline_rounded,
                     title: 'Mis datos',
-                    onTap: () => _openMyDataModal(context, user),
+                    onTap: () {
+                      if (user != null) CitizenProfileEditor.show(context, user);
+                    },
                   ),
                   const Divider(
                     height: 1,
@@ -162,7 +126,11 @@ class CitizenProfileScreen extends ConsumerWidget {
                   EcoProfileMenuItem(
                     icon: Icons.notifications_none_rounded,
                     title: 'Notificaciones',
-                    onTap: () => _openNotificationsModal(context),
+                    onTap: () {
+                      if (user != null) {
+                        CitizenNotificationPreferencesSheet.show(context, user.id);
+                      }
+                    },
                   ),
                   const Divider(
                     height: 1,
@@ -230,42 +198,8 @@ class CitizenProfileScreen extends ConsumerWidget {
     );
   }
 
-  void _openMyDataModal(BuildContext context, UserEntity? user) {
-    ProfileDataModal.show(
-      context,
-      name: user?.name.isNotEmpty == true ? user!.name : 'Ciudadano EcoRoute',
-      email: user?.email.isNotEmpty == true ? user!.email : 'Sin correo registrado',
-      phone: user?.phoneNumber != null && user!.phoneNumber!.trim().isNotEmpty
-          ? user.phoneNumber!
-          : 'No registrado',
-      roleLabel: 'Ciudadano Activo',
-    );
-  }
-
   void _openChangePasswordModal(BuildContext context, WidgetRef ref, String email) {
     ProfileChangePasswordModal.show(context, ref, email: email);
   }
 
-  void _openNotificationsModal(BuildContext context) {
-    ProfileNotificationsModal.show(
-      context,
-      options: const [
-        NotificationOptionItem(
-          title: 'Actualizaciones de reportes',
-          subtitle: 'Notificarme cuando mi reporte sea asignado o resuelto.',
-          initialValue: true,
-        ),
-        NotificationOptionItem(
-          title: 'Camión recolector cerca',
-          subtitle: 'Alertar cuando el camión esté a menos de 500 metros.',
-          initialValue: true,
-        ),
-        NotificationOptionItem(
-          title: 'Campañas y noticias ambientales',
-          subtitle: 'Avisos sobre jornadas de reciclaje y actividades cívicas.',
-          initialValue: false,
-        ),
-      ],
-    );
-  }
 }

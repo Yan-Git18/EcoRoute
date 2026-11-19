@@ -1,0 +1,321 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function stored(path) {
+      return exists(path) ? get(path).data : {};
+    }
+
+    function afterWrite(path) {
+      return existsAfter(path) ? getAfter(path).data : {};
+    }
+
+    function activeRole(uid, roles) {
+      let account = stored(/databases/$(database)/documents/users/$(uid));
+      return account.size() > 0
+        && account.get('role', 'citizen') in roles
+        && account.get('isActive', true) == true;
+    }
+
+    function citizenOwnsDocument(uid) {
+      return request.auth != null && request.auth.uid == uid
+        && activeRole(uid, ['citizen', 'ciudadano']);
+    }
+
+    function isAdmin() {
+      return request.auth != null && activeRole(request.auth.uid, ['admin', 'administrador']);
+    }
+
+    function isStaff() {
+      return request.auth != null && activeRole(request.auth.uid, ['staff', 'personal']);
+    }
+
+    function status(value) {
+      return value == 'asignado' ? 'assigned'
+        : value == 'en proceso' ? 'in_progress'
+        : value == 'resuelto' ? 'resolved'
+        : value == 'pendiente' ? 'pending'
+        : value == 'cancelado' ? 'cancelled'
+        : value;
+    }
+
+    function validCitizenProfileUpdate(uid) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let profile = request.resource.data;
+      let phone = profile.get('phoneNumber', null);
+      return changed.hasOnly(['name', 'phoneNumber', 'updatedAt', 'avatarPath'])
+        && profile.name is string && profile.name.size() > 0 && profile.name.size() <= 100
+        && (phone == null || (phone is string && phone.size() <= 30))
+        && profile.updatedAt == request.time
+        && (!changed.hasAny(['avatarPath']) || (
+          profile.avatarPath == 'users/' + uid + '/media/avatar'
+          && getAfter(/databases/$(database)/documents/users/$(uid)/media/avatar).data.updatedAt == request.time
+        ));
+    }
+
+    function validImage(maxBytes) {
+      let image = request.resource.data;
+      return image.keys().hasOnly(['data', 'contentType', 'updatedAt'])
+        && image.data is bytes && image.data.size() > 0 && image.data.size() <= maxBytes
+        && image.contentType == 'image/jpeg'
+        && image.updatedAt == request.time;
+    }
+
+    function mediaPath(reportId, imageId) {
+      return 'reports/' + reportId + '/media/' + imageId;
+    }
+
+    function photoIncluded(reportId, photos, index, imageId) {
+      return photos.size() <= index
+        || (photos[index] == mediaPath(reportId, imageId)
+          && getAfter(/databases/$(database)/documents/reports/$(reportId)/media/$(imageId)).data.updatedAt == request.time);
+    }
+
+    function validReportPhotoCreation(reportId) {
+      let report = request.resource.data;
+      let photos = report.get('imagePaths', []);
+      return request.auth != null && citizenOwnsDocument(request.auth.uid)
+        && report.id == reportId && report.citizenId == request.auth.uid
+        && report.status == 'pending' && report.updatedAt == request.time
+        && report.keys().hasOnly([
+          'id', 'reportNumber', 'citizenId', 'citizenName', 'citizenPhone',
+          'categoryId', 'categoryName', 'categoryIcon', 'description', 'priority', 'status',
+          'latitude', 'longitude', 'address', 'reference', 'location', 'createdAt', 'updatedAt',
+          'imagePaths', 'imageUrls', 'images'
+        ])
+        && report.description is string && report.description.size() >= 5
+        && report.priority in ['low', 'medium', 'high']
+        && photos is list && photos.size() <= 4
+        && photoIncluded(reportId, photos, 0, 'photo_0')
+        && photoIncluded(reportId, photos, 1, 'photo_1')
+        && photoIncluded(reportId, photos, 2, 'photo_2')
+        && photoIncluded(reportId, photos, 3, 'photo_3');
+    }
+
+    function canResolveWithEvidence(reportId) {
+      let staff = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      let before = get(/databases/$(database)/documents/reports/$(reportId)).data;
+      let after = getAfter(/databases/$(database)/documents/reports/$(reportId)).data;
+      let assigned = before.get('assignedStaffId', null);
+      return staff.role in ['staff', 'personal'] && staff.get('isActive', true) == true
+        && (assigned == null || assigned == request.auth.uid)
+        && before.status in ['pending', 'assigned', 'in_progress', 'pendiente', 'asignado', 'en proceso']
+        && after.status == 'resolved' && after.assignedStaffId == request.auth.uid
+        && after.updatedAt == request.time && after.evidenceImagePath == mediaPath(reportId, 'evidence')
+        && after.diff(before).affectedKeys().hasOnly([
+          'status', 'assignedStaffId', 'assignedStaffName', 'resolutionNotes', 'updatedAt',
+          'evidenceImagePath', 'evidenceImagePaths', 'statusEventId'
+        ]);
+    }
+
+    function validResolutionPhotos(reportId, report) {
+      let photos = report.get('evidenceImagePaths', [report.evidenceImagePath]);
+      return photos is list && photos.size() >= 1 && photos.size() <= 4
+        && photoIncluded(reportId, photos, 0, 'evidence')
+        && photoIncluded(reportId, photos, 1, 'evidence_1')
+        && photoIncluded(reportId, photos, 2, 'evidence_2')
+        && photoIncluded(reportId, photos, 3, 'evidence_3');
+    }
+
+    function canWriteEvidence(reportId, imageId) {
+      let after = getAfter(/databases/$(database)/documents/reports/$(reportId)).data;
+      return imageId.matches('evidence(_[1-3])?') && canResolveWithEvidence(reportId)
+        && mediaPath(reportId, imageId) in after.get('evidenceImagePaths', [after.evidenceImagePath]);
+    }
+
+    function receivesNotices(uid) {
+      let settings = stored(/databases/$(database)/documents/users/$(uid)/settings/notifications);
+      return activeRole(uid, ['citizen', 'ciudadano']) && settings.get('reportUpdates', true);
+    }
+
+    function noticeFieldsMatch(notice, reportId, report) {
+      let number = report.get('reportNumber', null);
+      return notice.keys().hasOnly(['reportId', 'reportNumber', 'status', 'createdAt', 'readAt', 'pushPending'])
+        && notice.reportId == reportId && notice.reportNumber == (number == null ? reportId : number)
+        && notice.status == report.status && notice.createdAt == request.time
+        && notice.readAt == null && notice.pushPending == true;
+    }
+
+    function statusChanged(before, after) {
+      return status(before.status) != after.status
+        && after.status in ['assigned', 'in_progress', 'resolved'];
+    }
+
+    function validNoticeForChange(reportId, before, after) {
+      let uid = before.citizenId;
+      let eventId = after.get('statusEventId', '');
+      return !statusChanged(before, after) || (
+        eventId is string && eventId.matches('[a-f0-9-]{36}')
+        && eventId != before.get('statusEventId', '')
+        && (receivesNotices(uid)
+          ? noticeFieldsMatch(afterWrite(/databases/$(database)/documents/users/$(uid)/notifications/$(eventId)), reportId, after)
+          : !existsAfter(/databases/$(database)/documents/users/$(uid)/notifications/$(eventId)))
+      );
+    }
+
+    function validReportNotice(uid, eventId) {
+      let notice = request.resource.data;
+      let reportId = notice.reportId;
+      let before = stored(/databases/$(database)/documents/reports/$(reportId));
+      let after = afterWrite(/databases/$(database)/documents/reports/$(reportId));
+      return (isAdmin() || isStaff()) && receivesNotices(uid)
+        && before.citizenId == uid && after.citizenId == uid
+        && statusChanged(before, after) && after.statusEventId == eventId
+        && after.updatedAt == request.time && noticeFieldsMatch(notice, reportId, after);
+    }
+
+    function validReportUpdate(reportId) {
+      let before = resource.data;
+      let after = request.resource.data;
+      let changed = after.diff(before).affectedKeys();
+      return request.auth != null && after.updatedAt == request.time && (
+        (isAdmin() && (
+          (changed.hasOnly(['priority', 'updatedAt']) && after.priority in ['low', 'medium', 'high'])
+          || (status(before.status) in ['pending', 'assigned'] && after.status == 'assigned'
+            && after.priority in ['low', 'medium', 'high']
+            && changed.hasOnly([
+              'status', 'assignedToTeamId', 'assignedToTeamName', 'assignedStaffName',
+              'assignedVehicle', 'priority', 'updatedAt', 'statusEventId'
+            ]))
+        ))
+        || (isStaff() && after.status == 'in_progress' && status(before.status) in ['pending', 'assigned']
+          && before.get('assignedStaffId', request.auth.uid) in [null, request.auth.uid]
+          && after.assignedStaffId == request.auth.uid
+          && changed.hasOnly(['status', 'assignedStaffId', 'assignedStaffName', 'updatedAt', 'statusEventId']))
+        || (after.status == 'resolved' && canResolveWithEvidence(reportId)
+          && validResolutionPhotos(reportId, after))
+        || (citizenOwnsDocument(before.citizenId) && status(before.status) == 'pending'
+          && after.status == 'cancelled' && changed.hasOnly(['status', 'cancellationReason', 'updatedAt']))
+      ) && validNoticeForChange(reportId, before, after);
+    }
+
+    function validCommunityChange(reportId, uid) {
+      let report = stored(/databases/$(database)/documents/reports/$(reportId));
+      let before = stored(/databases/$(database)/documents/reports/$(reportId)/participants/$(uid));
+      let after = afterWrite(/databases/$(database)/documents/reports/$(reportId)/participants/$(uid));
+      let oldSummary = stored(/databases/$(database)/documents/reports/$(reportId)/community/summary);
+      let summary = afterWrite(/databases/$(database)/documents/reports/$(reportId)/community/summary);
+      let wasSupported = before.get('supported', false);
+      let supported = after.get('supported', false);
+      let oldRating = before.get('rating', 0);
+      let rating = after.get('rating', 0);
+      return citizenOwnsDocument(uid)
+        && after.keys().hasOnly(['supported', 'rating']) && supported is bool && rating is int
+        && (!after.keys().hasAny(['rating']) || (rating >= 1 && rating <= 5))
+        && summary.keys().hasOnly(['supportCount', 'ratingCount', 'ratingTotal'])
+        && summary.get('supportCount', 0) == oldSummary.get('supportCount', 0) + (supported && !wasSupported ? 1 : 0)
+        && summary.get('ratingCount', 0) == oldSummary.get('ratingCount', 0) + (rating != oldRating ? 1 : 0)
+        && summary.get('ratingTotal', 0) == oldSummary.get('ratingTotal', 0) + (rating - oldRating)
+        && (
+          (status(report.status) in ['pending', 'assigned', 'in_progress']
+            && report.citizenId != uid && !wasSupported && supported && oldRating == rating)
+          || (status(report.status) == 'resolved' && (report.citizenId == uid || wasSupported)
+            && supported == wasSupported && oldRating == 0 && rating >= 1 && rating <= 5)
+        );
+    }
+
+    match /users/{uid} {
+      allow get: if (request.auth != null && request.auth.uid == uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.id == uid && request.resource.data.role == 'citizen'
+        && request.resource.data.email.lower() == request.auth.token.email.lower()
+        && request.resource.data.get('teamId', null) == null
+        && request.resource.data.keys().hasOnly([
+          'id', 'name', 'email', 'role', 'phoneNumber', 'photoUrl', 'teamId',
+          'isActive', 'createdAt', 'updatedAt'
+        ]);
+      allow update: if citizenOwnsDocument(uid) && validCitizenProfileUpdate(uid);
+      allow update: if isAdmin() && resource.data.role in ['citizen', 'ciudadano', 'staff', 'personal']
+        && request.resource.data.role in ['citizen', 'staff']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'teamId', 'updatedAt']);
+
+      match /media/avatar {
+        allow get: if request.auth != null && request.auth.uid == uid;
+        allow create, update: if citizenOwnsDocument(uid)
+          && validImage(96 * 1024)
+          && getAfter(/databases/$(database)/documents/users/$(uid)).data.avatarPath == 'users/' + uid + '/media/avatar'
+          && getAfter(/databases/$(database)/documents/users/$(uid)).data.updatedAt == request.time;
+      }
+
+      match /settings/notifications {
+        allow get: if citizenOwnsDocument(uid);
+        allow create, update: if citizenOwnsDocument(uid)
+          && request.resource.data.keys().hasOnly(['reportUpdates', 'nearbyTruck', 'campaigns'])
+          && request.resource.data.reportUpdates is bool
+          && request.resource.data.nearbyTruck is bool
+          && request.resource.data.campaigns is bool;
+      }
+
+      match /notifications/{notificationId} {
+        allow get, list: if citizenOwnsDocument(uid);
+        allow create: if validReportNotice(uid, notificationId);
+        allow update: if citizenOwnsDocument(uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt'])
+          && request.resource.data.readAt == request.time;
+      }
+    }
+
+    match /reports/{reportId} {
+      allow get, list: if request.auth != null;
+      allow create: if validReportPhotoCreation(reportId);
+      allow update: if validReportUpdate(reportId);
+
+      match /history/{entry} {
+        allow get, list: if request.auth != null;
+        allow create: if request.auth != null && request.resource.data.timestamp == request.time
+          && request.resource.data.newStatus == get(/databases/$(database)/documents/reports/$(reportId)).data.status
+          && (
+            (isAdmin() && request.resource.data.changedByUserRole == 'admin'
+              && request.resource.data.changedByUserId == request.auth.uid)
+            || (isStaff() && request.resource.data.changedByUserRole == 'staff'
+              && request.resource.data.changedByUserId == request.auth.uid)
+            || (request.resource.data.changedByUserRole == 'citizen'
+              && citizenOwnsDocument(get(/databases/$(database)/documents/reports/$(reportId)).data.citizenId)
+              && request.resource.data.newStatus in ['pending', 'cancelled'])
+          );
+      }
+
+      match /media/{imageId} {
+        allow get: if request.auth != null && exists(/databases/$(database)/documents/reports/$(reportId));
+        allow create: if request.auth != null && validImage(256 * 1024) && (
+          (imageId.matches('photo_[0-3]') && citizenOwnsDocument(request.auth.uid)
+            && !exists(/databases/$(database)/documents/reports/$(reportId))
+            && getAfter(/databases/$(database)/documents/reports/$(reportId)).data.citizenId == request.auth.uid
+            && mediaPath(reportId, imageId) in getAfter(/databases/$(database)/documents/reports/$(reportId)).data.imagePaths)
+          || canWriteEvidence(reportId, imageId)
+        );
+        allow update: if request.auth != null && validImage(256 * 1024)
+          && canWriteEvidence(reportId, imageId);
+      }
+
+      match /community/summary {
+        allow get: if request.auth != null;
+        allow create, update: if request.auth != null && validCommunityChange(reportId, request.auth.uid);
+      }
+
+      match /participants/{uid} {
+        allow get: if citizenOwnsDocument(uid);
+        allow create, update: if request.auth != null && validCommunityChange(reportId, uid);
+      }
+    }
+
+    match /crews/{crewId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /report_categories/{categoryId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    match /citizenPushDevices/{token} {
+      allow create, update: if request.auth != null && citizenOwnsDocument(request.auth.uid)
+        && request.resource.data.keys().hasOnly(['uid', 'updatedAt'])
+        && request.resource.data.uid == request.auth.uid
+        && token.size() >= 20 && token.size() <= 1024
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+    }
+  }
+}

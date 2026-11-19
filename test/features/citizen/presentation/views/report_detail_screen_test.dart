@@ -1,8 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ecoroute/features/auth/domain/entities/user_entity.dart';
+import 'package:ecoroute/features/auth/presentation/viewmodels/auth_state.dart';
+import 'package:ecoroute/features/auth/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ecoroute/features/citizen/domain/entities/report_entity.dart';
 import 'package:ecoroute/features/citizen/presentation/views/report_detail_screen.dart';
+
+class _CitizenSession extends AuthViewModel {
+  final String id;
+
+  _CitizenSession(this.id);
+
+  @override
+  AuthState build() => AuthState(
+    isInitialized: true,
+    user: UserEntity(
+      id: id,
+      name: 'Vecino',
+      email: 'vecino@example.com',
+      role: UserRole.citizen,
+      createdAt: DateTime(2026),
+    ),
+  );
+}
 
 void main() {
   testWidgets('Renderiza ReportDetailScreen con todos los datos y la línea de tiempo de auditoría', (WidgetTester tester) async {
@@ -148,6 +169,9 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          authViewModelProvider.overrideWith(() => _CitizenSession(pendingReport.citizenId)),
+        ],
         child: MaterialApp(
           home: ReportDetailScreen(
             reportId: pendingReport.id,

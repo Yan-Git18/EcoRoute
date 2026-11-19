@@ -34,6 +34,9 @@ migrate_working_dir/
 .gradle/
 **/local.properties
 /coverage/
+/functions/node_modules/
+/.firebase/
+.wrangler/
 
 # Symbolication related
 app.*.symbols

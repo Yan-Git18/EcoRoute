@@ -12,9 +12,7 @@ abstract class ReportRepository {
   Future<Result<ReportEntity>> createReport({
     required ReportEntity report,
     List<int>? imageBytes,
-    String? imageFileName,
     List<List<int>>? multipleImageBytes,
-    List<String>? localImagePaths,
   });
 
   /// Obtiene los reportes creados por el ciudadano actual.

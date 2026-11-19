@@ -7,6 +7,8 @@ import '../../../citizen/domain/entities/report_entity.dart';
 /// Ubicación: `lib/features/staff/domain/entities/staff_task_entity.dart`
 /// Capa: Domain (Entities)
 class StaffTaskEntity {
+  static const maxEvidencePhotos = 4;
+
   final String id;
   final String reportNumber;
   final String citizenId;

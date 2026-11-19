@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../../core/services/firestore_media.dart';
 import '../../domain/entities/report_entity.dart';
+import 'report_media_fields.dart';
 
 /// DTO para serialización de eventos de auditoría de un reporte en Firestore (`reports/{id}/history`).
 class ReportHistoryItemDto {
@@ -149,18 +151,7 @@ class ReportDto {
     final rawRef = (locationMap['reference'] as String?) ??
         (map['reference'] as String?);
 
-    final List<String> extractedEvidence = [];
-    if (map['evidenceImageUrls'] is List) {
-      for (final item in map['evidenceImageUrls']) {
-        if (item != null && item.toString().isNotEmpty) {
-          extractedEvidence.add(item.toString());
-        }
-      }
-    }
-    final singleEvidence = map['evidenceImageUrl'] as String? ?? (map['evidencePhoto'] as String?);
-    if (extractedEvidence.isEmpty && singleEvidence != null && singleEvidence.isNotEmpty) {
-      extractedEvidence.add(singleEvidence);
-    }
+    final evidence = ReportMediaFields.evidence(map);
 
     return ReportDto(
       id: documentId,
@@ -178,29 +169,27 @@ class ReportDto {
       longitude: rawLng,
       address: rawAddr,
       reference: rawRef,
-      imageUrls: (map['images'] as List<dynamic>?)
-              ?.map((e) => e is Map ? (e['url'] as String? ?? '') : e.toString())
-              .where((url) => url.isNotEmpty)
-              .toList() ??
-          (map['imageUrls'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .where((url) => url.isNotEmpty)
-              .toList() ??
-          [],
+      imageUrls: ReportMediaFields.photos(map),
       createdAt: parseDate(map['createdAt']),
       updatedAt: map['updatedAt'] != null ? parseDate(map['updatedAt']) : null,
       assignedToTeamId: map['assignedToTeamId'] as String?,
       assignedToTeamName: map['assignedToTeamName'] as String?,
       assignedStaffName: map['assignedStaffName'] as String? ?? (map['assignedToTeamName'] as String?),
       assignedVehicle: map['assignedVehicle'] as String?,
-      evidenceImageUrl: singleEvidence ?? (extractedEvidence.isNotEmpty ? extractedEvidence.first : null),
-      evidenceImageUrls: extractedEvidence,
+      evidenceImageUrl: evidence.firstOrNull,
+      evidenceImageUrls: evidence,
       resolutionNotes: map['resolutionNotes'] as String? ?? (map['resolutionComment'] as String?),
       history: history,
     );
   }
 
   Map<String, dynamic> toMap() {
+    final paths = imageUrls.map(FirestoreMedia.path).whereType<String>().toList();
+    final legacyUrls = imageUrls.where((url) => FirestoreMedia.path(url) == null).toList();
+    final evidence = evidenceImageUrls.isNotEmpty
+        ? evidenceImageUrls
+        : [if (evidenceImageUrl case final location?) location];
+    final evidencePaths = evidence.map(FirestoreMedia.path).whereType<String>().toList();
     return {
       'id': id,
       'reportNumber': reportNumber,
@@ -223,16 +212,18 @@ class ReportDto {
         'address': address,
         'reference': reference,
       },
-      'images': imageUrls.map((url) => {'url': url, 'uploadedAt': Timestamp.now()}).toList(),
-      'imageUrls': imageUrls,
+      if (paths.isNotEmpty) 'imagePaths': paths,
+      if (legacyUrls.isNotEmpty) 'imageUrls': legacyUrls,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': FieldValue.serverTimestamp(),
       if (assignedToTeamId != null) 'assignedToTeamId': assignedToTeamId,
       if (assignedToTeamName != null) 'assignedToTeamName': assignedToTeamName,
       if (assignedStaffName != null) 'assignedStaffName': assignedStaffName,
       if (assignedVehicle != null) 'assignedVehicle': assignedVehicle,
-      if (evidenceImageUrl != null) 'evidenceImageUrl': evidenceImageUrl,
-      if (evidenceImageUrls.isNotEmpty) 'evidenceImageUrls': evidenceImageUrls,
+      if (evidencePaths.isNotEmpty) 'evidenceImagePath': evidencePaths.first,
+      if (evidencePaths.length > 1) 'evidenceImagePaths': evidencePaths,
+      if (evidencePaths.isEmpty && evidence.isNotEmpty) 'evidenceImageUrl': evidence.first,
+      if (evidencePaths.isEmpty && evidence.length > 1) 'evidenceImageUrls': evidence,
       if (resolutionNotes != null) 'resolutionNotes': resolutionNotes,
     };
   }

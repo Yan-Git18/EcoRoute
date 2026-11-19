@@ -331,7 +331,7 @@ class _CitizenMapScreenState extends ConsumerState<CitizenMapScreen> {
                         formattedDistance: distance,
                         onTap: () {
                           context.push(
-                            '/citizen/report/${report.id}',
+                            RouteNames.citizenReportLocation(report.id),
                             extra: report,
                           );
                         },

@@ -1,13 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import '../../../../core/errors/exceptions.dart';
+import '../../../../core/services/firestore_media.dart';
 import '../models/report_dto.dart';
 
 /// Contrato abstracto para la fuente de datos remota de reportes de residuos en Firestore.
 ///
 /// Principio SRP: Responsabilidad única de guardar y consultar documentos de reportes e historial.
 abstract class ReportRemoteDataSource {
-  Future<ReportDto> createReport(ReportDto report);
+  Future<ReportDto> createReport(ReportDto report, {List<Uint8List> photos = const []});
   Future<List<ReportDto>> getMyReports(String citizenId);
   Future<ReportDto> getReportById(String reportId);
   Future<List<ReportDto>> getAllReports();
@@ -25,7 +27,7 @@ class FirebaseReportRemoteDataSourceImpl implements ReportRemoteDataSource {
   FirebaseFirestore get _firestore => _customFirestore ?? FirebaseFirestore.instance;
 
   @override
-  Future<ReportDto> createReport(ReportDto report) async {
+  Future<ReportDto> createReport(ReportDto report, {List<Uint8List> photos = const []}) async {
     if (!_isFirebaseReady && _customFirestore == null) {
       throw const ServerException(
         message: 'Servicio de base de datos no disponible.',
@@ -35,7 +37,18 @@ class FirebaseReportRemoteDataSourceImpl implements ReportRemoteDataSource {
 
     try {
       final docRef = _firestore.collection('reports').doc(report.id);
-      await docRef.set(report.toMap());
+      final batch = _firestore.batch();
+      final media = docRef.collection('media');
+      final paths = <String>[];
+      for (var i = 0; i < photos.length; i++) {
+        final photo = media.doc('photo_$i');
+        paths.add(photo.path);
+        batch.set(photo, FirestoreMedia.document(photos[i]));
+      }
+      final fields = report.toMap();
+      if (paths.isNotEmpty) fields['imagePaths'] = paths;
+      batch.set(docRef, fields);
+      await batch.commit();
 
       // Registrar auditoría inicial en la subcolección 'history'
       final initialHistoryItem = ReportHistoryItemDto(
@@ -60,32 +73,11 @@ class FirebaseReportRemoteDataSourceImpl implements ReportRemoteDataSource {
         });
       } catch (_) {}
 
-      return ReportDto(
-        id: report.id,
-        reportNumber: report.reportNumber,
-        citizenId: report.citizenId,
-        citizenName: report.citizenName,
-        citizenPhone: report.citizenPhone,
-        categoryId: report.categoryId,
-        categoryName: report.categoryName,
-        categoryIcon: report.categoryIcon,
-        description: report.description,
-        priority: report.priority,
-        status: report.status,
-        latitude: report.latitude,
-        longitude: report.longitude,
-        address: report.address,
-        reference: report.reference,
-        imageUrls: report.imageUrls,
-        createdAt: report.createdAt,
-        updatedAt: report.updatedAt,
-        assignedToTeamId: report.assignedToTeamId,
-        assignedToTeamName: report.assignedToTeamName,
-        assignedStaffName: report.assignedStaffName,
-        assignedVehicle: report.assignedVehicle,
-        evidenceImageUrl: report.evidenceImageUrl,
-        resolutionNotes: report.resolutionNotes,
-        history: [initialHistoryItem],
+      return ReportDto.fromDomain(
+        report.toDomain().copyWith(
+          imageUrls: [...paths.map(FirestoreMedia.location), ...report.imageUrls],
+          history: [initialHistoryItem.toDomain()],
+        ),
       );
     } on FirebaseException catch (e) {
       if (e.code == 'permission-denied') {

@@ -238,6 +238,8 @@ class ReportHistoryItem {
 /// Ubicación: `lib/features/citizen/domain/entities/report_entity.dart`
 /// Capa: Domain (Entities)
 class ReportEntity {
+  static const maxPhotos = 4;
+
   final String id;
   final String reportNumber;
   final String citizenId;

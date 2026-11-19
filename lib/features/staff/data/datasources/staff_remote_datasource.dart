@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import '../../../../core/errors/exceptions.dart';
+import '../../../../core/services/report_status_transaction.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../models/staff_task_dto.dart';
 
@@ -18,8 +20,7 @@ abstract class StaffRemoteDataSource {
     required String staffName,
     required ReportStatus newStatus,
     String? notes,
-    String? evidenceImageUrl,
-    List<String>? evidenceImageUrls,
+    List<Uint8List> evidencePhotos = const [],
   });
 }
 
@@ -80,8 +81,7 @@ class FirebaseStaffRemoteDataSourceImpl implements StaffRemoteDataSource {
     required String staffName,
     required ReportStatus newStatus,
     String? notes,
-    String? evidenceImageUrl,
-    List<String>? evidenceImageUrls,
+    List<Uint8List> evidencePhotos = const [],
   }) async {
     if (!_isFirebaseReady && _customFirestore == null) {
       throw const ServerException(message: 'Base de datos no inicializada.');
@@ -94,22 +94,20 @@ class FirebaseStaffRemoteDataSourceImpl implements StaffRemoteDataSource {
         'status': newStatus.toDbString(),
         'assignedStaffId': staffId,
         'assignedStaffName': staffName,
-        'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      if (notes != null && notes.isNotEmpty) {
+      if (newStatus == ReportStatus.resolved && notes != null && notes.isNotEmpty) {
         updateData['resolutionNotes'] = notes;
       }
 
-      if (evidenceImageUrls != null && evidenceImageUrls.isNotEmpty) {
-        updateData['evidenceImageUrls'] = evidenceImageUrls;
-        updateData['evidenceImageUrl'] = evidenceImageUrls.first;
-      } else if (evidenceImageUrl != null && evidenceImageUrl.isNotEmpty) {
-        updateData['evidenceImageUrl'] = evidenceImageUrl;
-        updateData['evidenceImageUrls'] = [evidenceImageUrl];
-      }
-
-      await docRef.update(updateData);
+      final result = await writeReportStatus(
+        report: docRef,
+        changes: updateData,
+        evidencePhotos: evidencePhotos,
+      );
+      final changed = result.changed;
+      final updatedTask = StaffTaskDto.fromFirestore(taskId, result.fields);
+      if (!changed) return updatedTask;
 
       // Registrar auditoría en la subcolección 'history'
       try {
@@ -123,8 +121,7 @@ class FirebaseStaffRemoteDataSourceImpl implements StaffRemoteDataSource {
         });
       } catch (_) {}
 
-      final updatedDoc = await docRef.get();
-      return StaffTaskDto.fromFirestore(taskId, updatedDoc.data() ?? {});
+      return updatedTask;
     } catch (e) {
       throw ServerException(message: 'Error al actualizar el estado de la tarea: $e');
     }

@@ -8,6 +8,7 @@ import '../../../../core/widgets/eco_section_header.dart';
 import '../../../../core/widgets/eco_status_summary_card.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../domain/entities/report_entity.dart';
+import '../viewmodels/citizen_notifications_providers.dart';
 import '../viewmodels/my_reports_viewmodel.dart';
 import '../widgets/citizen_bottom_nav_bar.dart';
 import '../widgets/citizen_hero_report_card.dart';
@@ -22,6 +23,8 @@ class CitizenHomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authViewModelProvider);
     final user = authState.user;
+    final hasUnread = user != null &&
+        ref.watch(citizenHasUnreadProvider(user.id)).value == true;
     final userName = user?.name.trim();
     final firstName = (userName != null && userName.isNotEmpty)
         ? userName.split(' ').first
@@ -84,7 +87,8 @@ class CitizenHomeScreen extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.only(right: 20),
             child: EcoNotificationButton(
-              onTap: () => _showNotificationsModal(context, ref, pendingCount, inProgressCount),
+              hasUnread: hasUnread,
+              onTap: () => context.push(RouteNames.citizenNotifications),
             ),
           ),
         ],
@@ -208,112 +212,6 @@ class CitizenHomeScreen extends ConsumerWidget {
         ),
       ),
       bottomNavigationBar: const CitizenBottomNavBar(currentIndex: 0),
-    );
-  }
-
-  void _showNotificationsModal(
-    BuildContext context,
-    WidgetRef ref,
-    int pending,
-    int inProgress,
-  ) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE2E8F0),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Notificaciones',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 20),
-                      onPressed: () => Navigator.pop(sheetContext),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFDCFCE7),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.info_outline_rounded,
-                          color: Color(0xFF047857),
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          (pending + inProgress > 0)
-                              ? 'Tienes ${pending + inProgress} reporte(s) en seguimiento activo.'
-                              : 'No tienes incidencias pendientes en este momento.',
-                          style: const TextStyle(
-                            fontSize: 13.5,
-                            color: Color(0xFF334155),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(sheetContext);
-                      ref.read(myReportsViewModelProvider.notifier).setFilter(ReportFilter.all);
-                      context.push(RouteNames.citizenMyReports);
-                    },
-                    child: const Text('Ver todos los reportes'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 }

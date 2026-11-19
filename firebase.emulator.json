@@ -1,0 +1,8 @@
+{
+  "firestore": { "rules": "firebase/citizen.firestore.rules" },
+  "emulators": {
+    "firestore": { "port": 18080, "websocketPort": 19150 },
+    "auth": { "port": 19099 },
+    "ui": { "enabled": false }
+  }
+}

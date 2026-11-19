@@ -16,6 +16,7 @@ import '../../features/auth/presentation/views/welcome_screen.dart';
 import '../../features/citizen/domain/entities/report_entity.dart';
 import '../../features/citizen/presentation/views/citizen_home_screen.dart';
 import '../../features/citizen/presentation/views/citizen_map_screen.dart';
+import '../../features/citizen/presentation/views/citizen_notifications_screen.dart';
 import '../../features/citizen/presentation/views/citizen_profile_screen.dart';
 import '../../features/citizen/presentation/views/create_report_wizard_screen.dart';
 import '../../features/citizen/presentation/views/my_reports_screen.dart';
@@ -115,11 +116,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: RouteNames.citizenReportDetail,
-        builder: (context, state) {
-          final id = state.pathParameters['id'] ?? '';
-          final extra = state.extra is ReportEntity ? state.extra as ReportEntity : null;
-          return ReportDetailScreen(reportId: id, initialReport: extra);
-        },
+        builder: _reportDetail,
       ),
       GoRoute(
         path: RouteNames.citizenMap,
@@ -128,6 +125,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.citizenProfile,
         builder: (context, state) => const CitizenProfileScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.citizenNotifications,
+        builder: (context, state) => const CitizenNotificationsScreen(),
       ),
 
       // Rutas Personal de Limpieza
@@ -157,6 +158,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.adminReports,
         builder: (context, state) => const AdminReportsScreen(),
       ),
+      GoRoute(path: RouteNames.adminReportDetail, builder: _reportDetail),
       GoRoute(
         path: RouteNames.adminLiveMap,
         builder: (context, state) => const AdminLiveMapScreen(),
@@ -176,3 +178,11 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+Widget _reportDetail(BuildContext context, GoRouterState state) {
+  final extra = state.extra;
+  return ReportDetailScreen(
+    reportId: state.pathParameters['id']!,
+    initialReport: extra is ReportEntity ? extra : null,
+  );
+}

@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../../../../core/errors/exceptions.dart';
+import '../../../../core/services/citizen_push_service.dart';
 import '../models/user_dto.dart';
 
 /// Contrato abstracto para la fuente de datos remota de autenticación.
@@ -179,6 +180,14 @@ class FirebaseAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   Future<void> signOut() async {
     if (!_isFirebaseReady && _customFirebaseAuth == null) return;
     try {
+      final uid = _firebaseAuth.currentUser?.uid;
+      if (uid != null && CitizenPushService.isSupported) {
+        try {
+          await CitizenPushService().revoke(uid).timeout(const Duration(seconds: 4));
+        } catch (_) {
+          // El cierre de sesión sigue disponible sin conexión.
+        }
+      }
       await _firebaseAuth.signOut();
     } catch (e) {
       throw AuthException(message: 'Error al cerrar sesión: $e');

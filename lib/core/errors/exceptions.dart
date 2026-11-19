@@ -14,12 +14,6 @@ class AuthException implements Exception {
   const AuthException({required this.message, this.code});
 }
 
-class StorageException implements Exception {
-  final String message;
-  final String? code;
-  const StorageException({required this.message, this.code});
-}
-
 class LocationException implements Exception {
   final String message;
   final String? code;

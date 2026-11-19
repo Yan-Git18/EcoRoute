@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../../core/services/firestore_media.dart';
 import '../../domain/entities/user_entity.dart';
 
 /// DTO (Data Transfer Object) para serialización de usuarios en Firestore.
@@ -42,7 +43,7 @@ class UserDto {
       email: map['email'] as String? ?? '',
       role: map['role'] as String? ?? 'citizen',
       phoneNumber: map['phoneNumber'] as String?,
-      photoUrl: map['photoUrl'] as String?,
+      photoUrl: FirestoreMedia.readLocation(map['avatarPath'], map['photoUrl']),
       teamId: map['teamId'] as String?,
       isActive: map['isActive'] as bool? ?? true,
       createdAt: parseDate(map['createdAt']),
@@ -51,13 +52,17 @@ class UserDto {
 
   /// Serialización a Map para Firestore
   Map<String, dynamic> toMap() {
+    final avatarPath = photoUrl == null ? null : FirestoreMedia.path(photoUrl!);
     return {
       'id': id,
       'name': name,
       'email': email,
       'role': role,
       'phoneNumber': phoneNumber,
-      'photoUrl': photoUrl,
+      if (avatarPath != null)
+        'avatarPath': avatarPath
+      else
+        'photoUrl': photoUrl,
       'teamId': teamId,
       'isActive': isActive,
       'createdAt': Timestamp.fromDate(createdAt),

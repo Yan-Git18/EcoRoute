@@ -1,12 +1,17 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/evidence_image_card.dart';
+import '../../../../core/widgets/media_image.dart';
+import '../../../auth/domain/entities/user_entity.dart';
+import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../../../core/widgets/report_thumbnail.dart';
 import '../../domain/entities/report_entity.dart';
 import '../viewmodels/my_reports_viewmodel.dart';
+import '../widgets/report_community_actions.dart';
+import '../widgets/report_community_summary_label.dart';
 import '../widgets/report_status_badge.dart';
 import '../widgets/report_timeline.dart';
 
@@ -109,7 +114,10 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
       ),
     );
 
-    if (confirmed == true && mounted && _report != null) {
+    if (confirmed == true &&
+        mounted &&
+        _report != null &&
+        ref.read(authViewModelProvider).user?.id == _report!.citizenId) {
       setState(() => _isLoading = true);
       final cancelUseCase = ref.read(cancelReportUseCaseProvider);
       final result = await cancelUseCase(reportId: _report!.id);
@@ -154,6 +162,8 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(authViewModelProvider.select((state) => state.user));
+    final citizenId = user?.isCitizen == true ? user!.id : null;
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -162,7 +172,13 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
         scrolledUnderElevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              context.go(user?.role.defaultRoute ?? RouteNames.citizenHome);
+            }
+          },
         ),
         centerTitle: true,
         title: const Text(
@@ -205,7 +221,11 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
                   ? const SizedBox.shrink()
                   : _ReportDetailBody(
                       report: _report!,
-                      onCancelReport: _handleCancelReport,
+                      citizenId: citizenId,
+                      showCommunitySummary: user?.isAdmin == true,
+                      onCancelReport: citizenId == _report!.citizenId
+                          ? _handleCancelReport
+                          : null,
                     ),
     );
   }
@@ -215,10 +235,14 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
 /// Principio SRP: Distribuye cada sección en componentes especializados y reutilizables.
 class _ReportDetailBody extends StatelessWidget {
   final ReportEntity report;
-  final VoidCallback onCancelReport;
+  final String? citizenId;
+  final bool showCommunitySummary;
+  final VoidCallback? onCancelReport;
 
   const _ReportDetailBody({
     required this.report,
+    required this.citizenId,
+    required this.showCommunitySummary,
     required this.onCancelReport,
   });
 
@@ -243,6 +267,15 @@ class _ReportDetailBody extends StatelessWidget {
             const SizedBox(height: 16),
           ],
 
+          if (citizenId case final userId?)
+            ReportCommunityActions(
+              key: ValueKey((report.id, userId)),
+              report: report,
+              userId: userId,
+            )
+          else if (showCommunitySummary)
+            ReportCommunitySummaryLabel(reportId: report.id, showWhenEmpty: true),
+
           // 4. Tarjeta de detalles: Descripción, fecha de reporte y métricas de prioridad/estado
           _ReportDetailsCard(report: report),
           const SizedBox(height: 16),
@@ -252,7 +285,7 @@ class _ReportDetailBody extends StatelessWidget {
           const SizedBox(height: 20),
 
           // 5. Botón de Cancelar Reporte para el ciudadano (solo en estado pendiente)
-          if (report.status == ReportStatus.pending) ...[
+          if (report.status == ReportStatus.pending && onCancelReport != null) ...[
             SizedBox(
               width: double.infinity,
               height: 50,
@@ -323,55 +356,11 @@ class _ReportPhotoCard extends StatefulWidget {
 class _ReportPhotoCardState extends State<_ReportPhotoCard> {
   int _currentIndex = 0;
 
-  Widget _buildSingleImage(String url) {
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return Image.network(
-        url,
-        width: double.infinity,
-        height: double.infinity,
-        fit: BoxFit.cover,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return const Center(
-            child: SizedBox(
-              width: 26,
-              height: 26,
-              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-            ),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) => const _ImageLoadErrorPlaceholder(),
-      );
-    } else if (url.startsWith('data:image')) {
-      try {
-        final commaIdx = url.indexOf(',');
-        final base64Str = commaIdx != -1 ? url.substring(commaIdx + 1) : url;
-        final bytes = base64Decode(base64Str);
-        return Image.memory(
-          bytes,
-          width: double.infinity,
-          height: double.infinity,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => const _ImageLoadErrorPlaceholder(),
-        );
-      } catch (_) {
-        return const _ImageLoadErrorPlaceholder();
-      }
-    } else {
-      final file = File(url);
-      if (file.existsSync()) {
-        return Image.file(
-          file,
-          width: double.infinity,
-          height: double.infinity,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => const _ImageLoadErrorPlaceholder(),
-        );
-      }
-      return const _ImageLoadErrorPlaceholder();
-    }
-  }
-
+  Widget _buildSingleImage(String url) => MediaImage(
+    location: url,
+    placeholder: const _ImageLoadErrorPlaceholder(),
+    loading: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+  );
   void _openFullScreenViewer(BuildContext context, List<String> images, int initialIndex) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -598,58 +587,19 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
     super.dispose();
   }
 
-  Widget _buildImage(String url) {
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return InteractiveViewer(
-        maxScale: 4.0,
-        child: Image.network(
-          url,
-          fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => const Center(
-            child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 48),
-          ),
-        ),
-      );
-    } else if (url.startsWith('data:image')) {
-      try {
-        final commaIdx = url.indexOf(',');
-        final base64Str = commaIdx != -1 ? url.substring(commaIdx + 1) : url;
-        final bytes = base64Decode(base64Str);
-        return InteractiveViewer(
-          maxScale: 4.0,
-          child: Image.memory(
-            bytes,
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => const Center(
-              child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 48),
-            ),
-          ),
-        );
-      } catch (_) {
-        return const Center(
-          child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 48),
-        );
-      }
-    } else {
-      final file = File(url);
-      if (file.existsSync()) {
-        return InteractiveViewer(
-          maxScale: 4.0,
-          child: Image.file(
-            file,
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => const Center(
-              child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 48),
-            ),
-          ),
-        );
-      }
-      return const Center(
-        child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 48),
-      );
-    }
-  }
-
+  Widget _buildImage(String url) => InteractiveViewer(
+    maxScale: 4,
+    child: MediaImage(
+      location: url,
+      fit: BoxFit.contain,
+      placeholder: const Icon(
+        Icons.broken_image_rounded,
+        color: Colors.white54,
+        size: 48,
+      ),
+      loading: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+    ),
+  );
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -701,7 +651,7 @@ class _ImageLoadErrorPlaceholder extends StatelessWidget {
             ),
             SizedBox(height: 2),
             Text(
-              'Archivo temporal no disponible en este dispositivo',
+              'Vuelve a abrir el reporte para reintentar.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 11,

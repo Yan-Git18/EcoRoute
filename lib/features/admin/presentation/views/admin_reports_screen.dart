@@ -211,7 +211,7 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
                           ),
                           onViewDetail: () {
                             context.push(
-                              RouteNames.citizenReportDetail.replaceFirst(':id', report.id),
+                              RouteNames.adminReportLocation(report.id),
                               extra: report,
                             );
                           },

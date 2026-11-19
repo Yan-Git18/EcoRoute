@@ -193,6 +193,25 @@ class AuthViewModel extends Notifier<AuthState> {
     );
   }
 
+  /// Actualiza el perfil de la sesión que inició la edición.
+  void applySavedProfile(UserEntity profile) {
+    final current = state.user;
+    if (current == null || current.id != profile.id) return;
+    state = state.copyWith(
+      user: UserEntity(
+        id: current.id,
+        name: profile.name,
+        email: current.email,
+        role: current.role,
+        phoneNumber: profile.phoneNumber,
+        photoUrl: profile.photoUrl,
+        teamId: current.teamId,
+        isActive: current.isActive,
+        createdAt: current.createdAt,
+      ),
+    );
+  }
+
   /// Limpia cualquier mensaje de error activo en la UI
   void clearError() {
     if (state.errorMessage != null) {

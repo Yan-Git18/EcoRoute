@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:ecoroute/core/errors/failures.dart';
 import 'package:ecoroute/core/services/location_service.dart';
 import 'package:ecoroute/core/services/media_picker_service.dart';
 import 'package:ecoroute/core/utils/result.dart';
@@ -81,6 +82,8 @@ class MockWizardLocationService implements LocationService {
 }
 
 class MockWizardReportRepository implements ReportRepository {
+  bool failSave = false;
+
   @override
   Future<Result<List<ReportCategoryEntity>>> getCategories() async {
     return const Success(ReportCategoryEntity.defaultCategories);
@@ -90,10 +93,13 @@ class MockWizardReportRepository implements ReportRepository {
   Future<Result<ReportEntity>> createReport({
     required ReportEntity report,
     List<int>? imageBytes,
-    String? imageFileName,
     List<List<int>>? multipleImageBytes,
-    List<String>? localImagePaths,
   }) async {
+    if (failSave) {
+      return const FailureResult(
+        ServerFailure(message: 'No se pudieron guardar las fotos.'),
+      );
+    }
     return Success(report);
   }
 
@@ -196,6 +202,24 @@ void main() {
     // 9. Verificamos que avanzó al Paso 4 (Completa la información)
     expect(find.text('Completa la información'), findsOneWidget);
     expect(find.text('Descripción'), findsOneWidget);
+
+    const description = 'Residuos acumulados en la vía';
+    await tester.enterText(find.byType(TextField).first, description);
+    await tester.pumpAndSettle();
+    mockRepo.failSave = true;
+    await tester.tap(find.text('Enviar reporte'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No se pudieron guardar las fotos.'), findsOneWidget);
+    expect(find.text(description), findsOneWidget);
+    expect(find.text('Completa la información'), findsOneWidget);
+
+    mockRepo.failSave = false;
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Enviar reporte'));
+    await tester.pumpAndSettle();
+    expect(find.text('¡Reporte enviado!'), findsOneWidget);
   });
 
   testWidgets('Paso 3 de ubicación: Permite buscar dirección y reubicar el PIN en el mapa', (WidgetTester tester) async {

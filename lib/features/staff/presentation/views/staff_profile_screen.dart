@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/widgets/media_image.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/widgets/profile/profile_widgets.dart';
@@ -87,23 +88,16 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
                   color: Color(0xFFD1FAE5),
                   shape: BoxShape.circle,
                 ),
-                child: user?.photoUrl != null && user!.photoUrl!.isNotEmpty
-                    ? ClipOval(
-                        child: Image.network(
-                          user.photoUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Icon(
-                            Icons.engineering_rounded,
-                            size: 58,
-                            color: Color(0xFF047857),
-                          ),
-                        ),
-                      )
-                    : const Icon(
-                        Icons.engineering_rounded,
-                        size: 58,
-                        color: Color(0xFF047857),
-                      ),
+                child: ClipOval(
+                  child: MediaImage(
+                    location: user?.photoUrl,
+                    placeholder: const Icon(
+                      Icons.engineering_rounded,
+                      size: 58,
+                      color: Color(0xFF047857),
+                    ),
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 14),

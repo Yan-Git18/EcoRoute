@@ -15,9 +15,7 @@ class CreateReportUseCase {
   Future<Result<ReportEntity>> call({
     required ReportEntity report,
     List<int>? imageBytes,
-    String? imageFileName,
     List<List<int>>? multipleImageBytes,
-    List<String>? localImagePaths,
   }) async {
     // Validaciones de reglas de negocio
     if (report.categoryId.trim().isEmpty) {
@@ -40,11 +38,9 @@ class CreateReportUseCase {
       );
     }
 
-    final hasImages = (imageBytes != null && imageBytes.isNotEmpty) ||
-        (multipleImageBytes != null && multipleImageBytes.isNotEmpty) ||
-        (localImagePaths != null && localImagePaths.isNotEmpty) ||
-        report.imageUrls.isNotEmpty ||
-        report.evidenceImageUrls.isNotEmpty;
+    final hasImages = multipleImageBytes?.isNotEmpty == true
+        ? multipleImageBytes!.every((bytes) => bytes.isNotEmpty)
+        : imageBytes?.isNotEmpty == true;
     if (!hasImages) {
       return const FailureResult(
         ValidationFailure(
@@ -56,9 +52,7 @@ class CreateReportUseCase {
     return _repository.createReport(
       report: report,
       imageBytes: imageBytes,
-      imageFileName: imageFileName,
       multipleImageBytes: multipleImageBytes,
-      localImagePaths: localImagePaths,
     );
   }
 }

@@ -17,8 +17,12 @@ class RouteNames {
   static const String citizenCreateReport = '/citizen/create-report';
   static const String citizenMyReports = '/citizen/my-reports';
   static const String citizenReportDetail = '/citizen/report/:id';
+  static const String citizenNotifications = '/citizen/notifications';
   static const String citizenMap = '/citizen/map';
   static const String citizenProfile = '/citizen/profile';
+
+  static String citizenReportLocation(String id) =>
+      citizenReportDetail.replaceFirst(':id', Uri.encodeComponent(id));
 
   // Personal de Limpieza / Recolección
   static const String staffHome = '/staff';
@@ -39,4 +43,7 @@ class RouteNames {
   static const String adminTeams = '/admin/teams';
   static const String adminStaff = '/admin/staff';
   static const String adminFleet = '/admin/fleet';
+
+  static String adminReportLocation(String id) =>
+      adminReportDetail.replaceFirst(':id', Uri.encodeComponent(id));
 }

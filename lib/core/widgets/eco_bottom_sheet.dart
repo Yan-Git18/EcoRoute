@@ -14,6 +14,7 @@ class EcoBottomSheet {
     required List<Widget> children,
     Widget? trailingHeader,
     bool isScrollControlled = true,
+    bool scrollable = false,
     CrossAxisAlignment crossAxisAlignment = CrossAxisAlignment.start,
   }) {
     return showModalBottomSheet<T>(
@@ -24,7 +25,7 @@ class EcoBottomSheet {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
-        return Padding(
+        final content = Padding(
           padding: EdgeInsets.only(
             top: 20,
             left: 24,
@@ -74,6 +75,9 @@ class EcoBottomSheet {
             ],
           ),
         );
+        return scrollable
+            ? SafeArea(top: false, child: SingleChildScrollView(child: content))
+            : content;
       },
     );
   }

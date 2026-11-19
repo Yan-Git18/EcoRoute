@@ -150,7 +150,7 @@ class _MyReportsScreenState extends ConsumerState<MyReportsScreen> {
                               report: report,
                               onTap: () {
                                 context.push(
-                                  '/citizen/report/${report.id}',
+                                  RouteNames.citizenReportLocation(report.id),
                                   extra: report,
                                 );
                               },

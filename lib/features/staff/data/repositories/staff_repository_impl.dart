@@ -1,12 +1,13 @@
-import 'dart:convert';
+import 'dart:typed_data';
+
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/errors/failures.dart';
+import '../../../../core/services/image_compression.dart';
 import '../../../../core/utils/result.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../domain/entities/staff_task_entity.dart';
 import '../../domain/repositories/staff_repository.dart';
 import '../datasources/staff_remote_datasource.dart';
-import '../datasources/staff_storage_datasource.dart';
 
 /// Implementación del repositorio de tareas de limpieza.
 ///
@@ -16,15 +17,12 @@ import '../datasources/staff_storage_datasource.dart';
 /// Capa: Data (Repositories)
 class StaffRepositoryImpl implements StaffRepository {
   final StaffRemoteDataSource _remoteDataSource;
-  final StaffStorageDataSource _storageDataSource;
 
   static final Map<String, StaffTaskEntity> _taskCache = {};
 
   StaffRepositoryImpl({
     StaffRemoteDataSource? remoteDataSource,
-    StaffStorageDataSource? storageDataSource,
-  })  : _remoteDataSource = remoteDataSource ?? FirebaseStaffRemoteDataSourceImpl(),
-        _storageDataSource = storageDataSource ?? FirebaseStaffStorageDataSourceImpl();
+  }) : _remoteDataSource = remoteDataSource ?? FirebaseStaffRemoteDataSourceImpl();
 
   @override
   Future<Result<List<StaffTaskEntity>>> getAssignedTasks(String staffId) async {
@@ -82,17 +80,6 @@ class StaffRepositoryImpl implements StaffRepository {
       _taskCache[entity.id] = entity;
       return Success(entity);
     } catch (_) {
-      // Fallback amigable para actualizar caché local
-      final existing = _taskCache[taskId];
-      if (existing != null) {
-        final updated = existing.copyWith(
-          status: newStatus,
-          resolutionNotes: notes ?? existing.resolutionNotes,
-          updatedAt: DateTime.now(),
-        );
-        _taskCache[taskId] = updated;
-        return Success(updated);
-      }
       return const FailureResult(ServerFailure(message: 'No se pudo actualizar el estado de la tarea.'));
     }
   }
@@ -105,67 +92,34 @@ class StaffRepositoryImpl implements StaffRepository {
     List<int>? evidenceImageBytes,
     List<List<int>>? multipleEvidenceBytes,
     required String notes,
-    String? localImagePath,
-    List<String>? localImagePaths,
   }) async {
-    final List<List<int>> bytesToProcess = [];
-    if (multipleEvidenceBytes != null && multipleEvidenceBytes.isNotEmpty) {
-      bytesToProcess.addAll(multipleEvidenceBytes);
-    } else if (evidenceImageBytes != null && evidenceImageBytes.isNotEmpty) {
-      bytesToProcess.add(evidenceImageBytes);
+    final originals = multipleEvidenceBytes?.isNotEmpty == true
+        ? multipleEvidenceBytes!
+        : [if (evidenceImageBytes != null) evidenceImageBytes];
+    if (originals.isEmpty || originals.length > StaffTaskEntity.maxEvidencePhotos) {
+      return const FailureResult(
+        ValidationFailure(message: 'Adjunta entre 1 y ${StaffTaskEntity.maxEvidencePhotos} fotografías de evidencia.'),
+      );
     }
-
-    final List<String> finalEvidenceUrls = [];
-
-    for (int i = 0; i < bytesToProcess.length; i++) {
-      final bytes = bytesToProcess[i];
-      final fileName = 'evidence_${taskId}_${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
-      String? uploadedUrl;
-      try {
-        uploadedUrl = await _storageDataSource.uploadEvidenceImage(
-          imageBytes: bytes,
-          fileName: fileName,
-        );
-      } catch (_) {}
-
-      if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
-        finalEvidenceUrls.add(uploadedUrl);
-      } else {
-        // Respaldo de alta disponibilidad: Convertir a Base64 data URI
-        // para garantizar que la evidencia sea visible en cualquier dispositivo
-        // y tras reinstalar el APK.
-        finalEvidenceUrls.add('data:image/jpeg;base64,${base64Encode(bytes)}');
-      }
-    }
-
-    final primaryEvidenceUrl = finalEvidenceUrls.isNotEmpty ? finalEvidenceUrls.first : null;
-
     try {
+      final photos = <Uint8List>[];
+      for (final bytes in originals) {
+        photos.add(await compressPhoto(bytes, PhotoSize.report));
+      }
       final dto = await _remoteDataSource.updateTaskStatus(
         taskId: taskId,
         staffId: staffId,
         staffName: staffName,
         newStatus: ReportStatus.resolved,
         notes: notes,
-        evidenceImageUrl: primaryEvidenceUrl,
-        evidenceImageUrls: finalEvidenceUrls,
+        evidencePhotos: photos,
       );
       final entity = dto.toDomain();
       _taskCache[entity.id] = entity;
       return Success(entity);
+    } on PhotoCompressionException catch (error) {
+      return FailureResult(ValidationFailure(message: error.message));
     } catch (_) {
-      final existing = _taskCache[taskId];
-      if (existing != null) {
-        final updated = existing.copyWith(
-          status: ReportStatus.resolved,
-          evidenceImageUrl: primaryEvidenceUrl,
-          evidenceImageUrls: finalEvidenceUrls,
-          resolutionNotes: notes,
-          updatedAt: DateTime.now(),
-        );
-        _taskCache[taskId] = updated;
-        return Success(updated);
-      }
       return const FailureResult(ServerFailure(message: 'Error al finalizar la tarea con evidencia.'));
     }
   }

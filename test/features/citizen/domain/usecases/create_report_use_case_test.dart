@@ -18,9 +18,7 @@ class FakeReportRepository implements ReportRepository {
   Future<Result<ReportEntity>> createReport({
     required ReportEntity report,
     List<int>? imageBytes,
-    String? imageFileName,
     List<List<int>>? multipleImageBytes,
-    List<String>? localImagePaths,
   }) async {
     lastCreatedReport = report;
     return Success(report);
@@ -171,7 +169,6 @@ void main() {
     final result = await useCase(
       report: reportWithoutUrls,
       imageBytes: [1, 2, 3],
-      imageFileName: 'foto.jpg',
     );
 
     expect(result.isSuccess, true);
@@ -179,7 +176,10 @@ void main() {
   });
 
   test('debe retornar Success y guardar el reporte cuando todos los campos son válidos', () async {
-    final result = await useCase(report: validReport);
+    final result = await useCase(
+      report: validReport,
+      multipleImageBytes: [[1, 2, 3]],
+    );
 
     expect(result.isSuccess, true);
     expect(result.dataOrNull?.reportNumber, '#0012');

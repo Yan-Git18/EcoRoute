@@ -1,15 +1,54 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:ecoroute/core/router/route_names.dart';
 import 'package:ecoroute/core/utils/result.dart';
+import 'package:ecoroute/core/widgets/eco_notification_button.dart';
 import 'package:ecoroute/features/auth/domain/entities/user_entity.dart';
 import 'package:ecoroute/features/auth/presentation/viewmodels/auth_state.dart';
 import 'package:ecoroute/features/auth/presentation/viewmodels/auth_viewmodel.dart';
+import 'package:ecoroute/features/citizen/domain/entities/citizen_notification.dart';
 import 'package:ecoroute/features/citizen/domain/entities/report_category_entity.dart';
 import 'package:ecoroute/features/citizen/domain/entities/report_entity.dart';
 import 'package:ecoroute/features/citizen/domain/repositories/report_repository.dart';
+import 'package:ecoroute/features/citizen/domain/repositories/citizen_notification_repository.dart';
+import 'package:ecoroute/features/citizen/presentation/viewmodels/citizen_notifications_providers.dart';
 import 'package:ecoroute/features/citizen/presentation/viewmodels/create_report_viewmodel.dart';
 import 'package:ecoroute/features/citizen/presentation/views/citizen_home_screen.dart';
+import 'package:ecoroute/features/citizen/presentation/views/citizen_notifications_screen.dart';
+
+class _InboxRepository implements CitizenNotificationRepository {
+  (String, String)? read;
+
+  @override
+  Stream<List<CitizenNotification>> watchInbox(String userId, int limit) => Stream.value([
+    CitizenNotification(
+      id: 'notice-1',
+      reportId: 'rep-1',
+      reportNumber: '#0001',
+      status: ReportStatus.resolved,
+      createdAt: DateTime(2026, 11, 19),
+      isRead: false,
+    ),
+  ]);
+
+  @override
+  Stream<bool> watchUnread(String userId) => Stream.value(true);
+
+  @override
+  Future<void> markRead(String userId, String notificationId) async {
+    read = (userId, notificationId);
+  }
+
+  @override
+  Future<CitizenNotificationPreferences> getPreferences(String userId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> savePreferences(String userId, CitizenNotificationPreferences preferences) =>
+      throw UnimplementedError();
+}
 
 class MockAuthViewModel extends AuthViewModel {
   final UserEntity? testUser;
@@ -36,9 +75,7 @@ class MockReportRepository implements ReportRepository {
   Future<Result<ReportEntity>> createReport({
     required ReportEntity report,
     List<int>? imageBytes,
-    String? imageFileName,
     List<List<int>>? multipleImageBytes,
-    List<String>? localImagePaths,
   }) async {
     return Success(report);
   }
@@ -75,6 +112,46 @@ final testCarlosUser = UserEntity(
 );
 
 void main() {
+  testWidgets('La campana abre la bandeja y un aviso abre su reporte y marca la lectura', (tester) async {
+    final inbox = _InboxRepository();
+    final router = GoRouter(
+      initialLocation: RouteNames.citizenHome,
+      routes: [
+        GoRoute(path: RouteNames.citizenHome, builder: (_, _) => const CitizenHomeScreen()),
+        GoRoute(
+          path: RouteNames.citizenNotifications,
+          builder: (_, _) => const CitizenNotificationsScreen(),
+        ),
+        GoRoute(
+          path: RouteNames.citizenReportDetail,
+          builder: (_, state) => Scaffold(body: Text('Detalle ${state.pathParameters['id']}')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authViewModelProvider.overrideWith(() => MockAuthViewModel(testCarlosUser)),
+          reportRepositoryProvider.overrideWithValue(MockReportRepository()),
+          citizenNotificationRepositoryProvider.overrideWithValue(inbox),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final bell = find.byType(EcoNotificationButton);
+    expect(tester.widget<EcoNotificationButton>(bell).hasUnread, isTrue);
+    await tester.tap(bell);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Reporte #0001'));
+    await tester.pumpAndSettle();
+
+    expect(inbox.read, (testCarlosUser.id, 'notice-1'));
+    expect(find.text('Detalle rep-1'), findsOneWidget);
+  });
+
   testWidgets('Renderiza CitizenHomeScreen con diseño de EcoRoute coincidente con el mockup',
       (tester) async {
     final mockRepo = MockReportRepository();

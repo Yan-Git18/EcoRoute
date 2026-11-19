@@ -1,10 +1,47 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ecoroute/core/utils/result.dart';
 import 'package:ecoroute/features/auth/domain/entities/user_entity.dart';
 import 'package:ecoroute/features/auth/presentation/viewmodels/auth_state.dart';
 import 'package:ecoroute/features/auth/presentation/viewmodels/auth_viewmodel.dart';
+import 'package:ecoroute/features/citizen/domain/entities/citizen_notification.dart';
+import 'package:ecoroute/features/citizen/domain/entities/citizen_profile_update.dart';
+import 'package:ecoroute/features/citizen/domain/repositories/citizen_notification_repository.dart';
+import 'package:ecoroute/features/citizen/domain/repositories/citizen_profile_repository.dart';
+import 'package:ecoroute/features/citizen/presentation/viewmodels/citizen_notifications_providers.dart';
 import 'package:ecoroute/features/citizen/presentation/views/citizen_profile_screen.dart';
+import 'package:ecoroute/features/citizen/presentation/widgets/citizen_profile_editor.dart';
+
+class _ProfileRepository implements CitizenProfileRepository {
+  @override
+  Future<Result<UserEntity>> update(String userId, CitizenProfileUpdate update) async {
+    expect(userId, testCitizenUser.id);
+    return Success(testCitizenUser.copyWith(name: update.name, phoneNumber: update.phone));
+  }
+}
+
+class _NotificationRepository implements CitizenNotificationRepository {
+  final _preferences = <String, CitizenNotificationPreferences>{};
+
+  @override
+  Future<CitizenNotificationPreferences> getPreferences(String userId) async =>
+      _preferences[userId] ?? const CitizenNotificationPreferences();
+
+  @override
+  Future<void> savePreferences(String userId, CitizenNotificationPreferences preferences) async {
+    _preferences[userId] = preferences;
+  }
+
+  @override
+  Stream<List<CitizenNotification>> watchInbox(String userId, int limit) => const Stream.empty();
+
+  @override
+  Stream<bool> watchUnread(String userId) => const Stream.empty();
+
+  @override
+  Future<void> markRead(String userId, String notificationId) async {}
+}
 
 class MockCitizenAuthViewModel extends AuthViewModel {
   final UserEntity? testUser;
@@ -91,13 +128,14 @@ void main() {
     expect(find.text('Perfil'), findsOneWidget);
   });
 
-  testWidgets('Abre modal de Mis datos personales al presionar la opción', (tester) async {
+  testWidgets('Edita los datos personales y actualiza el nombre de la sesión', (tester) async {
     final mockAuth = MockCitizenAuthViewModel(testCitizenUser);
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           authViewModelProvider.overrideWith(() => mockAuth),
+          citizenProfileRepositoryProvider.overrideWithValue(_ProfileRepository()),
         ],
         child: const MaterialApp(
           home: CitizenProfileScreen(),
@@ -117,21 +155,26 @@ void main() {
     expect(find.text('Rol en la plataforma'), findsOneWidget);
     expect(find.text('Ciudadano Activo'), findsOneWidget);
     expect(find.text('Cerrar'), findsOneWidget);
+    expect(find.text('Cambiar foto'), findsOneWidget);
 
-    // Cierra el modal
-    await tester.tap(find.text('Cerrar'));
+    await tester.enterText(find.byType(TextFormField).first, 'Alex Rabanal');
+    final save = find.text('Guardar cambios');
+    await tester.ensureVisible(save);
+    await tester.tap(save);
     await tester.pumpAndSettle();
 
     expect(find.text('Mis datos personales'), findsNothing);
+    expect(find.text('Alex Rabanal'), findsOneWidget);
   });
 
-  testWidgets('Abre modal de Notificaciones con toggles interactivos', (tester) async {
+  testWidgets('Guarda las preferencias y las recupera al reabrir el modal', (tester) async {
     final mockAuth = MockCitizenAuthViewModel(testCitizenUser);
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           authViewModelProvider.overrideWith(() => mockAuth),
+          citizenNotificationRepositoryProvider.overrideWithValue(_NotificationRepository()),
         ],
         child: const MaterialApp(
           home: CitizenProfileScreen(),
@@ -151,10 +194,17 @@ void main() {
     expect(find.text('Campañas y noticias ambientales'), findsOneWidget);
     expect(find.text('Guardar preferencias'), findsOneWidget);
 
+    final reportUpdates = find.widgetWithText(SwitchListTile, 'Actualizaciones de reportes');
+    expect(tester.widget<SwitchListTile>(reportUpdates).value, isTrue);
+    await tester.tap(reportUpdates);
     await tester.tap(find.text('Guardar preferencias'));
     await tester.pumpAndSettle();
 
     expect(find.text('Preferencias de Notificaciones'), findsNothing);
+
+    await tester.tap(find.text('Notificaciones'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(reportUpdates).value, isFalse);
   });
 
   testWidgets('Muestra diálogo de confirmación antes de cerrar sesión', (tester) async {

@@ -1,6 +1,5 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
+import 'media_image.dart';
 
 /// Miniatura reutilizable de fotografía de reporte con soporte para URLs web, archivos locales y Base64.
 ///
@@ -31,58 +30,13 @@ class ReportThumbnail extends StatelessWidget {
         width: width,
         height: height,
         color: const Color(0xFFF1F5F9),
-        child: _buildImageContent(),
+        child: MediaImage(
+          location: imageUrl,
+          fit: fit,
+          placeholder: const _ThumbnailPlaceholder(),
+        ),
       ),
     );
-  }
-
-  Widget _buildImageContent() {
-    final url = imageUrl?.trim();
-    if (url == null || url.isEmpty) {
-      return const _ThumbnailPlaceholder();
-    }
-
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return Image.network(
-        url,
-        width: width,
-        height: height,
-        fit: fit,
-        errorBuilder: (_, __, ___) => const _ThumbnailPlaceholder(),
-      );
-    }
-
-    if (url.startsWith('data:image')) {
-      try {
-        final commaIdx = url.indexOf(',');
-        final base64Str = commaIdx != -1 ? url.substring(commaIdx + 1) : url;
-        final bytes = base64Decode(base64Str);
-        return Image.memory(
-          bytes,
-          width: width,
-          height: height,
-          fit: fit,
-          errorBuilder: (_, __, ___) => const _ThumbnailPlaceholder(),
-        );
-      } catch (_) {
-        return const _ThumbnailPlaceholder();
-      }
-    }
-
-    try {
-      final file = File(url);
-      if (file.existsSync()) {
-        return Image.file(
-          file,
-          width: width,
-          height: height,
-          fit: fit,
-          errorBuilder: (_, __, ___) => const _ThumbnailPlaceholder(),
-        );
-      }
-    } catch (_) {}
-
-    return const _ThumbnailPlaceholder();
   }
 }
 
@@ -94,13 +48,8 @@ class _ThumbnailPlaceholder extends StatelessWidget {
     return Container(
       color: const Color(0xFFE2E8F0),
       child: const Center(
-        child: Icon(
-          Icons.image_outlined,
-          color: Color(0xFF94A3B8),
-          size: 28,
-        ),
+        child: Icon(Icons.image_outlined, color: Color(0xFF94A3B8), size: 28),
       ),
     );
   }
 }
-

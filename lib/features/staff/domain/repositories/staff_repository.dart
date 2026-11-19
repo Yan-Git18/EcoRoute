@@ -28,7 +28,5 @@ abstract class StaffRepository {
     List<int>? evidenceImageBytes,
     List<List<int>>? multipleEvidenceBytes,
     required String notes,
-    String? localImagePath,
-    List<String>? localImagePaths,
   });
 }

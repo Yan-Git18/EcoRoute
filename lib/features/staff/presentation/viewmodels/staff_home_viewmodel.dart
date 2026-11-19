@@ -6,8 +6,6 @@ import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../../../core/enums/report_filter.dart';
 import '../../data/datasources/staff_remote_datasource.dart';
-import '../../data/datasources/staff_storage_datasource.dart';
-import '../../data/fixtures/staff_tasks_fixtures.dart';
 import '../../data/repositories/staff_repository_impl.dart';
 import '../../domain/entities/staff_task_entity.dart';
 import '../../domain/repositories/staff_repository.dart';
@@ -22,14 +20,9 @@ final staffRemoteDataSourceProvider = Provider<StaffRemoteDataSource>((ref) {
   return FirebaseStaffRemoteDataSourceImpl();
 });
 
-final staffStorageDataSourceProvider = Provider<StaffStorageDataSource>((ref) {
-  return FirebaseStaffStorageDataSourceImpl();
-});
-
 final staffRepositoryProvider = Provider<StaffRepository>((ref) {
   final remote = ref.watch(staffRemoteDataSourceProvider);
-  final storage = ref.watch(staffStorageDataSourceProvider);
-  return StaffRepositoryImpl(remoteDataSource: remote, storageDataSource: storage);
+  return StaffRepositoryImpl(remoteDataSource: remote);
 });
 
 final getAssignedTasksUseCaseProvider = Provider<GetAssignedTasksUseCase>((ref) {
@@ -167,98 +160,18 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
   /// 5. Calcula la ruta óptima por calles desde la ubicación actual hasta el reporte.
   /// 6. Registra la tarea y la ruta activa en el estado para su visualización limpia en el Mapa.
   Future<bool> startTaskWithNavigation(StaffTaskEntity task) async {
-    final existingActive = state.currentInProgressTask;
-    if (existingActive != null && existingActive.id != task.id) {
-      state = state.copyWith(
-        isStartingNavigation: false,
-        errorMessage:
-            'Ya tienes la tarea ${existingActive.reportNumber} en curso. Debes resolverla antes de iniciar otra.',
-      );
-      return false;
-    }
-
+    if (state.isStartingNavigation) return false;
     state = state.copyWith(isStartingNavigation: true, clearError: true);
 
-    final authState = ref.read(authViewModelProvider);
-    final user = authState.user;
-
-    // 1. Actualizar el estado de la tarea de Pendiente a En progreso
-    StaffTaskEntity? updatedTask;
-    bool statusUpdated = false;
-
-    if (state.tasks.isEmpty && task.id.startsWith('task-demo-')) {
-      updatedTask = task.copyWith(status: ReportStatus.inProgress);
-      statusUpdated = true;
-    } else {
-      final statusResult = await _updateStatusUseCase(
-        taskId: task.id,
-        staffId: user?.id ?? 'staff_demo',
-        staffName: user?.name ?? 'Personal de Campo',
-        newStatus: ReportStatus.inProgress,
-        notes: 'Cuadrilla de recolección en ruta hacia la ubicación.',
+    try {
+      if (!await startTask(task.id)) return false;
+      await focusTaskRouteOnMap(
+        state.tasks.firstWhere((updated) => updated.id == task.id, orElse: () => task),
       );
-
-      statusUpdated = statusResult.fold(
-        onSuccess: (t) {
-          updatedTask = t;
-          return true;
-        },
-        onFailure: (failure) {
-          if (task.id.startsWith('task-demo-')) {
-            updatedTask = task.copyWith(status: ReportStatus.inProgress);
-            return true;
-          }
-          state = state.copyWith(
-            isStartingNavigation: false,
-            errorMessage: failure.message,
-          );
-          return false;
-        },
-      );
+      return true;
+    } finally {
+      state = state.copyWith(isStartingNavigation: false);
     }
-
-    if (!statusUpdated || updatedTask == null) {
-      return false;
-    }
-
-    final baseList = state.tasks.isNotEmpty
-        ? List<StaffTaskEntity>.from(state.tasks)
-        : List<StaffTaskEntity>.from(StaffTasksFixtures.defaultDemoTasks);
-    final index = baseList.indexWhere((t) => t.id == task.id);
-    if (index != -1) {
-      baseList[index] = updatedTask!;
-    } else {
-      baseList.insert(0, updatedTask!);
-    }
-
-    // 2. Obtener la ubicación actual del trabajador mediante el servicio de geolocalización
-    final locResult = await _locationService.getCurrentPosition();
-    final workerLat = locResult.latitude;
-    final workerLng = locResult.longitude;
-
-    // 3. Obtener las coordenadas reales del reporte seleccionado
-    final destLat = updatedTask!.latitude;
-    final destLng = updatedTask!.longitude;
-
-    // 4. Calcular la ruta óptima entre la ubicación del trabajador y el reporte
-    final routeInfo = await _routeNavigationService.calculateOptimalRoute(
-      originLat: workerLat,
-      originLng: workerLng,
-      destLat: destLat,
-      destLng: destLng,
-    );
-
-    // 5. Actualizar el estado con la tarea en progreso y la ruta calculada
-    state = state.copyWith(
-      tasks: baseList,
-      isStartingNavigation: false,
-      activeNavigationTask: updatedTask,
-      activeRoute: routeInfo,
-      workerLatitude: workerLat,
-      workerLongitude: workerLng,
-    );
-
-    return true;
   }
 
   /// Calcula y muestra en el mapa la ruta óptima hacia una tarea que ya se encuentra «En proceso».
@@ -290,13 +203,9 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
     state = state.copyWith(clearActiveNavigation: true);
   }
 
-  /// Capturar o seleccionar foto de evidencia de limpieza y finalizar la tarea
+  /// Captura una foto de evidencia de limpieza.
   Future<MediaPickResult> pickEvidenceImageFromCamera() async {
     return await _mediaPickerService.pickImageFromCamera();
-  }
-
-  Future<MediaPickResult> pickEvidenceImageFromGallery() async {
-    return await _mediaPickerService.pickImageFromGallery();
   }
 
   /// Completar y resolver una tarea de limpieza con foto(s) y notas
@@ -305,8 +214,6 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
     List<int>? imageBytes,
     List<List<int>>? multipleImageBytes,
     required String notes,
-    String? localImagePath,
-    List<String>? localImagePaths,
   }) async {
     final authState = ref.read(authViewModelProvider);
     final user = authState.user;
@@ -318,8 +225,6 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
       evidenceImageBytes: imageBytes,
       multipleEvidenceBytes: multipleImageBytes,
       notes: notes,
-      localImagePath: localImagePath,
-      localImagePaths: localImagePaths,
     );
 
     return result.fold(

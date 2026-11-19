@@ -29,8 +29,8 @@ class MockStaffLocationService implements LocationService {
   @override
   Future<LocationDataResult> getCurrentPosition() async {
     return const LocationDataResult(
-      latitude: -12.046374,
-      longitude: -77.042793,
+      latitude: -7.1644,
+      longitude: -78.5105,
       address: 'Base de Operaciones Municipal',
     );
   }
@@ -43,8 +43,8 @@ class MockStaffLocationService implements LocationService {
   @override
   Future<LocationDataResult?> getCoordinatesFromAddress(String address) async {
     return const LocationDataResult(
-      latitude: -12.046374,
-      longitude: -77.042793,
+      latitude: -7.1644,
+      longitude: -78.5105,
       address: 'Base de Operaciones Municipal',
     );
   }
@@ -86,8 +86,6 @@ class MockStaffRepository implements StaffRepository {
     List<int>? evidenceImageBytes,
     List<List<int>>? multipleEvidenceBytes,
     required String notes,
-    String? localImagePath,
-    List<String>? localImagePaths,
   }) async {
     final match = tasks.firstWhere((t) => t.id == taskId);
     final updated = match.copyWith(
@@ -114,7 +112,6 @@ void main() {
     addTearDown(() => tester.view.resetPhysicalSize());
 
     final mockRepo = MockStaffRepository();
-    mockRepo.tasks = []; // Utiliza el fallback de demostración
 
     final mockLoc = MockStaffLocationService();
 
@@ -218,8 +215,29 @@ void main() {
     tester.view.devicePixelRatio = 2.0;
     addTearDown(() => tester.view.resetPhysicalSize());
 
-    final mockRepo = MockStaffRepository();
-    mockRepo.tasks = []; // Usa el fallback con varias paradas pendientes
+    final mockRepo = MockStaffRepository()
+      ..tasks = [
+        for (final (id, number, category, longitude) in [
+          ('task-1', '#0102', 'Contenedor lleno', -78.5002),
+          ('task-2', '#0103', 'Residuos en vía pública', -78.5160),
+        ])
+          StaffTaskEntity(
+            id: id,
+            reportNumber: number,
+            citizenId: 'citizen-1',
+            citizenName: 'Vecino',
+            categoryName: category,
+            categoryIcon: 'delete_outline_rounded',
+            description: category,
+            priority: ReportPriority.medium,
+            status: ReportStatus.pending,
+            address: 'Cajamarca',
+            reportImageUrls: const [],
+            latitude: -7.1638,
+            longitude: longitude,
+            assignedAt: DateTime(2025, 1, 1),
+          ),
+      ];
     final mockLoc = MockStaffLocationService();
 
     await tester.pumpWidget(

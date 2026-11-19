@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../citizen/data/models/report_media_fields.dart';
 import '../../../../core/constants/geo_constants.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../domain/entities/staff_task_entity.dart';
@@ -76,38 +77,7 @@ class StaffTaskDto {
 
     final resolvedReference = (map['reference'] as String?) ?? (locationMap['reference'] as String?);
 
-    // Extraer imágenes ciudadanas de 'images' y/o 'imageUrls'
-    final List<String> extractedCitizenImages = [];
-    if (map['images'] is List) {
-      for (final item in map['images']) {
-        if (item is Map && item['url'] != null) {
-          extractedCitizenImages.add(item['url'].toString());
-        } else if (item is String && item.isNotEmpty) {
-          extractedCitizenImages.add(item);
-        }
-      }
-    }
-    if (map['imageUrls'] is List) {
-      for (final item in map['imageUrls']) {
-        if (item is String && item.isNotEmpty && !extractedCitizenImages.contains(item)) {
-          extractedCitizenImages.add(item);
-        }
-      }
-    }
-
-    // Extraer imágenes de evidencia de limpieza
-    final List<String> extractedEvidence = [];
-    if (map['evidenceImageUrls'] is List) {
-      for (final item in map['evidenceImageUrls']) {
-        if (item != null && item.toString().isNotEmpty) {
-          extractedEvidence.add(item.toString());
-        }
-      }
-    }
-    final singleEvidence = map['evidenceImageUrl'] as String? ?? (map['evidencePhoto'] as String?);
-    if (extractedEvidence.isEmpty && singleEvidence != null && singleEvidence.isNotEmpty) {
-      extractedEvidence.add(singleEvidence);
-    }
+    final evidence = ReportMediaFields.evidence(map);
 
     return StaffTaskDto(
       id: id,
@@ -124,9 +94,9 @@ class StaffTaskDto {
       reference: resolvedReference,
       latitude: hasValidGeo ? rawLat : AppGeoConstants.cajamarcaCenterLat,
       longitude: hasValidGeo ? rawLng : AppGeoConstants.cajamarcaCenterLng,
-      reportImageUrls: extractedCitizenImages,
-      evidenceImageUrl: singleEvidence ?? (extractedEvidence.isNotEmpty ? extractedEvidence.first : null),
-      evidenceImageUrls: extractedEvidence,
+      reportImageUrls: ReportMediaFields.photos(map),
+      evidenceImageUrl: evidence.firstOrNull,
+      evidenceImageUrls: evidence,
       resolutionNotes: map['resolutionNotes'] as String?,
       assignedAt: parseDate(map['createdAt']),
       updatedAt: map['updatedAt'] != null ? parseDate(map['updatedAt']) : null,

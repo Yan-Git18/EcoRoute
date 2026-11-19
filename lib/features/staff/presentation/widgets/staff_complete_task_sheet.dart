@@ -37,8 +37,7 @@ class StaffCompleteTaskSheet extends ConsumerStatefulWidget {
 class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet> {
   final _notesController = TextEditingController();
   final List<Uint8List> _imageBytesList = [];
-  final List<String> _localImagePaths = [];
-  static const int _maxEvidencePhotos = 4;
+  static const int _maxEvidencePhotos = StaffTaskEntity.maxEvidencePhotos;
   bool _isSubmitting = false;
   String? _error;
 
@@ -56,13 +55,11 @@ class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet>
 
     final viewModel = ref.read(staffHomeViewModelProvider.notifier);
     final result = await viewModel.pickEvidenceImageFromCamera();
+    if (!mounted) return;
 
     if (result.hasImage) {
       setState(() {
         _imageBytesList.add(result.bytes!);
-        if (result.file?.path != null) {
-          _localImagePaths.add(result.file!.path);
-        }
         _error = null;
       });
     } else if (result.errorMessage != null) {
@@ -73,9 +70,6 @@ class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet>
   void _removePhotoAt(int index) {
     setState(() {
       _imageBytesList.removeAt(index);
-      if (index < _localImagePaths.length) {
-        _localImagePaths.removeAt(index);
-      }
       _error = null;
     });
   }
@@ -103,8 +97,6 @@ class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet>
       imageBytes: _imageBytesList.first,
       multipleImageBytes: _imageBytesList,
       notes: notes,
-      localImagePath: _localImagePaths.isNotEmpty ? _localImagePaths.first : null,
-      localImagePaths: _localImagePaths,
     );
 
     if (mounted) {
@@ -122,7 +114,8 @@ class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet>
         );
       } else {
         setState(
-          () => _error = 'Error al registrar la finalización de la tarea.',
+          () => _error = ref.read(staffHomeViewModelProvider).errorMessage ??
+              'Error al registrar la finalización de la tarea.',
         );
       }
     }

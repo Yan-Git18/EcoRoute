@@ -22,11 +22,6 @@ class AuthFailure extends Failure {
   const AuthFailure({required super.message, super.code});
 }
 
-/// Fallo en operaciones de almacenamiento (Firebase Storage)
-class StorageFailure extends Failure {
-  const StorageFailure({required super.message, super.code});
-}
-
 /// Fallo de geolocalización o permisos de GPS
 class LocationFailure extends Failure {
   const LocationFailure({required super.message, super.code});

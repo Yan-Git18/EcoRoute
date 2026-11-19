@@ -52,12 +52,12 @@ class CreateReportState {
     this.errorMessage,
   });
 
-  /// Getters de compatibilidad y control de galería múltiple
+  /// Fotografías capturadas para el reporte.
   XFile? get imageFile => imageFiles.isNotEmpty ? imageFiles.first : null;
   Uint8List? get imageBytes => imageBytesList.isNotEmpty ? imageBytesList.first : null;
   bool get hasImage => imageBytesList.isNotEmpty;
   int get imagesCount => imageBytesList.length;
-  static const int maxImages = 4;
+  static const int maxImages = ReportEntity.maxPhotos;
   bool get canAddMoreImages => imagesCount < maxImages;
 
   bool get hasUserLocation => userLatitude != null && userLongitude != null;
