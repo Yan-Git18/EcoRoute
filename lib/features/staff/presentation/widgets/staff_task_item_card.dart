@@ -8,17 +8,21 @@ import '../../domain/entities/staff_task_entity.dart';
 class StaffTaskItemCard extends StatelessWidget {
   final StaffTaskEntity task;
   final bool isNextTask;
+  final String? pendingActionLabel;
   final VoidCallback onStart;
   final VoidCallback onResolve;
   final VoidCallback? onViewEvidence;
+  final VoidCallback? onViewDetail;
 
   const StaffTaskItemCard({
     super.key,
     required this.task,
     this.isNextTask = false,
+    this.pendingActionLabel,
     required this.onStart,
     required this.onResolve,
     this.onViewEvidence,
+    this.onViewDetail,
   });
 
   @override
@@ -85,27 +89,34 @@ class StaffTaskItemCard extends StatelessWidget {
     );
 
     if (isNextTask) {
-      return Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: Colors.white,
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onViewDetail ?? (task.isResolved ? onViewEvidence : null),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(8),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(8),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-          ],
+            padding: const EdgeInsets.all(16),
+            child: rowContent,
+          ),
         ),
-        padding: const EdgeInsets.all(16),
-        child: rowContent,
       );
     }
 
     return InkWell(
-      onTap: task.isResolved ? onViewEvidence : null,
+      onTap: onViewDetail ?? (task.isResolved ? onViewEvidence : null),
       borderRadius: BorderRadius.circular(16),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -118,18 +129,18 @@ class StaffTaskItemCard extends StatelessWidget {
     if (task.isPending) {
       if (isNextTask) {
         return EcoActionPill(
-          label: 'Atender',
-          textColor: const Color(0xFFDC2626),
-          backgroundColor: const Color(0xFFFEE2E2),
+          label: pendingActionLabel ?? 'Atender',
+          textColor: const Color(0xFFB45309), // Ámbar oscuro
+          backgroundColor: const Color(0xFFFEF3C7), // Ámbar suave
           icon: Icons.chevron_right_rounded,
           onTap: onStart,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         );
       }
       return EcoActionPill(
-        label: 'Iniciar',
-        textColor: const Color(0xFF047857),
-        backgroundColor: const Color(0xFFDCFCE7),
+        label: pendingActionLabel ?? 'Iniciar',
+        textColor: const Color(0xFFB45309), // Ámbar oscuro
+        backgroundColor: const Color(0xFFFEF3C7), // Ámbar suave
         icon: Icons.chevron_right_rounded,
         onTap: onStart,
       );

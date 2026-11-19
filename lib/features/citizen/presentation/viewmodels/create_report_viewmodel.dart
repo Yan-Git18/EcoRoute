@@ -314,6 +314,13 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
       return;
     }
 
+    if (state.currentStep == 2 && !state.canAdvanceFromStep2) {
+      state = state.copyWith(
+        errorMessage: 'Debes tomar al menos una fotografía instantánea para evidenciar el reporte.',
+      );
+      return;
+    }
+
     if (state.currentStep == 3 && !state.canAdvanceFromStep3) {
       if (!state.isLocationInsideCajamarca) {
         state = state.copyWith(

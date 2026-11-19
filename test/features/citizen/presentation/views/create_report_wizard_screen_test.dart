@@ -1,7 +1,10 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:ecoroute/core/services/location_service.dart';
+import 'package:ecoroute/core/services/media_picker_service.dart';
 import 'package:ecoroute/core/utils/result.dart';
 import 'package:ecoroute/features/citizen/domain/entities/report_category_entity.dart';
 import 'package:ecoroute/features/citizen/domain/entities/report_entity.dart';
@@ -9,6 +12,48 @@ import 'package:ecoroute/features/citizen/domain/repositories/report_repository.
 import 'package:ecoroute/features/citizen/presentation/viewmodels/create_report_viewmodel.dart';
 import 'package:ecoroute/core/constants/geo_constants.dart';
 import 'package:ecoroute/features/citizen/presentation/views/create_report_wizard_screen.dart';
+
+final _kTestPngBytes = Uint8List.fromList(<int>[
+  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49,
+  0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06,
+  0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44,
+  0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D,
+  0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42,
+  0x60, 0x82,
+]);
+
+class MockWizardMediaPickerService implements MediaPickerService {
+  @override
+  Future<MediaPickResult> pickImageFromCamera({
+    int quality = 70,
+    double maxWidth = 800,
+    double maxHeight = 800,
+  }) async {
+    return MediaPickResult(
+      file: XFile('test_photo.png'),
+      bytes: _kTestPngBytes,
+    );
+  }
+
+  @override
+  Future<MediaPickResult> pickImageFromGallery({
+    int quality = 70,
+    double maxWidth = 800,
+    double maxHeight = 800,
+  }) async {
+    return const MediaPickResult();
+  }
+
+  @override
+  Future<List<MediaPickResult>> pickMultipleImagesFromGallery({
+    int quality = 70,
+    double maxWidth = 800,
+    double maxHeight = 800,
+    int? limit,
+  }) async {
+    return const [];
+  }
+}
 
 class MockWizardLocationService implements LocationService {
   @override
@@ -82,12 +127,14 @@ void main() {
 
     final mockLocation = MockWizardLocationService();
     final mockRepo = MockWizardReportRepository();
+    final mockMedia = MockWizardMediaPickerService();
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           locationServiceProvider.overrideWithValue(mockLocation),
           reportRepositoryProvider.overrideWithValue(mockRepo),
+          mediaPickerServiceProvider.overrideWithValue(mockMedia),
         ],
         child: const MaterialApp(
           home: CreateReportWizardScreen(),
@@ -113,9 +160,19 @@ void main() {
     await tester.pumpAndSettle();
 
     // 4. Verificamos que avanzó al Paso 2 (Fotografía)
-    expect(find.text('Agrega una fotografía'), findsOneWidget);
-    expect(find.text('Tomar foto'), findsOneWidget);
-    expect(find.text('Elegir de la galería'), findsOneWidget);
+    expect(find.textContaining('Agrega una fotografía'), findsOneWidget);
+    expect(find.text('Tomar foto instantánea'), findsOneWidget);
+    expect(find.text('0 / 4 fotos'), findsOneWidget);
+
+    // Intentamos avanzar sin foto: debe mantenerse en el Paso 2
+    await tester.tap(find.text('Siguiente'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Agrega una fotografía'), findsOneWidget);
+
+    // Tomamos una foto instantánea con la cámara
+    await tester.tap(find.text('Tomar foto instantánea'));
+    await tester.pumpAndSettle();
+    expect(find.text('1 / 4 fotos'), findsOneWidget);
 
     // 5. Pulsamos en 'Siguiente' para avanzar al Paso 3 (Ubicación)
     await tester.tap(find.text('Siguiente'));
@@ -148,12 +205,14 @@ void main() {
 
     final mockLocation = MockWizardLocationService();
     final mockRepo = MockWizardReportRepository();
+    final mockMedia = MockWizardMediaPickerService();
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           locationServiceProvider.overrideWithValue(mockLocation),
           reportRepositoryProvider.overrideWithValue(mockRepo),
+          mediaPickerServiceProvider.overrideWithValue(mockMedia),
         ],
         child: const MaterialApp(
           home: CreateReportWizardScreen(),
@@ -167,6 +226,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Siguiente')); // Paso 1 -> 2
     await tester.pumpAndSettle();
+
+    // Tomar fotografía obligatoria en el Paso 2
+    await tester.tap(find.text('Tomar foto instantánea'));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('Siguiente')); // Paso 2 -> 3
     await tester.pumpAndSettle();
 

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/enums/report_filter.dart';
 import '../../../../core/router/route_names.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/eco_logo_badge.dart';
 import '../../../../core/widgets/eco_notification_button.dart';
 import '../../../../core/widgets/eco_section_header.dart';
@@ -14,7 +13,11 @@ import '../../domain/entities/staff_task_entity.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
 import '../widgets/staff_bottom_nav_bar.dart';
 import '../widgets/staff_complete_task_sheet.dart';
+import '../widgets/staff_evidence_detail_sheet.dart';
+import '../widgets/staff_start_task_confirm_dialog.dart';
+import '../widgets/staff_task_detail_sheet.dart';
 import '../widgets/staff_task_item_card.dart';
+import 'staff_route_map_screen.dart';
 
 /// Pantalla principal para el Personal de Limpieza / Recolección (Staff).
 /// Capa: Presentation (Personal)
@@ -37,7 +40,8 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
     final staffState = ref.watch(staffHomeViewModelProvider);
     final viewModel = ref.read(staffHomeViewModelProvider.notifier);
 
-    final allTasks = staffState.tasks;
+    final allTasks = List<StaffTaskEntity>.of(staffState.tasks)
+      ..sort((a, b) => b.assignedAt.compareTo(a.assignedAt));
 
     final pendingCount = allTasks.where((t) => t.isPending).length;
     final inProgressCount = allTasks.where((t) => t.isInProgress).length;
@@ -257,6 +261,13 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
                   isNextTask: true,
                   onStart: () => _handleStartTask(nextTask!),
                   onResolve: () => StaffCompleteTaskSheet.show(context, nextTask!),
+                  onViewEvidence: () => StaffEvidenceDetailSheet.show(context, nextTask!),
+                  onViewDetail: () => StaffTaskDetailSheet.show(
+                    context: context,
+                    task: nextTask!,
+                    onStart: () => _handleStartTask(nextTask!),
+                    onResolve: () => StaffCompleteTaskSheet.show(context, nextTask!),
+                  ),
                 )
               else
                 Container(
@@ -352,6 +363,13 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
                         isNextTask: false,
                         onStart: () => _handleStartTask(task),
                         onResolve: () => StaffCompleteTaskSheet.show(context, task),
+                        onViewEvidence: () => StaffEvidenceDetailSheet.show(context, task),
+                        onViewDetail: () => StaffTaskDetailSheet.show(
+                          context: context,
+                          task: task,
+                          onStart: () => _handleStartTask(task),
+                          onResolve: () => StaffCompleteTaskSheet.show(context, task),
+                        ),
                       );
                     },
                   ),
@@ -646,14 +664,38 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
   }
 
   Future<void> _handleStartTask(StaffTaskEntity task) async {
+    final currentActive = ref.read(staffHomeViewModelProvider).currentInProgressTask;
+    if (currentActive != null && currentActive.id != task.id) {
+      final goToMap = await StaffStartTaskConfirmDialog.showActiveTaskConflictDialog(
+        context,
+        activeTask: currentActive,
+      );
+      if (!goToMap || !mounted) return;
+      await ref.read(staffHomeViewModelProvider.notifier).focusTaskRouteOnMap(currentActive);
+      if (!mounted) return;
+      _navigateToRouteMap();
+      return;
+    }
+
+    final confirmed = await StaffStartTaskConfirmDialog.show(
+      context,
+      task: task,
+    );
+    if (!confirmed || !mounted) return;
+
     final viewModel = ref.read(staffHomeViewModelProvider.notifier);
-    final success = await viewModel.startTask(task.id);
-    if (mounted && success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Atención iniciada. Estado actualizado a "En proceso".'),
-          backgroundColor: AppColors.info,
-        ),
+    final success = await viewModel.startTaskWithNavigation(task);
+    if (!mounted || !success) return;
+
+    _navigateToRouteMap();
+  }
+
+  void _navigateToRouteMap() {
+    if (GoRouter.maybeOf(context) != null) {
+      context.push(RouteNames.staffRouteMap);
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const StaffRouteMapScreen()),
       );
     }
   }

@@ -18,9 +18,11 @@ class CompleteTaskWithEvidenceUseCase {
     required String taskId,
     required String staffId,
     required String staffName,
-    required List<int> evidenceImageBytes,
+    List<int>? evidenceImageBytes,
+    List<List<int>>? multipleEvidenceBytes,
     required String notes,
     String? localImagePath,
+    List<String>? localImagePaths,
   }) async {
     if (taskId.trim().isEmpty) {
       return const FailureResult(
@@ -28,9 +30,12 @@ class CompleteTaskWithEvidenceUseCase {
       );
     }
 
-    if (evidenceImageBytes.isEmpty) {
+    final hasSingle = evidenceImageBytes != null && evidenceImageBytes.isNotEmpty;
+    final hasMultiple = multipleEvidenceBytes != null && multipleEvidenceBytes.isNotEmpty;
+
+    if (!hasSingle && !hasMultiple) {
       return const FailureResult(
-        ValidationFailure(message: 'Debe capturar o adjuntar una fotografía de evidencia de la limpieza.'),
+        ValidationFailure(message: 'Debe capturar o adjuntar al menos una fotografía de evidencia de la limpieza.'),
       );
     }
 
@@ -45,8 +50,10 @@ class CompleteTaskWithEvidenceUseCase {
       staffId: staffId,
       staffName: staffName,
       evidenceImageBytes: evidenceImageBytes,
+      multipleEvidenceBytes: multipleEvidenceBytes,
       notes: notes.trim(),
       localImagePath: localImagePath,
+      localImagePaths: localImagePaths,
     );
   }
 }

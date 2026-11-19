@@ -58,9 +58,11 @@ class MockStaffRepository implements StaffRepository {
     required String taskId,
     required String staffId,
     required String staffName,
-    required List<int> evidenceImageBytes,
+    List<int>? evidenceImageBytes,
+    List<List<int>>? multipleEvidenceBytes,
     required String notes,
     String? localImagePath,
+    List<String>? localImagePaths,
   }) async {
     completeTaskCalled = true;
     final match = tasks.firstWhere((t) => t.id == taskId);
@@ -137,13 +139,11 @@ void main() {
     // 2. Sección Evidencia fotográfica
     expect(find.text('Evidencia fotográfica'), findsOneWidget);
     expect(find.text('*'), findsOneWidget);
-    expect(find.text('Agrega una foto para validar la limpieza.'), findsOneWidget);
+    expect(find.text('0 / 4 fotos'), findsOneWidget);
 
-    // 3. Botones Tomar foto y Elegir de galería
-    expect(find.text('Tomar foto'), findsOneWidget);
-    expect(find.text('Elegir de galería'), findsOneWidget);
+    // 3. Botón Tomar foto instantánea (sin galería)
+    expect(find.text('Tomar foto instantánea'), findsOneWidget);
     expect(find.byIcon(Icons.camera_alt_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.photo_library_rounded), findsOneWidget);
 
     // 4. Sección Notas de limpieza
     expect(find.text('Notas de limpieza'), findsOneWidget);
@@ -155,7 +155,7 @@ void main() {
     expect(find.byIcon(Icons.check_circle_rounded), findsOneWidget);
 
     // 6. Nota informativa al pie
-    expect(find.text('La fotografía es obligatoria para continuar.'), findsOneWidget);
+    expect(find.text('Fotografía instantánea obligatoria (antifraude). Hasta 4 fotos.'), findsOneWidget);
     expect(find.byIcon(Icons.info_outline_rounded), findsOneWidget);
   });
 
@@ -189,13 +189,13 @@ void main() {
     await tester.tap(find.text('Abrir Resolver'));
     await tester.pumpAndSettle();
 
-    // Pulsar 'Finalizar limpieza' sin haber tomado o seleccionado una foto
+    // Pulsar 'Finalizar limpieza' sin haber tomado una foto
     await tester.tap(find.text('Finalizar limpieza'));
     await tester.pumpAndSettle();
 
     // Debe mostrar el mensaje de validación
     expect(
-      find.text('Por favor tome o elija una fotografía para validar la limpieza.'),
+      find.text('Por favor tome al menos una fotografía instantánea para validar la limpieza.'),
       findsOneWidget,
     );
   });

@@ -18,10 +18,12 @@ class StaffTaskEntity {
   final ReportPriority priority;
   final ReportStatus status;
   final String address;
+  final String? reference;
   final double latitude;
   final double longitude;
   final List<String> reportImageUrls;
   final String? evidenceImageUrl;
+  final List<String> evidenceImageUrls;
   final String? resolutionNotes;
   final DateTime assignedAt;
   final DateTime? updatedAt;
@@ -38,10 +40,12 @@ class StaffTaskEntity {
     required this.priority,
     required this.status,
     required this.address,
+    this.reference,
     required this.latitude,
     required this.longitude,
     required this.reportImageUrls,
     this.evidenceImageUrl,
+    this.evidenceImageUrls = const [],
     this.resolutionNotes,
     required this.assignedAt,
     this.updatedAt,
@@ -50,6 +54,10 @@ class StaffTaskEntity {
   bool get isPending => status == ReportStatus.pending || status == ReportStatus.assigned;
   bool get isInProgress => status == ReportStatus.inProgress;
   bool get isResolved => status == ReportStatus.resolved;
+
+  List<String> get allEvidenceImageUrls => evidenceImageUrls.isNotEmpty
+      ? evidenceImageUrls
+      : (evidenceImageUrl != null && evidenceImageUrl!.isNotEmpty ? [evidenceImageUrl!] : const []);
 
   StaffTaskEntity copyWith({
     String? id,
@@ -63,14 +71,20 @@ class StaffTaskEntity {
     ReportPriority? priority,
     ReportStatus? status,
     String? address,
+    String? reference,
     double? latitude,
     double? longitude,
     List<String>? reportImageUrls,
     String? evidenceImageUrl,
+    List<String>? evidenceImageUrls,
     String? resolutionNotes,
     DateTime? assignedAt,
     DateTime? updatedAt,
   }) {
+    final nextEvidenceUrls = evidenceImageUrls ?? this.evidenceImageUrls;
+    final firstEvidence = evidenceImageUrl ??
+        (nextEvidenceUrls.isNotEmpty ? nextEvidenceUrls.first : this.evidenceImageUrl);
+
     return StaffTaskEntity(
       id: id ?? this.id,
       reportNumber: reportNumber ?? this.reportNumber,
@@ -83,10 +97,12 @@ class StaffTaskEntity {
       priority: priority ?? this.priority,
       status: status ?? this.status,
       address: address ?? this.address,
+      reference: reference ?? this.reference,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       reportImageUrls: reportImageUrls ?? this.reportImageUrls,
-      evidenceImageUrl: evidenceImageUrl ?? this.evidenceImageUrl,
+      evidenceImageUrl: firstEvidence,
+      evidenceImageUrls: nextEvidenceUrls,
       resolutionNotes: resolutionNotes ?? this.resolutionNotes,
       assignedAt: assignedAt ?? this.assignedAt,
       updatedAt: updatedAt ?? this.updatedAt,

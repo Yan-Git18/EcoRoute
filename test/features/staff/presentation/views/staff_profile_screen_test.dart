@@ -60,9 +60,11 @@ class MockStaffRepository implements StaffRepository {
     required String taskId,
     required String staffId,
     required String staffName,
-    required List<int> evidenceImageBytes,
+    List<int>? evidenceImageBytes,
+    List<List<int>>? multipleEvidenceBytes,
     required String notes,
     String? localImagePath,
+    List<String>? localImagePaths,
   }) async {
     throw UnimplementedError();
   }

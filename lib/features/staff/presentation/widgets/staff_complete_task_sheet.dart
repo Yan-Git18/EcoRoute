@@ -36,8 +36,9 @@ class StaffCompleteTaskSheet extends ConsumerStatefulWidget {
 
 class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet> {
   final _notesController = TextEditingController();
-  Uint8List? _imageBytes;
-  String? _localImagePath;
+  final List<Uint8List> _imageBytesList = [];
+  final List<String> _localImagePaths = [];
+  static const int _maxEvidencePhotos = 4;
   bool _isSubmitting = false;
   String? _error;
 
@@ -47,16 +48,21 @@ class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet>
     super.dispose();
   }
 
-  Future<void> _pickImage(bool fromCamera) async {
+  Future<void> _takePhoto() async {
+    if (_imageBytesList.length >= _maxEvidencePhotos) {
+      setState(() => _error = 'Has alcanzado el límite máximo de $_maxEvidencePhotos fotos.');
+      return;
+    }
+
     final viewModel = ref.read(staffHomeViewModelProvider.notifier);
-    final result = fromCamera
-        ? await viewModel.pickEvidenceImageFromCamera()
-        : await viewModel.pickEvidenceImageFromGallery();
+    final result = await viewModel.pickEvidenceImageFromCamera();
 
     if (result.hasImage) {
       setState(() {
-        _imageBytes = result.bytes;
-        _localImagePath = result.file?.path;
+        _imageBytesList.add(result.bytes!);
+        if (result.file?.path != null) {
+          _localImagePaths.add(result.file!.path);
+        }
         _error = null;
       });
     } else if (result.errorMessage != null) {
@@ -64,10 +70,20 @@ class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet>
     }
   }
 
+  void _removePhotoAt(int index) {
+    setState(() {
+      _imageBytesList.removeAt(index);
+      if (index < _localImagePaths.length) {
+        _localImagePaths.removeAt(index);
+      }
+      _error = null;
+    });
+  }
+
   Future<void> _submit() async {
-    if (_imageBytes == null || _imageBytes!.isEmpty) {
+    if (_imageBytesList.isEmpty) {
       setState(
-        () => _error = 'Por favor tome o elija una fotografía para validar la limpieza.',
+        () => _error = 'Por favor tome al menos una fotografía instantánea para validar la limpieza.',
       );
       return;
     }
@@ -84,9 +100,11 @@ class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet>
     final viewModel = ref.read(staffHomeViewModelProvider.notifier);
     final success = await viewModel.completeTask(
       taskId: widget.task.id,
-      imageBytes: _imageBytes!,
+      imageBytes: _imageBytesList.first,
+      multipleImageBytes: _imageBytesList,
       notes: notes,
-      localImagePath: _localImagePath,
+      localImagePath: _localImagePaths.isNotEmpty ? _localImagePaths.first : null,
+      localImagePaths: _localImagePaths,
     );
 
     if (mounted) {
@@ -231,185 +249,210 @@ class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet>
             ),
             const SizedBox(height: 20),
 
-            // 3. Título de sección: Evidencia fotográfica *
-            const Row(
+            // 3. Título de sección: Evidencia fotográfica * (Solo cámara, hasta 4 fotos)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Evidencia fotográfica',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F172A),
-                  ),
+                const Row(
+                  children: [
+                    Text(
+                      'Evidencia fotográfica',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      '*',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFFEF4444),
+                      ),
+                    ),
+                  ],
                 ),
-                SizedBox(width: 4),
-                Text(
-                  '*',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFFEF4444),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _imageBytesList.isNotEmpty
+                        ? const Color(0xFFDCFCE7)
+                        : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Text(
+                    '${_imageBytesList.length} / $_maxEvidencePhotos fotos',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: _imageBytesList.isNotEmpty
+                          ? const Color(0xFF047857)
+                          : const Color(0xFF64748B),
+                    ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 3),
             const Text(
-              'Agrega una foto para validar la limpieza.',
+              'Toma fotos instantáneas en el lugar para validar la limpieza (hasta 4 fotos, solo cámara).',
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 12.5,
                 color: Color(0xFF64748B),
                 fontWeight: FontWeight.w400,
               ),
             ),
             const SizedBox(height: 12),
 
-            // 4. Tarjetas de captura o previsualización de la foto
-            if (_imageBytes != null)
-              Stack(
-                children: [
-                  ClipRRect(
+            // 4. Tarjetas de captura o previsualización de las fotos (Solo cámara)
+            if (_imageBytesList.isNotEmpty) ...[
+              SizedBox(
+                height: 100,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _imageBytesList.length + (_imageBytesList.length < _maxEvidencePhotos ? 1 : 0),
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder: (context, index) {
+                    if (index == _imageBytesList.length) {
+                      return InkWell(
+                        onTap: _takePhoto,
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: const Color(0xFF047857),
+                              width: 1.2,
+                              style: BorderStyle.solid,
+                            ),
+                          ),
+                          child: const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.add_a_photo_rounded, color: Color(0xFF047857), size: 24),
+                              SizedBox(height: 4),
+                              Text(
+                                'Tomar otra',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF047857),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+
+                    final bytes = _imageBytesList[index];
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: Image.memory(
+                            bytes,
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: InkWell(
+                            onTap: () => _removePhotoAt(index),
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.close_rounded, color: Colors.white, size: 14),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          bottom: 4,
+                          left: 4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withAlpha(160),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '${index + 1}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ] else
+              InkWell(
+                onTap: _takePhoto,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 22),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    child: Image.memory(
-                      _imageBytes!,
-                      height: 140,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
+                    border: Border.all(
+                      color: const Color(0xFF047857),
+                      width: 1.5,
                     ),
                   ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: InkWell(
-                      onTap: () => setState(() => _imageBytes = null),
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
                         decoration: const BoxDecoration(
-                          color: Colors.black54,
+                          color: Color(0xFFDCFCE7),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.close_rounded, color: Colors.white, size: 16),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 8,
-                    left: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.black87,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 14),
-                          SizedBox(width: 4),
-                          Text(
-                            'Foto seleccionada',
-                            style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            else
-              Row(
-                children: [
-                  // Tarjeta 'Tomar foto'
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => _pickImage(true),
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: const Color(0xFF047857),
-                            width: 1.2,
-                          ),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFDCFCE7),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.camera_alt_rounded,
-                                color: Color(0xFF047857),
-                                size: 24,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            const Text(
-                              'Tomar foto',
-                              style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF047857),
-                              ),
-                            ),
-                          ],
+                        child: const Icon(
+                          Icons.camera_alt_rounded,
+                          color: Color(0xFF047857),
+                          size: 28,
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-
-                  // Tarjeta 'Elegir de galería'
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => _pickImage(false),
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: const Color(0xFF047857),
-                            width: 1.2,
-                          ),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFDCFCE7),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.photo_library_rounded,
-                                color: Color(0xFF047857),
-                                size: 24,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            const Text(
-                              'Elegir de galería',
-                              style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF047857),
-                              ),
-                            ),
-                          ],
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Tomar foto instantánea',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF047857),
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 3),
+                      const Text(
+                        'Solo foto al instante (antifraude)',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: Color(0xFF64748B),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             const SizedBox(height: 20),
 
@@ -425,11 +468,16 @@ class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet>
             const SizedBox(height: 8),
             Container(
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _notesController.text.trim().isNotEmpty
+                      ? const Color(0xFF047857)
+                      : const Color(0xFFE2E8F0),
+                  width: 1.2,
+                ),
               ),
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -441,18 +489,26 @@ class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet>
                     onChanged: (text) => setState(() {}),
                     decoration: const InputDecoration(
                       isDense: true,
+                      filled: false,
                       border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      focusedErrorBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
                       contentPadding: EdgeInsets.zero,
                       hintText: 'Describe brevemente el trabajo realizado...',
                       hintStyle: TextStyle(
                         color: Color(0xFF94A3B8),
                         fontSize: 13.5,
                         fontWeight: FontWeight.w400,
+                        height: 1.4,
                       ),
                     ),
                     style: const TextStyle(
                       fontSize: 13.5,
                       color: Color(0xFF0F172A),
+                      height: 1.4,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -528,6 +584,7 @@ class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet>
             const Center(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
                     Icons.info_outline_rounded,
@@ -535,12 +592,15 @@ class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet>
                     color: Color(0xFF64748B),
                   ),
                   SizedBox(width: 6),
-                  Text(
-                    'La fotografía es obligatoria para continuar.',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: Color(0xFF64748B),
-                      fontWeight: FontWeight.w500,
+                  Flexible(
+                    child: Text(
+                      'Fotografía instantánea obligatoria (antifraude). Hasta 4 fotos.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ],

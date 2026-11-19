@@ -261,6 +261,7 @@ class ReportEntity {
   final String? assignedStaffName;
   final String? assignedVehicle;
   final String? evidenceImageUrl;
+  final List<String> evidenceImageUrls;
   final String? resolutionNotes;
   final List<ReportHistoryItem> history;
 
@@ -288,12 +289,18 @@ class ReportEntity {
     this.assignedStaffName,
     this.assignedVehicle,
     this.evidenceImageUrl,
+    this.evidenceImageUrls = const [],
     this.resolutionNotes,
     this.history = const [],
   });
 
   bool get isResolved => status == ReportStatus.resolved;
-  bool get hasEvidence => evidenceImageUrl != null && evidenceImageUrl!.trim().isNotEmpty;
+  bool get hasEvidence =>
+      evidenceImageUrls.isNotEmpty || (evidenceImageUrl != null && evidenceImageUrl!.trim().isNotEmpty);
+
+  List<String> get allEvidenceImageUrls => evidenceImageUrls.isNotEmpty
+      ? evidenceImageUrls
+      : (evidenceImageUrl != null && evidenceImageUrl!.isNotEmpty ? [evidenceImageUrl!] : const []);
 
   ReportEntity copyWith({
     String? id,
@@ -319,9 +326,14 @@ class ReportEntity {
     String? assignedStaffName,
     String? assignedVehicle,
     String? evidenceImageUrl,
+    List<String>? evidenceImageUrls,
     String? resolutionNotes,
     List<ReportHistoryItem>? history,
   }) {
+    final nextEvidenceUrls = evidenceImageUrls ?? this.evidenceImageUrls;
+    final firstEvidenceUrl = evidenceImageUrl ??
+        (nextEvidenceUrls.isNotEmpty ? nextEvidenceUrls.first : this.evidenceImageUrl);
+
     return ReportEntity(
       id: id ?? this.id,
       reportNumber: reportNumber ?? this.reportNumber,
@@ -345,7 +357,8 @@ class ReportEntity {
       assignedToTeamName: assignedToTeamName ?? this.assignedToTeamName,
       assignedStaffName: assignedStaffName ?? this.assignedStaffName,
       assignedVehicle: assignedVehicle ?? this.assignedVehicle,
-      evidenceImageUrl: evidenceImageUrl ?? this.evidenceImageUrl,
+      evidenceImageUrl: firstEvidenceUrl,
+      evidenceImageUrls: nextEvidenceUrls,
       resolutionNotes: resolutionNotes ?? this.resolutionNotes,
       history: history ?? this.history,
     );

@@ -55,13 +55,24 @@ class _Step2PhotoViewState extends ConsumerState<Step2PhotoView> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const Expanded(
-                child: Text(
-                  'Agrega una fotografía',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF0F172A),
-                    letterSpacing: -0.5,
+                child: Text.rich(
+                  TextSpan(
+                    text: 'Agrega una fotografía',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF0F172A),
+                      letterSpacing: -0.5,
+                    ),
+                    children: [
+                      TextSpan(
+                        text: ' *',
+                        style: TextStyle(
+                          color: Color(0xFFEF4444),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -92,7 +103,7 @@ class _Step2PhotoViewState extends ConsumerState<Step2PhotoView> {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Puedes adjuntar hasta 4 fotografías para mostrar diferentes ángulos del problema de residuos.',
+            'La fotografía instantánea es obligatoria para validar la incidencia. Puedes adjuntar hasta 4 fotografías.',
             style: TextStyle(
               fontSize: 13.5,
               color: Color(0xFF64748B),
@@ -206,7 +217,7 @@ class _Step2PhotoViewState extends ConsumerState<Step2PhotoView> {
                       borderRadius: BorderRadius.circular(14),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(14),
-                        onTap: () => _showAddPhotoSourceDialog(context, viewModel),
+                        onTap: viewModel.pickImageFromCamera,
                         child: Container(
                           width: 72,
                           height: 72,
@@ -345,15 +356,15 @@ class _Step2PhotoViewState extends ConsumerState<Step2PhotoView> {
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF475569),
+                      color: Color(0xFF0F172A),
                     ),
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Puedes capturar o seleccionar hasta 4 imágenes',
+                    'Solo foto instantánea (hasta 4 fotos, no se admite galería)',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Color(0xFF94A3B8),
+                      color: Color(0xFF64748B),
                     ),
                   ),
                 ],
@@ -362,9 +373,8 @@ class _Step2PhotoViewState extends ConsumerState<Step2PhotoView> {
             const SizedBox(height: 20),
           ],
 
-          // Botones de acción para agregar fotos
+          // Botón único para captura instantánea con la cámara
           if (state.canAddMoreImages) ...[
-            // Botón 1: Tomar Foto
             SizedBox(
               width: double.infinity,
               height: 52,
@@ -372,35 +382,13 @@ class _Step2PhotoViewState extends ConsumerState<Step2PhotoView> {
                 onPressed: viewModel.pickImageFromCamera,
                 icon: const Icon(Icons.camera_alt_rounded, size: 20),
                 label: Text(
-                  hasImages ? 'Tomar otra foto' : 'Tomar foto',
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                  hasImages ? 'Tomar otra foto instantánea' : 'Tomar foto instantánea',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Botón 2: Elegir de la galería
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: OutlinedButton.icon(
-                onPressed: viewModel.pickImageFromGallery,
-                icon: const Icon(Icons.photo_library_outlined, size: 20),
-                label: Text(
-                  hasImages ? 'Agregar más de la galería' : 'Elegir de la galería',
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF1E293B),
-                  side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.2),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
@@ -422,7 +410,7 @@ class _Step2PhotoViewState extends ConsumerState<Step2PhotoView> {
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Has adjuntado el número máximo de fotografías (4/4). Puedes eliminar alguna si deseas cambiarla.',
+                      'Has alcanzado el límite de 4 fotografías. Puedes eliminar alguna si deseas tomar una diferente.',
                       style: TextStyle(
                         fontSize: 12.5,
                         color: Color(0xFF065F46),
@@ -435,24 +423,24 @@ class _Step2PhotoViewState extends ConsumerState<Step2PhotoView> {
             ),
           ],
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
 
-          // Tarjeta de sugerencia / tip
+          // Tarjeta de sugerencia / antifraude
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
+              color: const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: const Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.lightbulb_outline_rounded, color: AppColors.primary, size: 20),
+                Icon(Icons.verified_user_outlined, color: AppColors.primary, size: 20),
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Recomendación: Asegúrate de encuadrar el tipo de residuo y elementos de referencia (fachadas, postes o esquinas).',
+                    'Control de autenticidad: Para evitar reportes falsos, las fotos deben tomarse al instante en el lugar de los hechos. No se permite subir imágenes de la galería.',
                     style: TextStyle(
                       fontSize: 12,
                       color: Color(0xFF475569),
@@ -464,46 +452,6 @@ class _Step2PhotoViewState extends ConsumerState<Step2PhotoView> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  void _showAddPhotoSourceDialog(BuildContext context, CreateReportViewModel viewModel) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Agregar fotografía',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: const Icon(Icons.camera_alt_rounded, color: AppColors.primary),
-                title: const Text('Tomar foto con cámara'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  viewModel.pickImageFromCamera();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_library_outlined, color: AppColors.primary),
-                title: const Text('Seleccionar de galería'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  viewModel.pickImageFromGallery();
-                },
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

@@ -92,6 +92,7 @@ class ReportDto {
   final String? assignedStaffName;
   final String? assignedVehicle;
   final String? evidenceImageUrl;
+  final List<String> evidenceImageUrls;
   final String? resolutionNotes;
   final List<ReportHistoryItemDto> history;
 
@@ -119,6 +120,7 @@ class ReportDto {
     this.assignedStaffName,
     this.assignedVehicle,
     this.evidenceImageUrl,
+    this.evidenceImageUrls = const [],
     this.resolutionNotes,
     this.history = const [],
   });
@@ -146,6 +148,19 @@ class ReportDto {
         '';
     final rawRef = (locationMap['reference'] as String?) ??
         (map['reference'] as String?);
+
+    final List<String> extractedEvidence = [];
+    if (map['evidenceImageUrls'] is List) {
+      for (final item in map['evidenceImageUrls']) {
+        if (item != null && item.toString().isNotEmpty) {
+          extractedEvidence.add(item.toString());
+        }
+      }
+    }
+    final singleEvidence = map['evidenceImageUrl'] as String? ?? (map['evidencePhoto'] as String?);
+    if (extractedEvidence.isEmpty && singleEvidence != null && singleEvidence.isNotEmpty) {
+      extractedEvidence.add(singleEvidence);
+    }
 
     return ReportDto(
       id: documentId,
@@ -178,7 +193,8 @@ class ReportDto {
       assignedToTeamName: map['assignedToTeamName'] as String?,
       assignedStaffName: map['assignedStaffName'] as String? ?? (map['assignedToTeamName'] as String?),
       assignedVehicle: map['assignedVehicle'] as String?,
-      evidenceImageUrl: map['evidenceImageUrl'] as String? ?? (map['evidencePhoto'] as String?),
+      evidenceImageUrl: singleEvidence ?? (extractedEvidence.isNotEmpty ? extractedEvidence.first : null),
+      evidenceImageUrls: extractedEvidence,
       resolutionNotes: map['resolutionNotes'] as String? ?? (map['resolutionComment'] as String?),
       history: history,
     );
@@ -216,6 +232,7 @@ class ReportDto {
       if (assignedStaffName != null) 'assignedStaffName': assignedStaffName,
       if (assignedVehicle != null) 'assignedVehicle': assignedVehicle,
       if (evidenceImageUrl != null) 'evidenceImageUrl': evidenceImageUrl,
+      if (evidenceImageUrls.isNotEmpty) 'evidenceImageUrls': evidenceImageUrls,
       if (resolutionNotes != null) 'resolutionNotes': resolutionNotes,
     };
   }
@@ -245,6 +262,7 @@ class ReportDto {
       assignedStaffName: assignedStaffName,
       assignedVehicle: assignedVehicle,
       evidenceImageUrl: evidenceImageUrl,
+      evidenceImageUrls: evidenceImageUrls,
       resolutionNotes: resolutionNotes,
       history: history.map((h) => h.toDomain()).toList(),
     );
@@ -275,6 +293,7 @@ class ReportDto {
       assignedStaffName: entity.assignedStaffName,
       assignedVehicle: entity.assignedVehicle,
       evidenceImageUrl: entity.evidenceImageUrl,
+      evidenceImageUrls: entity.evidenceImageUrls,
       resolutionNotes: entity.resolutionNotes,
       history: entity.history.map(ReportHistoryItemDto.fromDomain).toList(),
     );
