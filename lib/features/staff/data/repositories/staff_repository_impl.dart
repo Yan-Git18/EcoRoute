@@ -11,14 +11,12 @@ import '../datasources/staff_remote_datasource.dart';
 
 /// Implementación del repositorio de tareas de limpieza.
 ///
-/// Principio SRP / DIP: Compone los data sources de Staff y maneja la caché en memoria.
+/// Traduce las respuestas de la fuente de datos al dominio de Staff.
 ///
 /// Ubicación: `lib/features/staff/data/repositories/staff_repository_impl.dart`
 /// Capa: Data (Repositories)
 class StaffRepositoryImpl implements StaffRepository {
   final StaffRemoteDataSource _remoteDataSource;
-
-  static final Map<String, StaffTaskEntity> _taskCache = {};
 
   StaffRepositoryImpl({
     StaffRemoteDataSource? remoteDataSource,
@@ -26,33 +24,25 @@ class StaffRepositoryImpl implements StaffRepository {
 
   @override
   Future<Result<List<StaffTaskEntity>>> getAssignedTasks(String staffId) async {
-    final Map<String, StaffTaskEntity> combined = Map.from(_taskCache);
-
     try {
       final dtos = await _remoteDataSource.getAssignedTasks(staffId);
-      for (final dto in dtos) {
-        final entity = dto.toDomain();
-        combined[entity.id] = entity;
-        _taskCache[entity.id] = entity;
-      }
-    } catch (_) {}
-
-    final list = combined.values.toList();
-    list.sort((a, b) => b.assignedAt.compareTo(a.assignedAt));
-    return Success(list);
+      final tasks = dtos.map((dto) => dto.toDomain()).toList()
+        ..sort((a, b) => b.assignedAt.compareTo(a.assignedAt));
+      return Success(tasks);
+    } on ServerException catch (e) {
+      return FailureResult(ServerFailure(message: e.message, code: e.code));
+    } catch (_) {
+      return const FailureResult(
+        ServerFailure(message: 'No se pudieron cargar las tareas asignadas.'),
+      );
+    }
   }
 
   @override
   Future<Result<StaffTaskEntity>> getTaskById(String taskId) async {
-    if (_taskCache.containsKey(taskId)) {
-      return Success(_taskCache[taskId]!);
-    }
-
     try {
       final dto = await _remoteDataSource.getTaskById(taskId);
-      final entity = dto.toDomain();
-      _taskCache[entity.id] = entity;
-      return Success(entity);
+      return Success(dto.toDomain());
     } on ServerException catch (e) {
       return FailureResult(ServerFailure(message: e.message, code: e.code));
     } catch (e) {
@@ -76,9 +66,9 @@ class StaffRepositoryImpl implements StaffRepository {
         newStatus: newStatus,
         notes: notes,
       );
-      final entity = dto.toDomain();
-      _taskCache[entity.id] = entity;
-      return Success(entity);
+      return Success(dto.toDomain());
+    } on ServerException catch (e) {
+      return FailureResult(ServerFailure(message: e.message, code: e.code));
     } catch (_) {
       return const FailureResult(ServerFailure(message: 'No se pudo actualizar el estado de la tarea.'));
     }
@@ -114,11 +104,11 @@ class StaffRepositoryImpl implements StaffRepository {
         notes: notes,
         evidencePhotos: photos,
       );
-      final entity = dto.toDomain();
-      _taskCache[entity.id] = entity;
-      return Success(entity);
+      return Success(dto.toDomain());
     } on PhotoCompressionException catch (error) {
       return FailureResult(ValidationFailure(message: error.message));
+    } on ServerException catch (e) {
+      return FailureResult(ServerFailure(message: e.message, code: e.code));
     } catch (_) {
       return const FailureResult(ServerFailure(message: 'Error al finalizar la tarea con evidencia.'));
     }

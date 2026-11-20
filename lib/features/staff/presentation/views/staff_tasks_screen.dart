@@ -7,6 +7,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../domain/entities/staff_task_entity.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
+import '../widgets/staff_tasks_load_notice.dart';
 import '../widgets/staff_bottom_nav_bar.dart';
 import '../widgets/staff_complete_task_sheet.dart';
 import '../widgets/staff_evidence_detail_sheet.dart';
@@ -283,7 +284,19 @@ class _StaffTasksScreenState extends ConsumerState<StaffTasksScreen> {
             child: RefreshIndicator(
               color: const Color(0xFF0A5835),
               onRefresh: () => viewModel.refresh(),
-              child: sortedList.isEmpty
+              child: staffState.isLoading || staffState.loadErrorMessage != null
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        StaffTasksLoadNotice(
+                          isLoading: staffState.isLoading,
+                          errorMessage: staffState.loadErrorMessage,
+                          onRetry: viewModel.refresh,
+                        ),
+                      ],
+                    )
+                  : sortedList.isEmpty
                   ? _EmptyTasksListView(
                       hasQuery: _searchController.text.isNotEmpty,
                       filter: staffState.selectedFilter,
@@ -294,6 +307,7 @@ class _StaffTasksScreenState extends ConsumerState<StaffTasksScreen> {
                       },
                     )
                   : ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.all(16.0),
                       itemCount: sortedList.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 12),
@@ -358,7 +372,14 @@ class _StaffTasksScreenState extends ConsumerState<StaffTasksScreen> {
 
     final viewModel = ref.read(staffHomeViewModelProvider.notifier);
     final success = await viewModel.startTaskWithNavigation(task);
-    if (!mounted || !success) return;
+    if (!mounted) return;
+    if (!success) {
+      final message = ref.read(staffHomeViewModelProvider).errorMessage;
+      if (message != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      }
+      return;
+    }
 
     _navigateToRouteMap();
   }

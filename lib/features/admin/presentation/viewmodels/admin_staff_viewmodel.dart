@@ -26,16 +26,19 @@ class AdminStaffViewModel extends Notifier<AdminStaffState> {
     return const AdminStaffState(isLoading: true);
   }
 
-  /// Carga la lista inicial de trabajadores municipales activos y cuadrillas disponibles.
+  /// Carga el personal municipal y las cuadrillas para el selector.
   Future<void> loadInitialData() async {
+    if (state.isUpdating) return;
     state = state.copyWith(isLoading: true, clearError: true);
 
-    final staffResult = await _repository.getStaffMembers();
-    final crewsResult = await _repository.getAvailableCrews();
+    final staffRequest = _repository.getStaffMembers();
+    final crewsRequest = _repository.getAvailableCrews();
+    final staffResult = await staffRequest;
+    final crewsResult = await crewsRequest;
 
     final staffList = switch (staffResult) {
       Success(data: final list) => list,
-      FailureResult() => <UserEntity>[],
+      FailureResult() => state.staffMembers,
     };
 
     final crewList = switch (crewsResult) {
@@ -47,6 +50,11 @@ class AdminStaffViewModel extends Notifier<AdminStaffState> {
       isLoading: false,
       staffMembers: staffList,
       crews: crewList,
+      errorMessage: switch ((staffResult, crewsResult)) {
+        (FailureResult(failure: final failure), _) => failure.message,
+        (_, FailureResult(failure: final failure)) => failure.message,
+        _ => null,
+      },
     );
   }
 
@@ -80,6 +88,7 @@ class AdminStaffViewModel extends Notifier<AdminStaffState> {
         state = state.copyWith(
           isSearching: false,
           searchedUser: user,
+          clearSearchedUser: user == null,
           hasSearched: true,
           searchedEmail: trimmed,
         );
@@ -104,8 +113,13 @@ class AdminStaffViewModel extends Notifier<AdminStaffState> {
     );
   }
 
-  /// Promueve un usuario (típicamente 'citizen') al rol 'staff'.
-  Future<bool> promoteToStaff(UserEntity user, {String? teamId}) async {
+  /// Asigna una cuadrilla y concede el rol Staff si el usuario aún es ciudadano.
+  Future<bool> assignToCrew(UserEntity user, String teamId) async {
+    if (state.isUpdating) return false;
+    if (!state.crews.any((crew) => crew.id == teamId)) {
+      state = state.copyWith(errorMessage: 'Selecciona una cuadrilla válida.');
+      return false;
+    }
     state = state.copyWith(isUpdating: true, clearError: true, clearSuccess: true);
 
     final result = await _repository.updateUserRole(
@@ -128,14 +142,14 @@ class AdminStaffViewModel extends Notifier<AdminStaffState> {
         state = state.copyWith(
           isUpdating: false,
           staffMembers: currentList,
-          searchedUser: updatedUser,
-          successMessage: '¡${user.name} ahora es Personal de Limpieza!',
+          searchedUser: state.searchedUser?.id == user.id ? updatedUser : null,
+          successMessage: 'Cuadrilla actualizada para ${user.name}.',
         );
         return true;
       case FailureResult(failure: final f):
         state = state.copyWith(
           isUpdating: false,
-          errorMessage: 'Error al asignar rol: ${f.message}',
+          errorMessage: 'No se pudo asignar la cuadrilla: ${f.message}',
         );
         return false;
     }
@@ -143,6 +157,7 @@ class AdminStaffViewModel extends Notifier<AdminStaffState> {
 
   /// Revierte a un miembro del personal al rol 'citizen'.
   Future<bool> demoteToCitizen(UserEntity user) async {
+    if (state.isUpdating) return false;
     state = state.copyWith(isUpdating: true, clearError: true, clearSuccess: true);
 
     final result = await _repository.updateUserRole(
@@ -152,7 +167,7 @@ class AdminStaffViewModel extends Notifier<AdminStaffState> {
 
     switch (result) {
       case Success():
-        final updatedUser = user.copyWith(role: UserRole.citizen, teamId: null);
+        final updatedUser = user.copyWith(role: UserRole.citizen, clearTeamId: true);
         final currentList = state.staffMembers.where((u) => u.id != user.id).toList();
 
         state = state.copyWith(

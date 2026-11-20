@@ -32,6 +32,18 @@ Para ejecutar el análisis y las pruebas de Flutter usa `flutter analyze` y `flu
 firebase emulators:exec --config firebase.emulator.json --only firestore,auth --project demo-ecoroute "node --test firebase/tests/*.test.mjs"
 ```
 
+### Despacho a personal de limpieza
+
+En **Admin → Gestión de Personal**, selecciona una cuadrilla al promover una cuenta o usa el botón de cuadrilla para cambiar la asignación de un trabajador existente. En **Reportes**, despacha el reporte a una cuadrilla. Un miembro puede iniciar la tarea disponible y queda como responsable del cierre con evidencia, incluso si después cambia de cuadrilla. El personal sin cuadrilla puede consultar sus tareas personales.
+
+Coordina la publicación de las reglas con la actualización de la app de Staff. Las reglas nuevas requieren consultas por asignación y una fecha de cierre generada por Firestore. Revisa desde Admin cualquier reporte antiguo que figure asignado sin cuadrilla ni responsable y vuelve a despacharlo a la cuadrilla correspondiente.
+
+Inicio y Perfil muestran la zona y el vehículo de la cuadrilla registrada. En **Mi perfil → Mis estadísticas**, el trabajador inicia, pausa, reanuda o termina su turno. Admin ve el estado de cada persona y cuántos miembros tienen un turno activo por cuadrilla. La disponibilidad de la unidad se sigue gestionando desde Admin.
+
+El tiempo efectivo suma los intervalos en turno, descontando las pausas. Los cierres nuevos se guardan con hora del servidor y aparecen ordenados por fecha en el historial personal. Los cierres anteriores sin fecha registrada aparecen al final del historial.
+
+El mapa propone paradas por prioridad y cercanía geográfica. OSRM traza por calles hacia la tarea activa. Si el servicio vial no está disponible, el mapa identifica la aproximación con un trazado punteado. El botón **Abrir en Google Maps** usa las coordenadas registradas de la tarea activa.
+
 ### Push de Android con Spark
 
 El [Worker programado](firebase/push-worker/worker.mjs) usa el plan Free de Cloudflare y FCM HTTP v1. Revisa la cola cada cinco minutos. En Android, activa el permiso desde **Perfil → Notificaciones**. Para compilar un entorno de desarrollo con solo la bandeja usa `--dart-define=ECOROUTE_PUSH_ENABLED=false`.

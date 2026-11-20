@@ -53,7 +53,8 @@ class AdminStaffState {
       crews: crews ?? this.crews,
       searchedUser: clearSearchedUser ? null : (searchedUser ?? this.searchedUser),
       hasSearched: hasSearched ?? this.hasSearched,
-      searchedEmail: clearSearchedUser ? null : (searchedEmail ?? this.searchedEmail),
+      searchedEmail: searchedEmail ??
+          (clearSearchedUser ? null : this.searchedEmail),
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       successMessage: clearSuccess ? null : (successMessage ?? this.successMessage),
     );

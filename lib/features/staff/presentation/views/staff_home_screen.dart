@@ -11,6 +11,8 @@ import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../domain/entities/staff_task_entity.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
+import '../viewmodels/staff_operations_providers.dart';
+import '../widgets/staff_tasks_load_notice.dart';
 import '../widgets/staff_bottom_nav_bar.dart';
 import '../widgets/staff_complete_task_sheet.dart';
 import '../widgets/staff_evidence_detail_sheet.dart';
@@ -38,6 +40,8 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
     final staffName = user?.name.isNotEmpty == true ? user!.name : 'Personal de Limpieza';
 
     final staffState = ref.watch(staffHomeViewModelProvider);
+    final crewState = ref.watch(staffCrewProvider);
+    final crew = crewState.asData?.value;
     final viewModel = ref.read(staffHomeViewModelProvider.notifier);
 
     final allTasks = List<StaffTaskEntity>.of(staffState.tasks)
@@ -138,16 +142,16 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 3),
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.shield_outlined, size: 14, color: Color(0xFF047857)),
-                      SizedBox(width: 4),
+                      const Icon(Icons.shield_outlined, size: 14, color: Color(0xFF047857)),
+                      const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          'Cuadrilla Zona Norte',
+                          staffCrewName(crewState),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                             color: Color(0xFF64748B),
@@ -160,12 +164,21 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
               ),
               const SizedBox(height: 18),
 
+              StaffTasksLoadNotice(
+                isLoading: staffState.isLoading,
+                errorMessage: staffState.loadErrorMessage,
+                onRetry: viewModel.refresh,
+              ),
+
               // 2. Información importante para el personal: Hero Card de Circuito Operativo en Cajamarca
               _buildOperationalCircuitCard(
                 context: context,
+                zone: crew?.zone,
+                vehicle: crew?.vehicleLabel,
                 pendingCount: pendingCount,
-                resolvedCount: resolvedCount,
-                totalCount: allTasks.length,
+                resolvedToday: staffState.isLoading || staffState.loadErrorMessage != null
+                    ? null
+                    : staffState.resolvedOn(DateTime.now()),
               ),
               const SizedBox(height: 18),
 
@@ -173,7 +186,7 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
               if (urgentTask != null) ...[
                 _buildUrgentTaskAlert(
                   task: urgentTask,
-                  onTap: () => StaffCompleteTaskSheet.show(context, urgentTask),
+                  onTap: () => _handleStartTask(urgentTask),
                 ),
                 const SizedBox(height: 18),
               ],
@@ -187,7 +200,7 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
                       iconColor: const Color(0xFF047857),
                       iconBgColor: const Color(0xFFDCFCE7),
                       title: 'Mapa de Ruta',
-                      subtitle: 'Circuito en Cajamarca',
+                      subtitle: 'Paradas asignadas',
                       onTap: () => context.push(RouteNames.staffRouteMap),
                     ),
                   ),
@@ -399,13 +412,11 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
   /// Tarjeta de Información Operativa Destacada (Circuito de Ruta y Camión)
   Widget _buildOperationalCircuitCard({
     required BuildContext context,
+    required String? zone,
+    required String? vehicle,
     required int pendingCount,
-    required int resolvedCount,
-    required int totalCount,
+    required int? resolvedToday,
   }) {
-    final double progress = totalCount > 0 ? (resolvedCount / totalCount).clamp(0.0, 1.0) : 0.0;
-    final int percentage = (progress * 100).round();
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -430,45 +441,54 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withAlpha(40),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.local_shipping_rounded,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Circuito Cajamarca Centro',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.2,
-                        ),
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withAlpha(40),
+                        shape: BoxShape.circle,
                       ),
-                      Text(
-                        'Camión #04 • Sector Urbano',
-                        style: TextStyle(
-                          color: Color(0xFFD1FAE5),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
+                      child: const Icon(
+                        Icons.local_shipping_rounded,
+                        color: Colors.white,
+                        size: 20,
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            zone ?? 'Zona sin registrar',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          Text(
+                            vehicle ?? 'Vehículo sin registrar',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFFD1FAE5),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
@@ -488,39 +508,23 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Barra de progreso de recolección del día
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Progreso de paradas hoy',
-                    style: TextStyle(
-                      color: Color(0xFFD1FAE5),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    '$percentage% ($resolvedCount/$totalCount atendidas)',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
+              const Text(
+                'Mis cierres de hoy',
+                style: TextStyle(
+                  color: Color(0xFFD1FAE5),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              const SizedBox(height: 7),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 7,
-                  backgroundColor: Colors.white.withAlpha(45),
-                  valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF34D399)),
+              Text(
+                resolvedToday?.toString() ?? '—',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ],
@@ -551,7 +555,7 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
                   Icon(Icons.map_rounded, size: 16, color: Color(0xFF047857)),
                   SizedBox(width: 8),
                   Text(
-                    'Ver mapa de ruta en Cajamarca',
+                    'Ver mapa de ruta',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
@@ -685,7 +689,14 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
 
     final viewModel = ref.read(staffHomeViewModelProvider.notifier);
     final success = await viewModel.startTaskWithNavigation(task);
-    if (!mounted || !success) return;
+    if (!mounted) return;
+    if (!success) {
+      final message = ref.read(staffHomeViewModelProvider).errorMessage;
+      if (message != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      }
+      return;
+    }
 
     _navigateToRouteMap();
   }

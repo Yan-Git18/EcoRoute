@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/entities/staff_operations.dart';
+
 /// Modal para seleccionar y cambiar el estado de turno del Personal de Limpieza.
 /// Capa: Presentation (Widgets Staff)
 class StaffShiftStatusModal {
   StaffShiftStatusModal._();
 
-  static void show({
+  static Future<StaffShiftStatus?> show({
     required BuildContext context,
-    required String currentStatus,
-    required ValueChanged<String> onStatusSelected,
+    required StaffShiftStatus currentStatus,
   }) {
-    showModalBottomSheet(
+    return showModalBottomSheet<StaffShiftStatus>(
       context: context,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
@@ -44,36 +45,23 @@ class StaffShiftStatusModal {
                   ),
                 ),
                 const SizedBox(height: 14),
-                _ShiftOption(
-                  title: 'En turno',
-                  subtitle: 'Disponible y activo para atención de rutas',
-                  color: const Color(0xFF10B981),
-                  isSelected: currentStatus == 'En turno',
-                  onTap: () {
-                    onStatusSelected('En turno');
-                    Navigator.pop(ctx);
-                  },
-                ),
-                _ShiftOption(
-                  title: 'En descanso',
-                  subtitle: 'Pausa para refrigerio o mantenimiento',
-                  color: const Color(0xFFF59E0B),
-                  isSelected: currentStatus == 'En descanso',
-                  onTap: () {
-                    onStatusSelected('En descanso');
-                    Navigator.pop(ctx);
-                  },
-                ),
-                _ShiftOption(
-                  title: 'Fin de turno',
-                  subtitle: 'Jornada completada para el día',
-                  color: const Color(0xFF94A3B8),
-                  isSelected: currentStatus == 'Fin de turno',
-                  onTap: () {
-                    onStatusSelected('Fin de turno');
-                    Navigator.pop(ctx);
-                  },
-                ),
+                for (final status in StaffShiftStatus.values)
+                  if (status == currentStatus || currentStatus.canChangeTo(status))
+                    _ShiftOption(
+                      title: status.label,
+                      subtitle: switch (status) {
+                        StaffShiftStatus.onDuty => 'Disponible para atender tareas',
+                        StaffShiftStatus.onBreak => 'Pausa durante el turno',
+                        StaffShiftStatus.offDuty => 'Termina el turno operativo',
+                      },
+                      color: switch (status) {
+                        StaffShiftStatus.onDuty => const Color(0xFF047857),
+                        StaffShiftStatus.onBreak => const Color(0xFFB45309),
+                        StaffShiftStatus.offDuty => const Color(0xFF64748B),
+                      },
+                      isSelected: currentStatus == status,
+                      onTap: () => Navigator.pop(ctx, status),
+                    ),
               ],
             ),
           ),

@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/services/report_status_transaction.dart';
+import '../../../auth/domain/entities/user_entity.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../models/staff_task_dto.dart';
 
@@ -26,6 +27,16 @@ abstract class StaffRemoteDataSource {
 
 /// Implementación concreta de StaffRemoteDataSource con Cloud Firestore.
 class FirebaseStaffRemoteDataSourceImpl implements StaffRemoteDataSource {
+  static const _assignedStatuses = ['assigned', 'asignado'];
+  static const _personalStatuses = [
+    ..._assignedStatuses,
+    'in_progress',
+    'en proceso',
+    'resolved',
+    'resuelto',
+  ];
+  static const _server = GetOptions(source: Source.server);
+
   final FirebaseFirestore? _customFirestore;
 
   FirebaseStaffRemoteDataSourceImpl({FirebaseFirestore? firestore})
@@ -36,23 +47,49 @@ class FirebaseStaffRemoteDataSourceImpl implements StaffRemoteDataSource {
 
   @override
   Future<List<StaffTaskDto>> getAssignedTasks(String staffId) async {
-    if (!_isFirebaseReady && _customFirestore == null) return [];
+    if (!_isFirebaseReady && _customFirestore == null) {
+      throw const ServerException(message: 'Base de datos no inicializada.');
+    }
 
     try {
-      // Consultar reportes asignados al personal o globales pendientes/en proceso
+      final profile = await _firestore.collection('users').doc(staffId).get(_server);
+      final user = profile.data();
+      if (user == null ||
+          UserRole.fromString(user['role'] as String? ?? '') != UserRole.staff ||
+          user['isActive'] == false) {
+        throw const ServerException(message: 'La sesión no tiene acceso a tareas de personal.');
+      }
+
+      final teamId = user['teamId'];
+      final personal = Filter.and(
+        Filter('assignedStaffId', isEqualTo: staffId),
+        Filter('status', whereIn: _personalStatuses),
+      );
+      final visible = teamId is String && teamId.isNotEmpty
+          ? Filter.or(
+              personal,
+              Filter.and(
+                Filter('assignedToTeamId', isEqualTo: teamId),
+                Filter('status', whereIn: _assignedStatuses),
+              ),
+            )
+          : personal;
       final snapshot = await _firestore
           .collection('reports')
-          .where('status', whereIn: ['pending', 'assigned', 'in_progress', 'resolved'])
-          .get();
+          .where(visible)
+          .get(_server);
 
-      final list = snapshot.docs
-          .map((doc) => StaffTaskDto.fromFirestore(doc.id, doc.data()))
-          .toList();
-
-      list.sort((a, b) => b.assignedAt.compareTo(a.assignedAt));
-      return list;
-    } catch (e) {
-      throw ServerException(message: 'Error al consultar tareas de recolección: $e');
+      return snapshot.docs.where((doc) {
+        final assignee = doc.data()['assignedStaffId'];
+        return assignee == null || assignee == staffId;
+      }).map((doc) => StaffTaskDto.fromFirestore(doc.id, doc.data())).toList();
+    } on ServerException {
+      rethrow;
+    } on FirebaseException catch (e) {
+      throw ServerException(
+        message: 'No se pudieron cargar las tareas asignadas.',
+        code: e.code,
+      );
     }
   }
 
@@ -63,7 +100,7 @@ class FirebaseStaffRemoteDataSourceImpl implements StaffRemoteDataSource {
     }
 
     try {
-      final doc = await _firestore.collection('reports').doc(taskId).get();
+      final doc = await _firestore.collection('reports').doc(taskId).get(_server);
       if (!doc.exists || doc.data() == null) {
         throw const ServerException(message: 'La tarea solicitada no existe.');
       }
@@ -94,6 +131,8 @@ class FirebaseStaffRemoteDataSourceImpl implements StaffRemoteDataSource {
         'status': newStatus.toDbString(),
         'assignedStaffId': staffId,
         'assignedStaffName': staffName,
+        if (newStatus == ReportStatus.resolved)
+          'resolvedAt': FieldValue.serverTimestamp(),
       };
 
       if (newStatus == ReportStatus.resolved && notes != null && notes.isNotEmpty) {
@@ -106,7 +145,11 @@ class FirebaseStaffRemoteDataSourceImpl implements StaffRemoteDataSource {
         evidencePhotos: evidencePhotos,
       );
       final changed = result.changed;
-      final updatedTask = StaffTaskDto.fromFirestore(taskId, result.fields);
+      final fields = result.fields;
+      final updatedTask = StaffTaskDto.fromFirestore(taskId, {
+        ...fields,
+        if (fields['resolvedAt'] is FieldValue) 'resolvedAt': fields['updatedAt'],
+      });
       if (!changed) return updatedTask;
 
       // Registrar auditoría en la subcolección 'history'
@@ -122,6 +165,13 @@ class FirebaseStaffRemoteDataSourceImpl implements StaffRemoteDataSource {
       } catch (_) {}
 
       return updatedTask;
+    } on FirebaseException catch (e) {
+      throw ServerException(
+        message: e.code == 'permission-denied'
+            ? 'La tarea ya no está disponible para esta sesión.'
+            : 'No se pudo actualizar el estado de la tarea.',
+        code: e.code,
+      );
     } catch (e) {
       throw ServerException(message: 'Error al actualizar el estado de la tarea: $e');
     }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,8 +10,11 @@ import 'package:ecoroute/features/auth/presentation/viewmodels/auth_state.dart';
 import 'package:ecoroute/features/auth/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ecoroute/features/citizen/domain/entities/report_entity.dart';
 import 'package:ecoroute/features/staff/domain/entities/staff_task_entity.dart';
+import 'package:ecoroute/features/staff/domain/entities/staff_operations.dart';
+import 'package:ecoroute/features/staff/domain/repositories/staff_operations_repository.dart';
 import 'package:ecoroute/features/staff/domain/repositories/staff_repository.dart';
 import 'package:ecoroute/features/staff/presentation/viewmodels/staff_home_viewmodel.dart';
+import 'package:ecoroute/features/staff/presentation/viewmodels/staff_operations_providers.dart';
 import 'package:ecoroute/features/staff/presentation/views/staff_home_screen.dart';
 
 class MockStaffAuthViewModel extends AuthViewModel {
@@ -79,7 +84,46 @@ final testStaffUser = UserEntity(
   createdAt: DateTime(2025, 1, 1),
 );
 
+class _CrewAssignmentFake implements StaffOperationsRepository {
+  final teams = StreamController<String?>.broadcast();
+
+  @override
+  Stream<String?> watchTeamId(String uid) => teams.stream;
+
+  @override
+  Stream<StaffCrew?> watchCrew(String teamId) => Stream.value(
+    StaffCrew(name: 'Cuadrilla $teamId', zone: 'Zona $teamId', vehicleCode: 'Unidad $teamId'),
+  );
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 void main() {
+  testWidgets('Inicio actualiza la unidad al cambiar la cuadrilla', (tester) async {
+    final assignment = _CrewAssignmentFake();
+    addTearDown(assignment.teams.close);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authViewModelProvider.overrideWith(() => MockStaffAuthViewModel(testStaffUser)),
+          staffRepositoryProvider.overrideWithValue(MockStaffRepository()),
+          staffOperationsRepositoryProvider.overrideWithValue(assignment),
+        ],
+        child: const MaterialApp(home: StaffHomeScreen()),
+      ),
+    );
+    assignment.teams.add('Norte');
+    await tester.pumpAndSettle();
+    expect(find.text('Cuadrilla Norte'), findsOneWidget);
+    expect(find.text('Unidad Norte'), findsOneWidget);
+    assignment.teams.add('Sur');
+    await tester.pumpAndSettle();
+    expect(find.text('Cuadrilla Sur'), findsOneWidget);
+    expect(find.text('Unidad Sur'), findsOneWidget);
+    expect(find.text('Unidad Norte'), findsNothing);
+  });
+
   testWidgets('Renderiza StaffHomeScreen mostrando estado vacío sin datos falsos cuando no hay tareas',
       (tester) async {
     final mockRepo = MockStaffRepository();
@@ -107,7 +151,7 @@ void main() {
 
     // 2. Cabecera del personal
     expect(find.text('Mario Limpieza'), findsOneWidget);
-    expect(find.text('Cuadrilla Zona Norte'), findsOneWidget);
+    expect(find.text('Sin cuadrilla asignada'), findsOneWidget);
 
     // 3. Sección "Mis tareas" con contadores en 0
     expect(find.text('Mis tareas'), findsOneWidget);

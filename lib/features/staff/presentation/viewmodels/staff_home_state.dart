@@ -8,6 +8,7 @@ class StaffHomeState {
   final bool isLoading;
   final bool isStartingNavigation;
   final String? errorMessage;
+  final String? loadErrorMessage;
   final ReportFilter selectedFilter;
   final String searchQuery;
 
@@ -26,6 +27,7 @@ class StaffHomeState {
     this.isLoading = false,
     this.isStartingNavigation = false,
     this.errorMessage,
+    this.loadErrorMessage,
     this.selectedFilter = ReportFilter.all,
     this.searchQuery = '',
     this.activeNavigationTask,
@@ -37,6 +39,18 @@ class StaffHomeState {
   int get pendingCount => tasks.where((t) => t.isPending).length;
   int get inProgressCount => tasks.where((t) => t.isInProgress).length;
   int get resolvedCount => tasks.where((t) => t.isResolved).length;
+
+  int resolvedOn(DateTime date) {
+    final day = date.toLocal();
+    return tasks.where((task) {
+      final closed = task.resolvedAt?.toLocal();
+      return task.isResolved &&
+          closed != null &&
+          closed.year == day.year &&
+          closed.month == day.month &&
+          closed.day == day.day;
+    }).length;
+  }
 
   /// Retorna la tarea actualmente en estado «En proceso» (si existe).
   /// Regla de negocio: solo se permite una tarea iniciada a la vez.
@@ -85,6 +99,8 @@ class StaffHomeState {
     bool? isStartingNavigation,
     String? errorMessage,
     bool clearError = false,
+    String? loadErrorMessage,
+    bool clearLoadError = false,
     ReportFilter? selectedFilter,
     String? searchQuery,
     StaffTaskEntity? activeNavigationTask,
@@ -92,22 +108,25 @@ class StaffHomeState {
     double? workerLatitude,
     double? workerLongitude,
     bool clearActiveNavigation = false,
+    bool clearWorkerPosition = false,
   }) {
     return StaffHomeState(
       tasks: tasks ?? this.tasks,
       isLoading: isLoading ?? this.isLoading,
       isStartingNavigation: isStartingNavigation ?? this.isStartingNavigation,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      loadErrorMessage: clearLoadError
+          ? null
+          : (loadErrorMessage ?? this.loadErrorMessage),
       selectedFilter: selectedFilter ?? this.selectedFilter,
       searchQuery: searchQuery ?? this.searchQuery,
-      activeNavigationTask: clearActiveNavigation
-          ? null
-          : (activeNavigationTask ?? this.activeNavigationTask),
+      activeNavigationTask: activeNavigationTask ??
+          (clearActiveNavigation ? null : this.activeNavigationTask),
       activeRoute: clearActiveNavigation
           ? null
           : (activeRoute ?? this.activeRoute),
-      workerLatitude: workerLatitude ?? this.workerLatitude,
-      workerLongitude: workerLongitude ?? this.workerLongitude,
+      workerLatitude: clearWorkerPosition ? null : (workerLatitude ?? this.workerLatitude),
+      workerLongitude: clearWorkerPosition ? null : (workerLongitude ?? this.workerLongitude),
     );
   }
 }

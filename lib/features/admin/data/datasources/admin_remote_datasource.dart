@@ -155,6 +155,7 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
         'status': ReportStatus.assigned.toDbString(),
         'assignedToTeamId': crew.id,
         'assignedToTeamName': crew.name,
+        'assignedStaffId': null,
         'assignedStaffName': crew.leadStaffName,
         'assignedVehicle': '${crew.vehicleCode} • ${crew.vehiclePlate}',
       };

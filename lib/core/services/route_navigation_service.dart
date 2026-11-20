@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
 /// Resultado inmutable del cálculo de ruta óptima hacia un reporte ciudadano.
@@ -19,6 +20,7 @@ class RouteInfoResult {
   final List<LatLng> points;
   final double distanceMeters;
   final int durationSeconds;
+  final bool isApproximate;
 
   const RouteInfoResult({
     required this.origin,
@@ -26,6 +28,7 @@ class RouteInfoResult {
     required this.points,
     required this.distanceMeters,
     required this.durationSeconds,
+    this.isApproximate = false,
   });
 
   /// Distancia formateada legible para la interfaz (ej. '450 m' o '1.8 km').
@@ -68,6 +71,10 @@ abstract class RouteNavigationService {
 /// de enrutamiento vial Open Source Routing Machine (OSRM) sobre OpenStreetMap,
 /// con respaldo geodésico automático para entornos sin conexión o pruebas.
 class OsrmRouteNavigationServiceImpl implements RouteNavigationService {
+  OsrmRouteNavigationServiceImpl({http.Client? client}) : _client = client;
+
+  final http.Client? _client;
+
   bool get _isFlutterTest {
     if (kIsWeb) return false;
     try {
@@ -87,8 +94,7 @@ class OsrmRouteNavigationServiceImpl implements RouteNavigationService {
     final origin = LatLng(originLat, originLng);
     final destination = LatLng(destLat, destLng);
 
-    // En modo de pruebas unitarias/widgets o web sin CORS, usar cálculo geodésico directo
-    if (!_isFlutterTest && !kIsWeb) {
+    if (_client != null || !_isFlutterTest) {
       final osrmRoute = await _fetchOsrmDrivingRoute(
         origin: origin,
         destination: destination,
@@ -114,11 +120,11 @@ class OsrmRouteNavigationServiceImpl implements RouteNavigationService {
       'https://router.project-osrm.org/route/v1/driving/'
           '${origin.longitude},${origin.latitude};'
           '${destination.longitude},${destination.latitude}'
-          '?overview=full&geometries=geojson&steps=true',
+          '?overview=full&geometries=geojson&steps=false',
       'https://routing.openstreetmap.de/routed-car/route/v1/driving/'
           '${origin.longitude},${origin.latitude};'
           '${destination.longitude},${destination.latitude}'
-          '?overview=full&geometries=geojson&steps=true',
+          '?overview=full&geometries=geojson&steps=false',
     ];
 
     for (final url in endpoints) {
@@ -127,7 +133,7 @@ class OsrmRouteNavigationServiceImpl implements RouteNavigationService {
         origin: origin,
         destination: destination,
       );
-      if (result != null && result.points.length > 2) {
+      if (result != null) {
         return result;
       }
     }
@@ -139,21 +145,14 @@ class OsrmRouteNavigationServiceImpl implements RouteNavigationService {
     required LatLng origin,
     required LatLng destination,
   }) async {
-    HttpClient? client;
+    final client = _client ?? http.Client();
     try {
-      final uri = Uri.parse(url);
+      final response = await client
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 5));
+      if (response.statusCode != 200) return null;
 
-      client = HttpClient()..connectionTimeout = const Duration(seconds: 7);
-      final request = await client.getUrl(uri).timeout(const Duration(seconds: 7));
-      request.headers.set(HttpHeaders.userAgentHeader, 'EcoRouteApp/1.0');
-      final response = await request.close().timeout(const Duration(seconds: 7));
-
-      if (response.statusCode != 200) {
-        return null;
-      }
-
-      final body = await response.transform(utf8.decoder).join();
-      final data = jsonDecode(body) as Map<String, dynamic>;
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       if (data['code'] != 'Ok') {
         return null;
       }
@@ -197,7 +196,7 @@ class OsrmRouteNavigationServiceImpl implements RouteNavigationService {
     } catch (_) {
       return null;
     } finally {
-      client?.close(force: true);
+      if (_client == null) client.close();
     }
   }
 
@@ -218,6 +217,7 @@ class OsrmRouteNavigationServiceImpl implements RouteNavigationService {
       origin: origin,
       destination: destination,
       points: <LatLng>[origin, destination],
+      isApproximate: true,
       distanceMeters: distanceMeters,
       durationSeconds: durationSeconds,
     );

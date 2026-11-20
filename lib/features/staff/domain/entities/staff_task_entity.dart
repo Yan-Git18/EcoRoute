@@ -23,12 +23,14 @@ class StaffTaskEntity {
   final String? reference;
   final double latitude;
   final double longitude;
+  final bool hasReportLocation;
   final List<String> reportImageUrls;
   final String? evidenceImageUrl;
   final List<String> evidenceImageUrls;
   final String? resolutionNotes;
   final DateTime assignedAt;
   final DateTime? updatedAt;
+  final DateTime? resolvedAt;
 
   const StaffTaskEntity({
     required this.id,
@@ -45,12 +47,14 @@ class StaffTaskEntity {
     this.reference,
     required this.latitude,
     required this.longitude,
+    this.hasReportLocation = true,
     required this.reportImageUrls,
     this.evidenceImageUrl,
     this.evidenceImageUrls = const [],
     this.resolutionNotes,
     required this.assignedAt,
     this.updatedAt,
+    this.resolvedAt,
   });
 
   bool get isPending => status == ReportStatus.pending || status == ReportStatus.assigned;
@@ -76,12 +80,14 @@ class StaffTaskEntity {
     String? reference,
     double? latitude,
     double? longitude,
+    bool? hasReportLocation,
     List<String>? reportImageUrls,
     String? evidenceImageUrl,
     List<String>? evidenceImageUrls,
     String? resolutionNotes,
     DateTime? assignedAt,
     DateTime? updatedAt,
+    DateTime? resolvedAt,
   }) {
     final nextEvidenceUrls = evidenceImageUrls ?? this.evidenceImageUrls;
     final firstEvidence = evidenceImageUrl ??
@@ -102,12 +108,14 @@ class StaffTaskEntity {
       reference: reference ?? this.reference,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
+      hasReportLocation: hasReportLocation ?? this.hasReportLocation,
       reportImageUrls: reportImageUrls ?? this.reportImageUrls,
       evidenceImageUrl: firstEvidence,
       evidenceImageUrls: nextEvidenceUrls,
       resolutionNotes: resolutionNotes ?? this.resolutionNotes,
       assignedAt: assignedAt ?? this.assignedAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      resolvedAt: resolvedAt ?? this.resolvedAt,
     );
   }
 }

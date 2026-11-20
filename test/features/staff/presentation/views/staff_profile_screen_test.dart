@@ -101,7 +101,7 @@ void main() {
 
     // 2. Ficha de Identidad del Personal
     expect(find.text('Carlos Mendoza'), findsOneWidget);
-    expect(find.text('Equipo de limpieza #03'), findsOneWidget);
+    expect(find.text('Sin cuadrilla asignada'), findsOneWidget);
     expect(find.byIcon(Icons.engineering_rounded), findsOneWidget);
 
     // 3. Opciones principales en la tarjeta
@@ -183,7 +183,7 @@ void main() {
 
     // Debe mostrar métricas y estado de turno
     expect(find.text('Estado de Turno'), findsOneWidget);
-    expect(find.text('En turno'), findsOneWidget);
+    expect(find.text('Sin turno registrado'), findsOneWidget);
     expect(find.text('Resueltas Hoy'), findsOneWidget);
     expect(find.text('Por Atender'), findsOneWidget);
     expect(find.text('Cambiar'), findsOneWidget);

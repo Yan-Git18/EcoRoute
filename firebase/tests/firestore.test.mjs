@@ -73,9 +73,13 @@ function media(length = 16) {
 function statusChange(report, owner, status, extra = {}) {
   const id = randomUUID();
   const path = `${owner.profile}/notifications/${id}`;
+  const change = write(report.path, { status: string(status), statusEventId: string(id), ...extra }, { merge: true });
+  if (status === "resolved") {
+    change.updateTransforms.push({ fieldPath: "resolvedAt", setToServerValue: "REQUEST_TIME" });
+  }
   return {
     path,
-    change: write(report.path, { status: string(status), statusEventId: string(id), ...extra }, { merge: true }),
+    change,
     notice: write(path, {
       reportId: string(report.id), reportNumber: string("#100"), status: string(status),
       readAt: { nullValue: null }, pushPending: bool(true),
@@ -83,8 +87,165 @@ function statusChange(report, owner, status, extra = {}) {
   };
 }
 
+async function createCrew(admin) {
+  const id = randomUUID();
+  await commit(admin.token, 200, write(`crews/${id}`, { name: string("Cuadrilla de prueba") }));
+  return id;
+}
+
+function crewMembership(worker, teamId) {
+  return write(worker.profile, {
+    role: string("staff"),
+    teamId: string(teamId),
+  }, { merge: true });
+}
+
+async function dispatch(admin, item, owner, teamId) {
+  const assignment = statusChange(item, owner, "assigned", {
+    assignedToTeamId: string(teamId),
+  });
+  await commit(admin.token, 200, assignment.change, assignment.notice);
+}
+
+async function start(staff, item, owner) {
+  const started = statusChange(item, owner, "in_progress", { assignedStaffId: string(staff.id) });
+  await commit(staff.token, 200, started.change, started.notice);
+}
+
+test("el acceso operativo sigue a la cuadrilla y la toma de la tarea tiene un solo ganador", emulator, async () => {
+  const [owner, admin, first, second, outsider, unassigned] = await Promise.all([
+    register(), register("admin"), register("staff"), register("staff"),
+    register("staff"), register("staff"),
+  ]);
+  const [teamId, otherTeamId] = await Promise.all([createCrew(admin), createCrew(admin)]);
+  await commit(first.token, 403, crewMembership(first, teamId));
+  await commit(admin.token, 403, crewMembership(first, randomUUID()));
+  await commit(admin.token, 200, crewMembership(first, teamId),
+    crewMembership(second, teamId), crewMembership(outsider, otherTeamId));
+  assert.equal((await request(`/crews/${teamId}`, first.token)).status, 200);
+  assert.equal((await request(`/crews/${otherTeamId}`, first.token)).status, 403);
+  assert.equal((await request("/crews", first.token)).status, 403);
+
+  const pending = report(owner);
+  const item = report(owner);
+  const personal = report(owner);
+  await commit(owner.token, 200, ...[pending, item, personal].map((r) => write(r.path, r.data)));
+  await commit("owner", 200, write(personal.path, {
+    status: string("asignado"), assignedStaffId: string(unassigned.id),
+  }, { merge: true }));
+  const read = async (actor, report) => (await request(`/${report.path}`, actor.token)).status;
+  assert.equal(await read(first, pending), 403);
+  const earlyStart = statusChange(pending, owner, "in_progress", { assignedStaffId: string(first.id) });
+  await commit(first.token, 403, earlyStart.change, earlyStart.notice);
+  await dispatch(admin, item, owner, teamId);
+  assert.equal(await read(first, item), 200);
+  assert.equal(await read(second, item), 200);
+  assert.equal(await read(outsider, item), 403);
+  assert.equal(await read(unassigned, item), 403);
+  assert.equal(await read(unassigned, personal), 200);
+  assert.equal(await read(first, personal), 403);
+
+  const fieldFilter = (fieldPath, op, value) => ({ fieldFilter: { field: { fieldPath }, op, value } });
+  const equal = (field, value) => fieldFilter(field, "EQUAL", string(value));
+  const statuses = (...values) => fieldFilter("status", "IN", { arrayValue: { values: values.map(string) } });
+  const compound = (op, ...filters) => ({ compositeFilter: { op, filters } });
+  const byWorker = (worker) => compound("AND", equal("assignedStaffId", worker.id),
+    statuses("assigned", "asignado", "in_progress", "en proceso", "resolved", "resuelto"));
+  const byCrew = (id) => compound("AND", equal("assignedToTeamId", id), statuses("assigned", "asignado"));
+  async function query(actor, status, where) {
+    const response = await request(":runQuery", actor.token, {
+      structuredQuery: {
+        from: [{ collectionId: "reports" }],
+        ...(where ? { where } : {}),
+      },
+    });
+    assert.equal(response.status, status, status === 200 && !response.ok ? await response.text() : undefined);
+    if (response.ok) {
+      return (await response.json()).flatMap((row) => row.document?.name.split("/").at(-1) ?? []);
+    }
+  }
+
+  assert.deepEqual(await query(first, 200, compound("OR", byWorker(first), byCrew(teamId))), [item.id]);
+  assert.deepEqual(await query(unassigned, 200, byWorker(unassigned)), [personal.id]);
+  await query(outsider, 403, compound("OR", byWorker(outsider), byCrew(teamId)));
+  await query(first, 403);
+  assert.ok((await query(owner, 200)).includes(item.id));
+  const foreignStart = statusChange(item, owner, "in_progress", { assignedStaffId: string(outsider.id) });
+  await commit(outsider.token, 403, foreignStart.change, foreignStart.notice);
+
+  const preemptiveResolution = statusChange(item, owner, "resolved", {
+    assignedStaffId: string(first.id), evidenceImagePath: string(`${item.path}/media/evidence`),
+  });
+  const evidence = write(`${item.path}/media/evidence`, media());
+  await commit(first.token, 403, preemptiveResolution.change, preemptiveResolution.notice, evidence);
+
+  const contenders = [first, second];
+  const responses = await Promise.all(contenders.map((worker) => {
+    const attempt = statusChange(item, owner, "in_progress", { assignedStaffId: string(worker.id) });
+    return request(":commit", worker.token, { writes: [attempt.change, attempt.notice] });
+  }));
+  const results = await Promise.all(responses.map(async (response) => [response.status, await response.text()]));
+  assert.deepEqual(results.map(([status]) => status).sort(), [200, 403], JSON.stringify(results));
+  const winner = contenders[responses.findIndex((response) => response.ok)];
+  const teammate = contenders.find((worker) => worker !== winner);
+  assert.equal(await read(winner, item), 200);
+  assert.equal(await read(teammate, item), 403);
+  assert.deepEqual(await query(teammate, 200, compound("OR", byWorker(teammate), byCrew(teamId))), []);
+
+  const resolution = statusChange(item, owner, "resolved", {
+    assignedStaffId: string(winner.id), evidenceImagePath: string(`${item.path}/media/evidence`),
+  });
+  await commit(teammate.token, 403, resolution.change, resolution.notice, evidence);
+  await commit(admin.token, 200, crewMembership(winner, otherTeamId));
+  await query(winner, 403, compound("OR", byWorker(winner), byCrew(teamId)));
+  assert.deepEqual(await query(winner, 200, compound("OR", byWorker(winner), byCrew(otherTeamId))), [item.id]);
+  await commit(winner.token, 200, resolution.change, resolution.notice, evidence);
+  const closed = await (await request(`/${item.path}`, winner.token)).json();
+  assert.equal(closed.fields.resolvedAt.timestampValue, closed.fields.updatedAt.timestampValue);
+  assert.equal(await read(winner, item), 200);
+  assert.equal(await read(teammate, item), 403);
+  assert.equal((await request(`/${item.path}/media/evidence`, teammate.token)).status, 403);
+  assert.equal((await request(`/${item.path}/media/evidence`, owner.token)).status, 200);
+});
+
+test("los turnos guardan cambios atómicos por trabajador con fecha del servidor", emulator, async () => {
+  const [staff, other, admin] = await Promise.all([register("staff"), register("staff"), register("admin")]);
+  const shift = `${staff.profile}/operations/shift`;
+  const eventId = () => randomUUID().replaceAll("-", "").slice(0, 20);
+  const transition = (status, id, sessionId = id) => {
+    const fields = { status: string(status), sessionId: string(sessionId) };
+    return [
+      write(shift, { ...fields, eventId: string(id) }, { timestamp: "changedAt" }),
+      write(`${staff.profile}/shiftEvents/${id}`, fields, { timestamp: "changedAt" }),
+    ];
+  };
+  const firstSession = eventId();
+  const [shiftStart, startEvent] = transition("on_duty", firstSession);
+  await commit(staff.token, 403, ...transition("on_break", eventId()));
+  await commit(staff.token, 403, shiftStart);
+  await commit(staff.token, 403, startEvent);
+  await commit(other.token, 403, shiftStart, startEvent);
+  await commit(admin.token, 403, shiftStart, startEvent);
+  await commit(staff.token, 200, shiftStart, startEvent);
+  await commit(staff.token, 403, ...transition("on_break", eventId()));
+  await commit(staff.token, 200, ...transition("on_break", eventId(), firstSession));
+  await commit(staff.token, 200, ...transition("on_duty", eventId(), firstSession));
+  await commit(staff.token, 200, ...transition("off_duty", eventId(), firstSession));
+  assert.equal((await request(`/${shift}`, other.token)).status, 403);
+  const saved = await request(`/${shift}`, admin.token);
+  assert.equal(saved.status, 200);
+  const current = (await saved.json()).fields;
+  assert.equal(current.status.stringValue, "off_duty");
+  assert.equal(current.sessionId.stringValue, firstSession);
+  const [restarted, reentry] = transition("on_duty", eventId());
+  await commit(staff.token, 200, restarted, reentry);
+  await commit(staff.token, 403, write(`${staff.profile}/shiftEvents/${firstSession}`, { status: string("off_duty") }));
+});
+
 test("las fotos se guardan junto con el reporte y la evidencia con la resolución y el aviso", emulator, async () => {
-  const [owner, staff] = await Promise.all([register(), register("staff")]);
+  const [owner, staff, admin] = await Promise.all([register(), register("staff"), register("admin")]);
+  const teamId = await createCrew(admin);
+  await commit(admin.token, 200, crewMembership(staff, teamId));
   const item = report(owner);
   const paths = Array.from({ length: 4 }, (_, index) => `${item.path}/media/photo_${index}`);
   const photos = paths.map((path) => write(path, media()));
@@ -92,7 +253,10 @@ test("las fotos se guardan junto con el reporte y la evidencia con la resolució
   await commit(owner.token, 403, ...photos);
   await commit(owner.token, 403, create, ...photos.slice(0, 3));
   await commit(owner.token, 200, create, ...photos);
+  assert.equal((await request(`/${paths[0]}`, staff.token)).status, 403);
+  await dispatch(admin, item, owner, teamId);
   assert.equal((await request(`/${paths[0]}`, staff.token)).status, 200);
+  await start(staff, item, owner);
 
   const evidencePath = `${item.path}/media/evidence`;
   const evidence = write(evidencePath, media());
@@ -108,10 +272,14 @@ test("las fotos se guardan junto con el reporte y la evidencia con la resolució
   assert.equal((await request(`/${evidencePath}`, owner.token)).status, 200);
 });
 
-test("Solo el personal puede guardar todas las fotos de resolución junto con el aviso", async () => {
-  const [owner, staff] = await Promise.all([register(), register("staff")]);
+test("Solo el personal puede guardar todas las fotos de resolución junto con el aviso", emulator, async () => {
+  const [owner, staff, admin] = await Promise.all([register(), register("staff"), register("admin")]);
+  const teamId = await createCrew(admin);
+  await commit(admin.token, 200, crewMembership(staff, teamId));
   const item = report(owner);
   await commit(owner.token, 200, write(item.path, item.data));
+  await dispatch(admin, item, owner, teamId);
+  await start(staff, item, owner);
   const paths = ["evidence", "evidence_1", "evidence_2", "evidence_3"]
     .map((id) => `${item.path}/media/${id}`);
   const photos = paths.map((path) => write(path, media()));
@@ -128,9 +296,11 @@ test("Solo el personal puede guardar todas las fotos de resolución junto con el
 
 test("la bandeja sigue al estado, respeta preferencias y solo permite leer al titular", emulator, async () => {
   const [owner, admin, staff] = await Promise.all([register(), register("admin"), register("staff")]);
+  const teamId = await createCrew(admin);
+  await commit(admin.token, 200, crewMembership(staff, teamId));
   const item = report(owner);
   await commit(owner.token, 200, write(item.path, item.data));
-  const assignment = statusChange(item, owner, "assigned");
+  const assignment = statusChange(item, owner, "assigned", { assignedToTeamId: string(teamId) });
   await commit(owner.token, 403, assignment.change, assignment.notice);
   await commit(admin.token, 403, assignment.notice);
   await commit(admin.token, 403, assignment.change);

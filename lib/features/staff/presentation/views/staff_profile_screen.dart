@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/widgets/media_image.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/widgets/profile/profile_widgets.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
+import '../../domain/entities/staff_operations.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
+import '../viewmodels/staff_operations_providers.dart';
 import '../widgets/staff_bottom_nav_bar.dart';
 import '../widgets/staff_shift_status_modal.dart';
 
@@ -29,31 +32,17 @@ class StaffProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
-  String _shiftStatus = 'En turno';
   bool _priorityNotificationsEnabled = true;
   bool _taskAssignedNotificationsEnabled = true;
   bool _shiftAlertsEnabled = true;
-
-  Color _getShiftStatusColor() {
-    switch (_shiftStatus) {
-      case 'En turno':
-        return const Color(0xFF10B981); // Verde activo
-      case 'En descanso':
-        return const Color(0xFFF59E0B); // Ámbar descanso
-      default:
-        return const Color(0xFF64748B); // Gris fuera de servicio
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authViewModelProvider);
     final user = authState.user;
 
-    final displayName = user?.name.isNotEmpty == true ? user!.name : 'Carlos Mendoza';
-    final teamSubtitle = user?.teamId != null && user!.teamId!.isNotEmpty
-        ? 'Equipo de limpieza #${user.teamId}'
-        : 'Equipo de limpieza #03';
+    final displayName = user?.name.isNotEmpty == true ? user!.name : 'Personal de Limpieza';
+    final teamSubtitle = staffCrewName(ref.watch(staffCrewProvider));
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -381,9 +370,9 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
 
   /// Modal con los datos del personal de limpieza
   void _showMyDataModal(BuildContext context, UserEntity? user) {
-    final staffName = user?.name.isNotEmpty == true ? user!.name : 'Carlos Mendoza';
-    final staffEmail = user?.email.isNotEmpty == true ? user!.email : 'carlos.mendoza@ecoroute.com';
-    final phone = user?.phoneNumber ?? '+51 988 123 456';
+    final staffName = user?.name.isNotEmpty == true ? user!.name : 'Personal de Limpieza';
+    final staffEmail = user?.email.isNotEmpty == true ? user!.email : '';
+    final phone = user?.phoneNumber ?? 'Sin teléfono registrado';
 
     ProfileDataModal.show(
       context,
@@ -400,7 +389,7 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
     WidgetRef ref,
     UserEntity? user,
   ) {
-    final email = user?.email.isNotEmpty == true ? user!.email : 'carlos.mendoza@ecoroute.com';
+    final email = user?.email.isNotEmpty == true ? user!.email : '';
     ProfileChangePasswordModal.show(context, ref, email: email);
   }
 
@@ -431,224 +420,159 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
     );
   }
 
-  /// Modal interactivo de estadísticas de desempeño del operario
   void _showStatsModal(BuildContext context) {
-    final staffState = ref.watch(staffHomeViewModelProvider);
-    final totalResolved = staffState.resolvedCount;
-    final totalPending = staffState.pendingCount;
-
+    var saving = false;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE2E8F0),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Mis estadísticas',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF0F172A),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (_, setSheetState) => Consumer(
+          builder: (context, ref, _) {
+            final staff = ref.watch(authViewModelProvider).user;
+            final crewState = ref.watch(staffCrewProvider);
+            final crew = crewState.asData?.value;
+            final taskState = ref.watch(staffHomeViewModelProvider);
+            final shiftState = staff == null
+                ? const AsyncData<StaffShift?>(null)
+                : ref.watch(staffShiftProvider(staff.id));
+            final shift = shiftState.asData?.value;
+            final events = staff != null && shift != null
+                ? ref.watch(staffShiftEventsProvider((staff.id, shift.sessionId))).asData?.value
+                : null;
+            final now = shift?.status == StaffShiftStatus.onDuty
+                ? ref.watch(staffShiftClockProvider).asData?.value ?? DateTime.now()
+                : DateTime.now();
+            final worked = events == null || events.isEmpty ? null : activeShiftTime(events, now);
+            final tasksAvailable = !taskState.isLoading && taskState.loadErrorMessage == null;
 
-                  // Estado de turno con botón interactivo de cambio
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: Row(
+            Future<void> changeShift() async {
+              if (staff == null || saving) return;
+              final repository = ref.read(staffOperationsRepositoryProvider);
+              final currentStatus = shift?.status ?? StaffShiftStatus.offDuty;
+              final next = await StaffShiftStatusModal.show(
+                context: context,
+                currentStatus: currentStatus,
+              );
+              if (!context.mounted || next == null || next == currentStatus) return;
+              setSheetState(() => saving = true);
+              try {
+                await repository.changeShift(staff.id, next);
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('No se pudo guardar el estado del turno.')),
+                  );
+                }
+              } finally {
+                if (context.mounted) setSheetState(() => saving = false);
+              }
+            }
+
+            return SafeArea(
+              top: false,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
                       children: [
-                        Container(
-                          width: 12,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: _getShiftStatusColor(),
-                            shape: BoxShape.circle,
+                        const Expanded(
+                          child: Text(
+                            'Mis estadísticas',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded),
+                          tooltip: 'Cerrar estadísticas',
+                          onPressed: () => Navigator.pop(sheetContext),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Card(
+                      child: ListTile(
+                        leading: const Icon(Icons.schedule),
+                        title: const Text('Estado de Turno'),
+                        subtitle: Text(switch (shiftState) {
+                          AsyncData() => shift?.status.label ?? 'Sin turno registrado',
+                          AsyncError() => 'Estado no disponible',
+                          _ => 'Cargando turno…',
+                        }),
+                        trailing: OutlinedButton(
+                          onPressed: staff == null || saving || shiftState is! AsyncData
+                              ? null
+                              : changeShift,
+                          child: Text(saving ? 'Guardando…' : 'Cambiar'),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Estado de Turno',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFF64748B),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              Text(
-                                _shiftStatus,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w800,
-                                  color: _getShiftStatusColor(),
-                                ),
-                              ),
-                            ],
+                          child: _StatMiniCard(
+                            title: 'Resueltas Hoy',
+                            value: tasksAvailable ? '${taskState.resolvedOn(now)}' : '—',
+                            color: const Color(0xFF047857),
+                            icon: Icons.check_circle_outline_rounded,
                           ),
                         ),
-                        OutlinedButton(
-                          onPressed: () {
-                            StaffShiftStatusModal.show(
-                              context: context,
-                              currentStatus: _shiftStatus,
-                              onStatusSelected: (status) {
-                                setState(() => _shiftStatus = status);
-                                setModalState(() {});
-                              },
-                            );
-                          },
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF0A5835),
-                            side: const BorderSide(color: Color(0xFF0A5835), width: 1.2),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          ),
-                          child: const Text(
-                            'Cambiar',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _StatMiniCard(
+                            title: 'Por Atender',
+                            value: tasksAvailable ? '${taskState.pendingCount}' : '—',
+                            color: const Color(0xFFB45309),
+                            icon: Icons.pending_actions_rounded,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Métricas clave de rendimiento
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _StatMiniCard(
-                          title: 'Resueltas Hoy',
-                          value: '$totalResolved',
-                          color: const Color(0xFF047857),
-                          icon: Icons.check_circle_outline_rounded,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _StatMiniCard(
-                          title: 'Por Atender',
-                          value: '$totalPending',
-                          color: const Color(0xFFF59E0B),
-                          icon: Icons.pending_actions_rounded,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  const Row(
-                    children: [
-                      Expanded(
-                        child: _StatMiniCard(
-                          title: 'Tasa a Tiempo',
-                          value: '98%',
-                          color: Color(0xFF2563EB),
-                          icon: Icons.speed_rounded,
-                        ),
-                      ),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: _StatMiniCard(
-                          title: 'Horas en Turno',
-                          value: '7.5 h',
-                          color: Color(0xFF7C3AED),
-                          icon: Icons.timer_outlined,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Asignación de Cuadrilla y Unidad
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    const SizedBox(height: 8),
+                    _StatMiniCard(
+                      title: 'Tiempo efectivo del turno',
+                      value: worked == null
+                          ? '—'
+                          : '${worked.inHours} h ${worked.inMinutes % 60} min',
+                      color: const Color(0xFF2563EB),
+                      icon: Icons.timer_outlined,
                     ),
-                    child: const Column(
-                      children: [
-                        _SmallInfoRow(
-                          icon: Icons.groups_rounded,
-                          iconColor: Color(0xFF047857),
-                          title: 'Personal Asignado',
-                          subtitle: 'Cuadrilla Zona Norte (Turno Diurno)',
-                        ),
-                        Divider(height: 16, color: Color(0xFFE2E8F0)),
-                        _SmallInfoRow(
-                          icon: Icons.local_shipping_rounded,
-                          iconColor: Color(0xFF2563EB),
-                          title: 'Unidad Vehicular',
-                          subtitle: 'Camión Recolector #04 • Placa ECR-882',
-                        ),
-                        Divider(height: 16, color: Color(0xFFE2E8F0)),
-                        _SmallInfoRow(
-                          icon: Icons.map_rounded,
-                          iconColor: Color(0xFFD97706),
-                          title: 'Zona de Cobertura',
-                          subtitle: 'Sector 1 y 2 • Cajamarca',
-                        ),
-                      ],
+                    const SizedBox(height: 16),
+                    _SmallInfoRow(
+                      icon: Icons.groups_rounded,
+                      iconColor: const Color(0xFF047857),
+                      title: 'Cuadrilla',
+                      subtitle: staffCrewName(crewState),
                     ),
-                  ),
-                ],
+                    const Divider(height: 16),
+                    _SmallInfoRow(
+                      icon: Icons.local_shipping_rounded,
+                      iconColor: const Color(0xFF2563EB),
+                      title: 'Unidad vehicular',
+                      subtitle: crew?.vehicleLabel ?? 'Vehículo sin registrar',
+                    ),
+                    const Divider(height: 16),
+                    _SmallInfoRow(
+                      icon: Icons.map_rounded,
+                      iconColor: const Color(0xFFB45309),
+                      title: 'Zona de cobertura',
+                      subtitle: crew?.zone ?? 'Zona sin registrar',
+                    ),
+                  ],
+                ),
               ),
             );
           },
-        );
-      },
+        ),
+      ),
     );
   }
 
   /// Modal con historial resumido de tareas recientes
   void _showTaskHistoryModal(BuildContext context) {
-    final staffState = ref.read(staffHomeViewModelProvider);
-    final resolvedTasks = staffState.tasks.where((t) => t.isResolved).toList();
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -656,112 +580,130 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE2E8F0),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Historial de tareas',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF0F172A),
+      builder: (ctx) => Consumer(
+        builder: (context, ref, _) {
+          final staffState = ref.watch(staffHomeViewModelProvider);
+          final resolvedTasks = staffState.tasks.where((task) => task.isResolved).toList()
+            ..sort((a, b) {
+              final first = a.resolvedAt;
+              final second = b.resolvedAt;
+              if (first != null && second != null) return second.compareTo(first);
+              if (first == null && second == null) return b.assignedAt.compareTo(a.assignedAt);
+              return first == null ? 1 : -1;
+            });
+          final recent = resolvedTasks.take(3).toList();
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE2E8F0),
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Registro de las paradas y recolecciones completadas recientemente.',
-                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-              ),
-              const SizedBox(height: 16),
-              if (resolvedTasks.isEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: const Column(
-                    children: [
-                      Icon(Icons.history_rounded, size: 36, color: Color(0xFF94A3B8)),
-                      SizedBox(height: 8),
-                      Text(
-                        'Aún no hay tareas completadas registradas',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF334155),
-                        ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Historial de tareas',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
                       ),
-                    ],
-                  ),
-                )
-              else
-                for (int i = 0; i < resolvedTasks.take(3).length; i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
-                  _TaskHistoryItem(
-                    folio: resolvedTasks[i].reportNumber,
-                    category: resolvedTasks[i].categoryName,
-                    address: resolvedTasks[i].address,
-                    time: 'Resuelta',
-                    isCompleted: true,
-                  ),
-                ],
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    context.go(RouteNames.staffTasks);
-                  },
-                  icon: const Icon(Icons.assignment_rounded, size: 20),
-                  label: const Text(
-                    'Ver todas las tareas en el panel',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0A5835),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Registro de las paradas y recolecciones completadas recientemente.',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 16),
+                if (staffState.isLoading)
+                  const LinearProgressIndicator()
+                else if (staffState.loadErrorMessage case final error?)
+                  Text(error)
+                else if (recent.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: const Column(
+                      children: [
+                        Icon(Icons.history_rounded, size: 36, color: Color(0xFF94A3B8)),
+                        SizedBox(height: 8),
+                        Text(
+                          'Aún no hay tareas completadas registradas',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF334155),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  for (int i = 0; i < recent.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 8),
+                    _TaskHistoryItem(
+                      folio: recent[i].reportNumber,
+                      category: recent[i].categoryName,
+                      address: recent[i].address,
+                      time: recent[i].resolvedAt == null
+                          ? 'Sin fecha de cierre registrada'
+                          : DateFormat('dd/MM/yyyy HH:mm').format(recent[i].resolvedAt!.toLocal()),
+                      isCompleted: true,
+                    ),
+                  ],
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      context.go(RouteNames.staffTasks);
+                    },
+                    icon: const Icon(Icons.assignment_rounded, size: 20),
+                    label: const Text(
+                      'Ver todas las tareas en el panel',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0A5835),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 

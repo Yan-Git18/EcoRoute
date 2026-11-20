@@ -124,6 +124,7 @@ class UserEntity {
     String? phoneNumber,
     String? photoUrl,
     String? teamId,
+    bool clearTeamId = false,
     bool? isActive,
     DateTime? createdAt,
   }) {
@@ -134,7 +135,7 @@ class UserEntity {
       role: role ?? this.role,
       phoneNumber: phoneNumber ?? this.phoneNumber,
       photoUrl: photoUrl ?? this.photoUrl,
-      teamId: teamId ?? this.teamId,
+      teamId: clearTeamId ? null : (teamId ?? this.teamId),
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
     );

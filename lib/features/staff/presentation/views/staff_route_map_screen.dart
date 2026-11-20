@@ -15,7 +15,10 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/map/map_widgets.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../domain/entities/staff_task_entity.dart';
+import '../../domain/usecases/order_staff_stops.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
+import '../viewmodels/staff_navigation_link.dart';
+import '../widgets/staff_tasks_load_notice.dart';
 import '../widgets/staff_bottom_nav_bar.dart';
 import '../widgets/staff_complete_task_sheet.dart';
 import '../widgets/staff_start_task_confirm_dialog.dart';
@@ -48,6 +51,7 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
   double _userLat = AppGeoConstants.cajamarcaCenterLat;
   double _userLng = AppGeoConstants.cajamarcaCenterLng;
   bool _isLocating = false;
+  bool _hasUserPosition = false;
   StaffTaskEntity? _selectedTask;
   bool _isActiveCardDismissed = false;
 
@@ -71,6 +75,7 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
       setState(() {
         _userLat = staffState.workerLatitude!;
         _userLng = staffState.workerLongitude!;
+        _hasUserPosition = true;
         if (staffState.activeNavigationTask != null) {
           _selectedTask = staffState.activeNavigationTask;
         }
@@ -122,7 +127,8 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
       final result = await locService.getCurrentPosition();
       if (mounted) {
         setState(() {
-          if (result.latitude != 0.0 && result.longitude != 0.0) {
+          _hasUserPosition = result.errorMessage == null && !result.isPermissionDenied;
+          if (_hasUserPosition) {
             _userLat = result.latitude;
             _userLng = result.longitude;
           } else {
@@ -134,12 +140,17 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
 
         final activeTask = ref.read(staffHomeViewModelProvider).activeNavigationTask;
         if (activeTask != null) {
-          await ref.read(staffHomeViewModelProvider.notifier).focusTaskRouteOnMap(activeTask);
+          await ref
+              .read(staffHomeViewModelProvider.notifier)
+              .focusTaskRouteOnMap(activeTask, position: result);
         }
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _isLocating = false);
+        setState(() {
+          _isLocating = false;
+          _hasUserPosition = false;
+        });
       }
     }
   }
@@ -173,6 +184,19 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
     if (distanceMeters < 2500) return 14.5;
     if (distanceMeters < 6000) return 13.5;
     return 12.5;
+  }
+
+  Future<void> _openGoogleMaps(StaffTaskEntity task) async {
+    final launch = ref.read(staffNavigationLauncherProvider);
+    try {
+      if (await launch(staffGoogleMapsLink(task.latitude, task.longitude))) return;
+    } catch (_) {
+      // El dispositivo puede no tener una aplicación que abra el enlace.
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No se pudo abrir Google Maps.')),
+    );
   }
 
   void _recenterMap() {
@@ -278,7 +302,14 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
 
     final viewModel = ref.read(staffHomeViewModelProvider.notifier);
     final success = await viewModel.startTaskWithNavigation(task);
-    if (!mounted || !success) return;
+    if (!mounted) return;
+    if (!success) {
+      final message = ref.read(staffHomeViewModelProvider).errorMessage;
+      if (message != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      }
+      return;
+    }
 
     final updatedState = ref.read(staffHomeViewModelProvider);
     setState(() {
@@ -308,18 +339,22 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
     final staffState = ref.watch(staffHomeViewModelProvider);
     final viewModel = ref.read(staffHomeViewModelProvider.notifier);
 
-    final tasks = staffState.tasks;
-    final activeTasks = tasks.where((t) => !t.isResolved).toList();
+    final hasUserPosition = staffState.workerLatitude != null || _hasUserPosition;
+    final workerLat = staffState.workerLatitude ?? _userLat;
+    final workerLng = staffState.workerLongitude ?? _userLng;
+    final activeTasks = orderStaffStops(
+      staffState.tasks,
+      origin: hasUserPosition ? LatLng(workerLat, workerLng) : null,
+    );
 
     // Solo se considera tarea en navegación activa aquella que ya está iniciada ("En proceso")
     final activeNavTask = staffState.currentInProgressTask;
     final activeRoute = activeNavTask != null ? staffState.activeRoute : null;
     final effectiveSelectedTask = activeNavTask != null
         ? (_isActiveCardDismissed ? null : activeNavTask)
-        : _selectedTask;
+        : activeTasks.where((task) => task.id == _selectedTask?.id).firstOrNull;
 
-    final workerLat = staffState.workerLatitude ?? _userLat;
-    final workerLng = staffState.workerLongitude ?? _userLng;
+    final canEstimate = hasUserPosition && effectiveSelectedTask?.hasReportLocation == true;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -397,6 +432,7 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
                     activeRoute: activeRoute,
                     workerLat: workerLat,
                     workerLng: workerLng,
+                    hasUserPosition: hasUserPosition,
                   ),
           ),
 
@@ -407,21 +443,31 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
             right: 16,
             child: SafeArea(
               bottom: false,
-              child: activeNavTask != null
+              child: staffState.isLoading || staffState.loadErrorMessage != null
+                  ? StaffTasksLoadNotice(
+                      isLoading: staffState.isLoading,
+                      errorMessage: staffState.loadErrorMessage,
+                      onRetry: viewModel.refresh,
+                    )
+                  : activeNavTask != null
                   ? _ActiveRouteHeaderBanner(
                       task: activeNavTask,
-                      distanceText: activeRoute?.formattedDistance ??
-                          _formatDistanceTo(activeNavTask.latitude, activeNavTask.longitude),
-                      durationText: activeRoute?.formattedDuration ??
-                          _formatEstimatedTimeTo(activeNavTask.latitude, activeNavTask.longitude),
+                      route: activeRoute,
+                      hasUserPosition: hasUserPosition,
+                      onOpenMaps: activeNavTask.hasReportLocation
+                          ? () => _openGoogleMaps(activeNavTask)
+                          : null,
                     )
-                  : _CircuitHeaderBanner(activeTasksCount: activeTasks.length),
+                  : _CircuitHeaderBanner(
+                      activeTasksCount: activeTasks.length,
+                      hasUserPosition: hasUserPosition,
+                    ),
             ),
           ),
 
           // 3. Controles de Zoom vertical flotantes en la esquina superior derecha
           Positioned(
-            top: activeNavTask != null ? 116 : 86,
+            top: activeNavTask != null ? 136 : 86,
             right: 16,
             child: Column(
               children: [
@@ -468,17 +514,17 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
                   formattedDistance: (activeNavTask?.id == effectiveSelectedTask.id &&
                           activeRoute != null)
                       ? activeRoute.formattedDistance
-                      : _formatDistanceTo(
+                          : canEstimate ? 'Aprox. ${_formatDistanceTo(
                           effectiveSelectedTask.latitude,
                           effectiveSelectedTask.longitude,
-                        ),
+                            )}' : '—',
                   formattedDuration: (activeNavTask?.id == effectiveSelectedTask.id &&
                           activeRoute != null)
                       ? activeRoute.formattedDuration
-                      : _formatEstimatedTimeTo(
+                          : canEstimate ? _formatEstimatedTimeTo(
                           effectiveSelectedTask.latitude,
                           effectiveSelectedTask.longitude,
-                        ),
+                            ) : '—',
                   onClose: () {
                     setState(() {
                       if (activeNavTask != null) {
@@ -530,6 +576,7 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
     required RouteInfoResult? activeRoute,
     required double workerLat,
     required double workerLng,
+    required bool hasUserPosition,
   }) {
     final validUserPos = (workerLat != 0.0 && workerLng != 0.0)
         ? LatLng(workerLat, workerLng)
@@ -539,9 +586,7 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
     LatLng initialCenter = validUserPos;
     double initialZoom = AppGeoConstants.defaultZoom;
 
-    if (activeNavTask != null &&
-        activeNavTask.latitude != 0.0 &&
-        activeNavTask.longitude != 0.0) {
+    if (activeNavTask != null && activeNavTask.hasReportLocation) {
       initialCenter = LatLng(
         (validUserPos.latitude + activeNavTask.latitude) / 2,
         (validUserPos.longitude + activeNavTask.longitude) / 2,
@@ -556,20 +601,7 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
       initialZoom = _calculateRouteZoom(dist);
     }
 
-    // Construir puntos de la ruta vial por calles (evitando líneas rectas entre todos los pines)
-    final List<LatLng> routePoints;
-    if (activeRoute != null && activeRoute.points.length >= 2) {
-      routePoints = activeRoute.points;
-    } else if (activeNavTask != null &&
-        activeNavTask.latitude != 0.0 &&
-        activeNavTask.longitude != 0.0) {
-      routePoints = [
-        validUserPos,
-        LatLng(activeNavTask.latitude, activeNavTask.longitude),
-      ];
-    } else {
-      routePoints = const <LatLng>[];
-    }
+    final routePoints = activeRoute?.points ?? const <LatLng>[];
 
     return FlutterMap(
       mapController: _mapController,
@@ -599,6 +631,9 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
             polylines: [
               Polyline(
                 points: routePoints,
+                pattern: activeRoute?.isApproximate == true
+                    ? const StrokePattern.dotted()
+                    : const StrokePattern.solid(),
                 color: activeNavTask != null
                     ? const Color(0xFF2563EB)
                     : const Color(0xFF047857).withAlpha(190),
@@ -613,7 +648,7 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
         MarkerLayer(
           markers: [
             // Marcador GPS de la ubicación actual del trabajador
-            Marker(
+            if (hasUserPosition) Marker(
               point: validUserPos,
               width: 96,
               height: 68,
@@ -622,7 +657,7 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
             ),
 
             // Si hay una tarea en navegación activa, destacar el marcador de destino del reporte
-            if (activeNavTask != null)
+            if (activeNavTask != null && activeNavTask.hasReportLocation)
               _buildStopMarker(
                 activeNavTask,
                 stopNumber: 1,
@@ -630,7 +665,8 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
               )
             else
               for (int i = 0; i < activeTasks.length; i++)
-                _buildStopMarker(activeTasks[i], stopNumber: i + 1),
+                if (activeTasks[i].hasReportLocation)
+                  _buildStopMarker(activeTasks[i], stopNumber: i + 1),
           ],
         ),
       ],
@@ -783,10 +819,11 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
               const Icon(Icons.map_rounded, size: 54, color: Color(0xFF047857)),
               const SizedBox(height: 12),
               if (activeNavTask != null) ...[
-                const Text(
-                  'Ruta óptima activa',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+                if (activeRoute != null)
+                  Text(
+                    activeRoute.isApproximate ? 'Ruta aproximada' : 'Ruta por calles',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 Text(
                   'Origen trabajador: (${workerLat.toStringAsFixed(4)}, ${workerLng.toStringAsFixed(4)})',
                 ),
@@ -822,17 +859,20 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
 /// Banner superior cuando el trabajador está navegando hacia una tarea específica.
 class _ActiveRouteHeaderBanner extends StatelessWidget {
   final StaffTaskEntity task;
-  final String distanceText;
-  final String durationText;
+  final RouteInfoResult? route;
+  final bool hasUserPosition;
+  final VoidCallback? onOpenMaps;
 
   const _ActiveRouteHeaderBanner({
     required this.task,
-    required this.distanceText,
-    required this.durationText,
+    required this.route,
+    required this.hasUserPosition,
+    required this.onOpenMaps,
   });
 
   @override
   Widget build(BuildContext context) {
+    final activeRoute = route;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -893,10 +933,25 @@ class _ActiveRouteHeaderBanner extends StatelessWidget {
                   ],
                 ),
               ),
+              if (onOpenMaps != null)
+                IconButton(
+                  onPressed: onOpenMaps,
+                  tooltip: 'Abrir en Google Maps',
+                  icon: const Icon(Icons.open_in_new, color: Color(0xFF1D4ED8)),
+                ),
             ],
           ),
           const SizedBox(height: 8),
-          Wrap(
+          if (activeRoute == null)
+            Text(
+              task.hasReportLocation
+                  ? (hasUserPosition
+                        ? 'Calculando ruta…'
+                        : 'Activa la ubicación para trazar la ruta.')
+                  : 'El reporte no tiene coordenadas válidas.',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+            )
+          else Wrap(
             spacing: 8,
             runSpacing: 6,
             children: [
@@ -913,7 +968,9 @@ class _ActiveRouteHeaderBanner extends StatelessWidget {
                     const Icon(Icons.straighten_rounded, size: 13, color: Color(0xFF047857)),
                     const SizedBox(width: 4),
                     Text(
-                      'Distancia: $distanceText',
+                      activeRoute.isApproximate
+                          ? 'Aprox. ${activeRoute.formattedDistance}'
+                          : 'Distancia: ${activeRoute.formattedDistance}',
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -936,7 +993,7 @@ class _ActiveRouteHeaderBanner extends StatelessWidget {
                     const Icon(Icons.schedule_rounded, size: 13, color: Color(0xFF1D4ED8)),
                     const SizedBox(width: 4),
                     Text(
-                      'Llegada: $durationText',
+                      'Llegada: ${activeRoute.formattedDuration}',
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -957,8 +1014,12 @@ class _ActiveRouteHeaderBanner extends StatelessWidget {
 /// Banner superior cuando se visualiza el circuito general de paradas.
 class _CircuitHeaderBanner extends StatelessWidget {
   final int activeTasksCount;
+  final bool hasUserPosition;
 
-  const _CircuitHeaderBanner({required this.activeTasksCount});
+  const _CircuitHeaderBanner({
+    required this.activeTasksCount,
+    required this.hasUserPosition,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1006,8 +1067,10 @@ class _CircuitHeaderBanner extends StatelessWidget {
                 ),
                 Text(
                   activeTasksCount == 0
-                      ? 'Todas las paradas en Cajamarca han sido atendidas.'
-                      : 'Ruta urbana activa en Cajamarca.',
+                      ? 'Sin paradas por atender.'
+                      : (hasUserPosition
+                            ? 'Orden sugerido por prioridad y cercanía.'
+                            : 'Orden por prioridad. Activa el GPS para ordenar por cercanía.'),
                   style: const TextStyle(
                     fontSize: 11.5,
                     color: Color(0xFF64748B),

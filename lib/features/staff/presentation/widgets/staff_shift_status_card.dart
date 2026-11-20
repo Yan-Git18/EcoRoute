@@ -12,7 +12,7 @@ class StaffShiftStatusCard extends StatelessWidget {
   const StaffShiftStatusCard({
     super.key,
     required this.staffName,
-    this.squadName = 'Cuadrilla Zona Norte',
+    required this.squadName,
     required this.shiftStatus,
     required this.statusColor,
     required this.onTapChangeStatus,

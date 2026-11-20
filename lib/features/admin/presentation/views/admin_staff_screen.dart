@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/domain/entities/user_entity.dart';
+import '../../../staff/domain/entities/staff_operations.dart';
+import '../../../staff/presentation/viewmodels/staff_operations_providers.dart';
 import '../viewmodels/admin_staff_viewmodel.dart';
 
 /// Pantalla de Gestión Segura de Personal Municipal.
@@ -35,79 +37,75 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
     ref.read(adminStaffViewModelProvider.notifier).searchExactEmail(query);
   }
 
-  void _confirmPromote(UserEntity user) {
-    showDialog(
+  Future<void> _selectCrew(UserEntity user) async {
+    final staffState = ref.read(adminStaffViewModelProvider);
+    final crews = [...staffState.crews]..sort((a, b) => a.name.compareTo(b.name));
+    String? selectedCrewId = crews.any((crew) => crew.id == user.teamId)
+        ? user.teamId
+        : null;
+
+    final teamId = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.badge_rounded, color: Color(0xFF0A5835)),
-            SizedBox(width: 8),
-            Text('Promover a Personal', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '¿Confirmas la asignación de este usuario como Personal de Limpieza y Recolección?',
-              style: TextStyle(fontSize: 14, color: Color(0xFF334155)),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(user.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  const SizedBox(height: 2),
-                  Text(user.email, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'El usuario podrá acceder de inmediato a la interfaz de cuadrillas y tareas municipales en su dispositivo.',
-              style: TextStyle(fontSize: 12, color: Color(0xFF047857), fontStyle: FontStyle.italic),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar', style: TextStyle(color: Color(0xFF64748B))),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(dialogContext);
-              final success = await ref
-                  .read(adminStaffViewModelProvider.notifier)
-                  .promoteToStaff(user);
-              if (mounted && success) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('¡${user.name} ahora es Personal Municipal!'),
-                    backgroundColor: const Color(0xFF047857),
-                    behavior: SnackBarBehavior.floating,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          scrollable: true,
+          icon: const Icon(Icons.groups_outlined, color: Color(0xFF0A5835)),
+          title: Text(user.isStaff ? 'Asignar cuadrilla' : 'Asignar a Personal'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(user.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text(user.email),
+              const SizedBox(height: 16),
+              if (crews.isEmpty)
+                const Text('Registra una cuadrilla para asignarla a este trabajador.')
+              else
+                DropdownButtonFormField<String>(
+                  initialValue: selectedCrewId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Cuadrilla',
+                    border: OutlineInputBorder(),
                   ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0A5835),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: const Text('Confirmar Asignación'),
+                  items: [
+                    for (final crew in crews)
+                      DropdownMenuItem(
+                        value: crew.id,
+                        child: Text(crew.name, overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                  onChanged: (value) => setDialogState(() => selectedCrewId = value),
+                ),
+            ],
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: selectedCrewId == null ||
+                      (user.isStaff && selectedCrewId == user.teamId)
+                  ? null
+                  : () => Navigator.pop(dialogContext, selectedCrewId),
+              child: const Text('Guardar'),
+            ),
+          ],
+        ),
       ),
+    );
+    if (!mounted || teamId == null) return;
+    final success = await ref
+        .read(adminStaffViewModelProvider.notifier)
+        .assignToCrew(user, teamId);
+    if (!mounted) return;
+    final message = success
+        ? 'Cuadrilla actualizada para ${user.name}.'
+        : ref.read(adminStaffViewModelProvider).errorMessage;
+    if (message == null) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
   }
 
@@ -164,6 +162,21 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(adminStaffViewModelProvider);
     final viewModel = ref.read(adminStaffViewModelProvider.notifier);
+    final shifts = {
+      for (final staff in state.staffMembers)
+        staff.id: ref.watch(staffShiftProvider(staff.id)),
+    };
+    final onDutyByTeam = <String, int>{};
+    final teamsWithUnknownStatus = <String>{};
+    for (final staff in state.staffMembers) {
+      final teamId = staff.teamId;
+      if (teamId == null) continue;
+      final shift = shifts[staff.id];
+      if (shift is! AsyncData) teamsWithUnknownStatus.add(teamId);
+      if (shift?.asData?.value?.status == StaffShiftStatus.onDuty) {
+        onDutyByTeam.update(teamId, (count) => count + 1, ifAbsent: () => 1);
+      }
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -340,7 +353,10 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
                       if (state.searchedUser == null)
                         _buildNoUserFoundCard(state.searchedEmail ?? '')
                       else
-                        _buildSearchedUserCard(state.searchedUser!),
+                        _buildSearchedUserCard(
+                          state.searchedUser!,
+                          canEdit: !state.isLoading && !state.isUpdating,
+                        ),
                     ],
                   ],
                 ),
@@ -400,7 +416,16 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final staff = state.staffMembers[index];
-                    return _buildStaffItemCard(staff);
+                    final crew = state.crews.where((crew) => crew.id == staff.teamId).firstOrNull;
+                    return _buildStaffItemCard(
+                      staff,
+                      crewName: crew?.name,
+                      shift: shifts[staff.id]!,
+                      onDutyInCrew: crew == null || teamsWithUnknownStatus.contains(crew.id)
+                          ? null
+                          : (onDutyByTeam[crew.id] ?? 0),
+                      canEdit: !state.isUpdating,
+                    );
                   },
                 ),
               const SizedBox(height: 24),
@@ -445,7 +470,7 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
     );
   }
 
-  Widget _buildSearchedUserCard(UserEntity user) {
+  Widget _buildSearchedUserCard(UserEntity user, {required bool canEdit}) {
     final isStaff = user.isStaff;
     final isAdmin = user.isAdmin;
 
@@ -516,7 +541,7 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () => _confirmPromote(user),
+                onPressed: canEdit ? () => _selectCrew(user) : null,
                 icon: const Icon(Icons.badge_rounded, size: 18),
                 label: const Text('Asignar como Personal de Limpieza'),
                 style: ElevatedButton.styleFrom(
@@ -528,20 +553,18 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
               ),
             )
           else if (isStaff)
-            Row(
+            Wrap(
+              spacing: 8,
               children: [
-                const Icon(Icons.check_circle_rounded, color: Color(0xFF059669), size: 18),
-                const SizedBox(width: 6),
-                const Expanded(
-                  child: Text(
-                    'Este usuario ya forma parte del personal municipal.',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF059669), fontWeight: FontWeight.w600),
-                  ),
+                TextButton.icon(
+                  onPressed: canEdit ? () => _selectCrew(user) : null,
+                  icon: const Icon(Icons.groups_outlined),
+                  label: const Text('Asignar cuadrilla'),
                 ),
                 TextButton(
-                  onPressed: () => _confirmDemote(user),
+                  onPressed: canEdit ? () => _confirmDemote(user) : null,
                   style: TextButton.styleFrom(foregroundColor: const Color(0xFFE11D48)),
-                  child: const Text('Revertir', style: TextStyle(fontSize: 12)),
+                  child: const Text('Revertir rol'),
                 ),
               ],
             )
@@ -555,7 +578,13 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
     );
   }
 
-  Widget _buildStaffItemCard(UserEntity staff) {
+  Widget _buildStaffItemCard(
+    UserEntity staff, {
+    required String? crewName,
+    required AsyncValue<StaffShift?> shift,
+    required int? onDutyInCrew,
+    required bool canEdit,
+  }) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -595,6 +624,21 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
                   staff.email,
                   style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  crewName == null
+                      ? 'Sin cuadrilla asignada'
+                      : (onDutyInCrew == null ? crewName : '$crewName • $onDutyInCrew en turno'),
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF0A5835)),
+                ),
+                Text(
+                  switch (shift) {
+                    AsyncData(:final value) => value?.status.label ?? 'Sin turno registrado',
+                    AsyncError() => 'Turno no disponible',
+                    _ => 'Cargando turno…',
+                  },
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                ),
                 if (staff.phoneNumber != null && staff.phoneNumber!.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Row(
@@ -609,9 +653,14 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
             ),
           ),
           IconButton(
+            icon: const Icon(Icons.groups_outlined, color: Color(0xFF0A5835)),
+            tooltip: crewName == null ? 'Asignar cuadrilla' : 'Cambiar cuadrilla',
+            onPressed: canEdit ? () => _selectCrew(staff) : null,
+          ),
+          IconButton(
             icon: const Icon(Icons.remove_circle_outline_rounded, color: Color(0xFFE11D48), size: 20),
             tooltip: 'Revertir a Ciudadano',
-            onPressed: () => _confirmDemote(staff),
+            onPressed: canEdit ? () => _confirmDemote(staff) : null,
           ),
         ],
       ),

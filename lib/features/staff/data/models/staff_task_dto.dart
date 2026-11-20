@@ -21,12 +21,14 @@ class StaffTaskDto {
   final String? reference;
   final double latitude;
   final double longitude;
+  final bool hasReportLocation;
   final List<String> reportImageUrls;
   final String? evidenceImageUrl;
   final List<String> evidenceImageUrls;
   final String? resolutionNotes;
   final DateTime assignedAt;
   final DateTime? updatedAt;
+  final DateTime? resolvedAt;
 
   const StaffTaskDto({
     required this.id,
@@ -43,12 +45,14 @@ class StaffTaskDto {
     this.reference,
     required this.latitude,
     required this.longitude,
+    this.hasReportLocation = true,
     required this.reportImageUrls,
     this.evidenceImageUrl,
     this.evidenceImageUrls = const [],
     this.resolutionNotes,
     required this.assignedAt,
     this.updatedAt,
+    this.resolvedAt,
   });
 
   factory StaffTaskDto.fromFirestore(String id, Map<String, dynamic> map) {
@@ -94,12 +98,18 @@ class StaffTaskDto {
       reference: resolvedReference,
       latitude: hasValidGeo ? rawLat : AppGeoConstants.cajamarcaCenterLat,
       longitude: hasValidGeo ? rawLng : AppGeoConstants.cajamarcaCenterLng,
+      hasReportLocation: hasValidGeo,
       reportImageUrls: ReportMediaFields.photos(map),
       evidenceImageUrl: evidence.firstOrNull,
       evidenceImageUrls: evidence,
       resolutionNotes: map['resolutionNotes'] as String?,
       assignedAt: parseDate(map['createdAt']),
       updatedAt: map['updatedAt'] != null ? parseDate(map['updatedAt']) : null,
+      resolvedAt: switch (map['resolvedAt']) {
+        Timestamp timestamp => timestamp.toDate(),
+        String date => DateTime.tryParse(date),
+        _ => null,
+      },
     );
   }
 
@@ -119,12 +129,14 @@ class StaffTaskDto {
       reference: reference,
       latitude: latitude,
       longitude: longitude,
+      hasReportLocation: hasReportLocation,
       reportImageUrls: reportImageUrls,
       evidenceImageUrl: evidenceImageUrl,
       evidenceImageUrls: evidenceImageUrls,
       resolutionNotes: resolutionNotes,
       assignedAt: assignedAt,
       updatedAt: updatedAt,
+      resolvedAt: resolvedAt,
     );
   }
 }

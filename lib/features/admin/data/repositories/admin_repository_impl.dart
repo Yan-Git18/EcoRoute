@@ -28,11 +28,8 @@ class AdminRepositoryImpl implements AdminRepository {
       final dtos = await _remoteDataSource.getAllReports();
       for (final dto in dtos) {
         final entity = dto.toDomain();
-        // Si no está en caché con estado local más reciente, registrar
-        if (!combined.containsKey(entity.id)) {
-          combined[entity.id] = entity;
-          _adminReportsCache[entity.id] = entity;
-        }
+        combined[entity.id] = entity;
+        _adminReportsCache[entity.id] = entity;
       }
     } catch (_) {}
 
@@ -108,35 +105,15 @@ class AdminRepositoryImpl implements AdminRepository {
     String? instructions,
   }) async {
     try {
-      // 1. Intentar actualizar en Firestore
-      try {
-        await _remoteDataSource.assignReportToCrew(
-          reportId: reportId,
-          crew: crew,
-          adminId: adminId,
-          adminName: adminName,
-          priority: priority,
-          instructions: instructions,
-        );
-      } catch (_) {
-        // En caso de modo offline o sin conexión directa, continuar con actualización local reactiva
-      }
-
-      // 2. Actualizar inmediatamente en la caché
-      final existing = _adminReportsCache[reportId];
-      if (existing == null) {
-        return const FailureResult(ServerFailure(message: 'Reporte no encontrado'));
-      }
-      final updated = existing.copyWith(
-        status: ReportStatus.assigned,
-        priority: priority ?? existing.priority,
-        assignedToTeamId: crew.id,
-        assignedToTeamName: crew.name,
-        assignedStaffName: crew.leadStaffName,
-        assignedVehicle: '${crew.vehicleCode} • ${crew.vehiclePlate}',
-        updatedAt: DateTime.now(),
+      final saved = await _remoteDataSource.assignReportToCrew(
+        reportId: reportId,
+        crew: crew,
+        adminId: adminId,
+        adminName: adminName,
+        priority: priority,
+        instructions: instructions,
       );
-
+      final updated = saved.toDomain();
       _adminReportsCache[reportId] = updated;
       return Success(updated);
     } on ServerException catch (e) {

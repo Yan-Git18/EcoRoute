@@ -30,6 +30,34 @@ service cloud.firestore {
       return request.auth != null && activeRole(request.auth.uid, ['staff', 'personal']);
     }
 
+    function isCitizen() {
+      return request.auth != null && activeRole(request.auth.uid, ['citizen', 'ciudadano']);
+    }
+
+    function isCrewMember(teamId) {
+      let profile = stored(/databases/$(database)/documents/users/$(request.auth.uid));
+      return teamId is string && teamId.size() > 0 && teamId == profile.get('teamId', null);
+    }
+
+    function crewExists(teamId) {
+      return teamId is string && teamId.size() > 0
+        && exists(/databases/$(database)/documents/crews/$(teamId));
+    }
+
+    function canReadReport(report) {
+      return isAdmin() || isCitizen() || (isStaff() && (
+        (report.status in ['assigned', 'asignado', 'in_progress', 'en proceso', 'resolved', 'resuelto']
+          && report.get('assignedStaffId', null) == request.auth.uid)
+        || (report.status in ['assigned', 'asignado']
+          && isCrewMember(report.get('assignedToTeamId', null)))
+      ));
+    }
+
+    function canReadReportChild(reportId) {
+      let report = stored(/databases/$(database)/documents/reports/$(reportId));
+      return report.size() > 0 && canReadReport(report);
+    }
+
     function status(value) {
       return value == 'asignado' ? 'assigned'
         : value == 'en proceso' ? 'in_progress'
@@ -93,18 +121,16 @@ service cloud.firestore {
     }
 
     function canResolveWithEvidence(reportId) {
-      let staff = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
       let before = get(/databases/$(database)/documents/reports/$(reportId)).data;
       let after = getAfter(/databases/$(database)/documents/reports/$(reportId)).data;
-      let assigned = before.get('assignedStaffId', null);
-      return staff.role in ['staff', 'personal'] && staff.get('isActive', true) == true
-        && (assigned == null || assigned == request.auth.uid)
-        && before.status in ['pending', 'assigned', 'in_progress', 'pendiente', 'asignado', 'en proceso']
+      return isStaff() && before.get('assignedStaffId', null) == request.auth.uid
+        && status(before.status) == 'in_progress'
         && after.status == 'resolved' && after.assignedStaffId == request.auth.uid
+        && after.resolvedAt == request.time
         && after.updatedAt == request.time && after.evidenceImagePath == mediaPath(reportId, 'evidence')
         && after.diff(before).affectedKeys().hasOnly([
           'status', 'assignedStaffId', 'assignedStaffName', 'resolutionNotes', 'updatedAt',
-          'evidenceImagePath', 'evidenceImagePaths', 'statusEventId'
+          'evidenceImagePath', 'evidenceImagePaths', 'statusEventId', 'resolvedAt'
         ]);
     }
 
@@ -173,13 +199,17 @@ service cloud.firestore {
           (changed.hasOnly(['priority', 'updatedAt']) && after.priority in ['low', 'medium', 'high'])
           || (status(before.status) in ['pending', 'assigned'] && after.status == 'assigned'
             && after.priority in ['low', 'medium', 'high']
+            && crewExists(after.get('assignedToTeamId', null))
+            && after.get('assignedStaffId', null) == null
             && changed.hasOnly([
               'status', 'assignedToTeamId', 'assignedToTeamName', 'assignedStaffName',
-              'assignedVehicle', 'priority', 'updatedAt', 'statusEventId'
+              'assignedStaffId', 'assignedVehicle', 'priority', 'updatedAt', 'statusEventId'
             ]))
         ))
-        || (isStaff() && after.status == 'in_progress' && status(before.status) in ['pending', 'assigned']
-          && before.get('assignedStaffId', request.auth.uid) in [null, request.auth.uid]
+        || (isStaff() && after.status == 'in_progress' && status(before.status) == 'assigned'
+          && (before.get('assignedStaffId', null) == request.auth.uid
+            || (before.get('assignedStaffId', null) == null
+              && isCrewMember(before.get('assignedToTeamId', null))))
           && after.assignedStaffId == request.auth.uid
           && changed.hasOnly(['status', 'assignedStaffId', 'assignedStaffName', 'updatedAt', 'statusEventId']))
         || (after.status == 'resolved' && canResolveWithEvidence(reportId)
@@ -214,6 +244,30 @@ service cloud.firestore {
         );
     }
 
+    function ownsStaffProfile(uid) {
+      return isStaff() && request.auth.uid == uid;
+    }
+
+    function shiftPath(uid) {
+      return /databases/$(database)/documents/users/$(uid)/operations/shift;
+    }
+
+    function validShiftUpdate(uid) {
+      let before = stored(shiftPath(uid));
+      let next = request.resource.data;
+      let previousStatus = before.get('status', 'off_duty');
+      let event = afterWrite(/databases/$(database)/documents/users/$(uid)/shiftEvents/$(next.eventId));
+      return ownsStaffProfile(uid)
+        && next.keys().hasOnly(['status', 'sessionId', 'eventId', 'changedAt'])
+        && next.eventId.matches('[a-zA-Z0-9]{20}') && next.changedAt == request.time
+        && (previousStatus == 'off_duty'
+          ? next.status == 'on_duty' && next.sessionId == next.eventId
+          : next.status in ['on_duty', 'on_break', 'off_duty'] && next.status != previousStatus
+            && next.sessionId == before.sessionId)
+        && event.status == next.status && event.changedAt == request.time
+        && event.sessionId == next.sessionId;
+    }
+
     match /users/{uid} {
       allow get: if (request.auth != null && request.auth.uid == uid) || isAdmin();
       allow list: if isAdmin();
@@ -228,7 +282,23 @@ service cloud.firestore {
       allow update: if citizenOwnsDocument(uid) && validCitizenProfileUpdate(uid);
       allow update: if isAdmin() && resource.data.role in ['citizen', 'ciudadano', 'staff', 'personal']
         && request.resource.data.role in ['citizen', 'staff']
+        && (request.resource.data.get('teamId', null) == null
+          || (request.resource.data.role == 'staff' && crewExists(request.resource.data.teamId)))
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'teamId', 'updatedAt']);
+
+      match /operations/shift {
+        allow get: if ownsStaffProfile(uid) || isAdmin();
+        allow create, update: if validShiftUpdate(uid);
+      }
+
+      match /shiftEvents/{eventId} {
+        allow read: if ownsStaffProfile(uid);
+        allow create: if ownsStaffProfile(uid)
+          && request.resource.data.keys().hasOnly(['status', 'sessionId', 'changedAt'])
+          && request.resource.data.changedAt == request.time
+          && getAfter(shiftPath(uid)).data.changedAt == request.time
+          && getAfter(shiftPath(uid)).data.eventId == eventId;
+      }
 
       match /media/avatar {
         allow get: if request.auth != null && request.auth.uid == uid;
@@ -257,19 +327,21 @@ service cloud.firestore {
     }
 
     match /reports/{reportId} {
-      allow get, list: if request.auth != null;
+      allow get, list: if canReadReport(resource.data);
       allow create: if validReportPhotoCreation(reportId);
       allow update: if validReportUpdate(reportId);
 
       match /history/{entry} {
-        allow get, list: if request.auth != null;
+        allow get, list: if canReadReportChild(reportId);
         allow create: if request.auth != null && request.resource.data.timestamp == request.time
           && request.resource.data.newStatus == get(/databases/$(database)/documents/reports/$(reportId)).data.status
           && (
             (isAdmin() && request.resource.data.changedByUserRole == 'admin'
               && request.resource.data.changedByUserId == request.auth.uid)
             || (isStaff() && request.resource.data.changedByUserRole == 'staff'
-              && request.resource.data.changedByUserId == request.auth.uid)
+              && request.resource.data.changedByUserId == request.auth.uid
+              && get(/databases/$(database)/documents/reports/$(reportId)).data.get('assignedStaffId', null) == request.auth.uid
+              && request.resource.data.newStatus in ['in_progress', 'resolved'])
             || (request.resource.data.changedByUserRole == 'citizen'
               && citizenOwnsDocument(get(/databases/$(database)/documents/reports/$(reportId)).data.citizenId)
               && request.resource.data.newStatus in ['pending', 'cancelled'])
@@ -277,7 +349,7 @@ service cloud.firestore {
       }
 
       match /media/{imageId} {
-        allow get: if request.auth != null && exists(/databases/$(database)/documents/reports/$(reportId));
+        allow get: if canReadReportChild(reportId);
         allow create: if request.auth != null && validImage(256 * 1024) && (
           (imageId.matches('photo_[0-3]') && citizenOwnsDocument(request.auth.uid)
             && !exists(/databases/$(database)/documents/reports/$(reportId))
@@ -290,7 +362,7 @@ service cloud.firestore {
       }
 
       match /community/summary {
-        allow get: if request.auth != null;
+        allow get: if canReadReportChild(reportId);
         allow create, update: if request.auth != null && validCommunityChange(reportId, request.auth.uid);
       }
 
@@ -302,6 +374,7 @@ service cloud.firestore {
 
     match /crews/{crewId} {
       allow read, write: if isAdmin();
+      allow get: if isStaff() && isCrewMember(crewId);
     }
 
     match /report_categories/{categoryId} {

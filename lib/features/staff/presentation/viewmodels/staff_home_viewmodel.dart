@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/services/media_picker_service.dart';
 import '../../../../core/services/route_navigation_service.dart';
+import '../../../auth/domain/entities/user_entity.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../../../core/enums/report_filter.dart';
@@ -13,6 +14,7 @@ import '../../domain/usecases/complete_task_with_evidence_use_case.dart';
 import '../../domain/usecases/get_assigned_tasks_use_case.dart';
 import '../../domain/usecases/update_task_status_use_case.dart';
 import 'staff_home_state.dart';
+import 'staff_operations_providers.dart';
 
 // --- Inyección de Dependencias con Riverpod ---
 
@@ -52,59 +54,83 @@ final staffHomeViewModelProvider =
 /// Ubicación: `lib/features/staff/presentation/viewmodels/staff_home_viewmodel.dart`
 /// Capa: Presentation (ViewModel)
 class StaffHomeViewModel extends Notifier<StaffHomeState> {
-  late final GetAssignedTasksUseCase _getTasksUseCase;
-  late final UpdateTaskStatusUseCase _updateStatusUseCase;
-  late final CompleteTaskWithEvidenceUseCase _completeTaskUseCase;
-  late final MediaPickerService _mediaPickerService;
-  late final LocationService _locationService;
-  late final RouteNavigationService _routeNavigationService;
+  (String, String?)? _session;
+  int _sessionVersion = 0;
+  int _loadVersion = 0;
 
   @override
   StaffHomeState build() {
-    _getTasksUseCase = ref.watch(getAssignedTasksUseCaseProvider);
-    _updateStatusUseCase = ref.watch(updateTaskStatusUseCaseProvider);
-    _completeTaskUseCase = ref.watch(completeTaskWithEvidenceUseCaseProvider);
-    _mediaPickerService = ref.watch(mediaPickerServiceProvider);
-    _locationService = ref.watch(locationServiceProvider);
-    _routeNavigationService = ref.watch(routeNavigationServiceProvider);
-
-    Future.microtask(() => loadTasks());
-
-    return const StaffHomeState(isLoading: true);
+    final session = ref.watch(
+      authViewModelProvider.select((auth) => _sessionOf(auth.user)),
+    );
+    _session = session;
+    final version = ++_sessionVersion;
+    if (session != null) {
+      ref.listen(staffTeamIdProvider, (previous, next) {
+        if (next case AsyncData(value: final newTeam)) {
+          final oldTeam = switch (previous) {
+            AsyncData(:final value) => value,
+            _ => session.$2,
+          };
+          if (oldTeam != newTeam) loadTasks();
+        }
+      });
+      Future.microtask(() async {
+        if (_isCurrentSession(version)) await loadTasks();
+      });
+    }
+    return StaffHomeState(isLoading: session != null);
   }
+
+  UserEntity? get _staffUser {
+    final user = ref.read(authViewModelProvider).user;
+    return user != null && user.isStaff && user.isActive ? user : null;
+  }
+
+  static (String, String?)? _sessionOf(UserEntity? user) =>
+      user != null && user.isStaff && user.isActive ? (user.id, user.teamId) : null;
+
+  bool _isCurrentSession(int version) =>
+      ref.mounted &&
+      version == _sessionVersion &&
+      _sessionOf(ref.read(authViewModelProvider).user) == _session;
 
   /// Carga la lista de tareas de recolección asignadas al personal
   Future<void> loadTasks() async {
-    state = state.copyWith(isLoading: true, clearError: true);
+    final user = _staffUser;
+    if (user == null) return;
+    state = state.copyWith(isLoading: true, clearLoadError: true);
 
-    final authState = ref.read(authViewModelProvider);
-    final staffId = authState.user?.id ?? 'staff_demo_user';
-
-    final result = await _getTasksUseCase(staffId);
+    final session = _sessionVersion;
+    final load = ++_loadVersion;
+    final result = await ref.read(getAssignedTasksUseCaseProvider)(user.id);
+    if (!_isCurrentSession(session) || load != _loadVersion) return;
 
     result.fold(
       onSuccess: (tasks) {
-        StaffTaskEntity? inProgressTask;
-        for (final t in tasks) {
-          if (t.isInProgress) {
-            inProgressTask = t;
-            break;
-          }
-        }
+        final inProgress = tasks.where((task) => task.isInProgress);
+        final previousTaskId = state.activeNavigationTask?.id;
+        final activeTask = inProgress
+                .where((task) => task.id == previousTaskId)
+                .firstOrNull ??
+            inProgress.firstOrNull;
+        final keepRoute = activeTask != null && activeTask.id == previousTaskId;
         state = state.copyWith(
           tasks: tasks,
           isLoading: false,
-          activeNavigationTask: inProgressTask ?? state.activeNavigationTask,
+          clearActiveNavigation: !keepRoute,
+          activeNavigationTask: activeTask,
         );
-        if (inProgressTask != null && state.activeRoute == null) {
-          Future.microtask(() => focusTaskRouteOnMap(inProgressTask!));
+        if (activeTask != null && state.activeRoute == null) {
+          focusTaskRouteOnMap(activeTask);
         }
       },
       onFailure: (failure) {
         state = state.copyWith(
           tasks: const [],
           isLoading: false,
-          errorMessage: failure.message,
+          clearActiveNavigation: true,
+          loadErrorMessage: failure.message,
         );
       },
     );
@@ -113,6 +139,8 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
   /// Iniciar la atención de una tarea (Cambia estado a 'inProgress').
   /// Respeta la regla de negocio de solo 1 tarea en curso a la vez.
   Future<bool> startTask(String taskId) async {
+    final user = _staffUser;
+    if (user == null) return false;
     final existingActive = state.currentInProgressTask;
     if (existingActive != null && existingActive.id != taskId) {
       state = state.copyWith(
@@ -122,16 +150,15 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
       return false;
     }
 
-    final authState = ref.read(authViewModelProvider);
-    final user = authState.user;
-
-    final result = await _updateStatusUseCase(
+    final session = _sessionVersion;
+    final result = await ref.read(updateTaskStatusUseCaseProvider)(
       taskId: taskId,
-      staffId: user?.id ?? 'staff_demo',
-      staffName: user?.name ?? 'Personal de Campo',
+      staffId: user.id,
+      staffName: user.name,
       newStatus: ReportStatus.inProgress,
       notes: 'Cuadrilla de recolección en ruta hacia la ubicación.',
     );
+    if (!_isCurrentSession(session)) return false;
 
     return result.fold(
       onSuccess: (updatedTask) {
@@ -142,11 +169,13 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
         } else {
           currentTasks.insert(0, updatedTask);
         }
-        state = state.copyWith(tasks: currentTasks);
+        _loadVersion++;
+        state = state.copyWith(tasks: currentTasks, isLoading: false);
         return true;
       },
       onFailure: (failure) {
         state = state.copyWith(errorMessage: failure.message);
+        if (failure.code == 'permission-denied') loadTasks();
         return false;
       },
     );
@@ -162,33 +191,58 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
   Future<bool> startTaskWithNavigation(StaffTaskEntity task) async {
     if (state.isStartingNavigation) return false;
     state = state.copyWith(isStartingNavigation: true, clearError: true);
+    final session = _sessionVersion;
 
     try {
-      if (!await startTask(task.id)) return false;
-      await focusTaskRouteOnMap(
-        state.tasks.firstWhere((updated) => updated.id == task.id, orElse: () => task),
-      );
-      return true;
+      if (!await startTask(task.id) || !_isCurrentSession(session)) return false;
+      final updated = state.tasks.where((item) => item.id == task.id).firstOrNull;
+      if (updated != null) await focusTaskRouteOnMap(updated);
+      return _isCurrentSession(session);
     } finally {
-      state = state.copyWith(isStartingNavigation: false);
+      if (_isCurrentSession(session)) {
+        state = state.copyWith(isStartingNavigation: false);
+      }
     }
   }
 
   /// Calcula y muestra en el mapa la ruta óptima hacia una tarea que ya se encuentra «En proceso».
   /// No traza rutas para tareas pendientes no iniciadas.
-  Future<void> focusTaskRouteOnMap(StaffTaskEntity task) async {
+  Future<void> focusTaskRouteOnMap(
+    StaffTaskEntity task, {
+    LocationDataResult? position,
+  }) async {
     if (!task.isInProgress) return;
+    final session = _sessionVersion;
+    final location = ref.read(locationServiceProvider);
+    final routing = ref.read(routeNavigationServiceProvider);
 
-    final locResult = await _locationService.getCurrentPosition();
+    final locResult = position ?? await location.getCurrentPosition();
+    if (!_isCurrentSession(session)) return;
+    final hasPosition = locResult.errorMessage == null && !locResult.isPermissionDenied;
+    if (!hasPosition || !task.hasReportLocation) {
+      if (!state.tasks.any((item) => item.id == task.id && item.isInProgress)) return;
+      state = state.copyWith(
+        activeNavigationTask: task,
+        clearActiveNavigation: true,
+        clearWorkerPosition: !hasPosition,
+        workerLatitude: hasPosition ? locResult.latitude : null,
+        workerLongitude: hasPosition ? locResult.longitude : null,
+      );
+      return;
+    }
     final workerLat = locResult.latitude;
     final workerLng = locResult.longitude;
 
-    final routeInfo = await _routeNavigationService.calculateOptimalRoute(
+    final routeInfo = await routing.calculateOptimalRoute(
       originLat: workerLat,
       originLng: workerLng,
       destLat: task.latitude,
       destLng: task.longitude,
     );
+    if (!_isCurrentSession(session) ||
+        !state.tasks.any((item) => item.id == task.id && item.isInProgress)) {
+      return;
+    }
 
     state = state.copyWith(
       activeNavigationTask: task,
@@ -205,7 +259,7 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
 
   /// Captura una foto de evidencia de limpieza.
   Future<MediaPickResult> pickEvidenceImageFromCamera() async {
-    return await _mediaPickerService.pickImageFromCamera();
+    return ref.read(mediaPickerServiceProvider).pickImageFromCamera();
   }
 
   /// Completar y resolver una tarea de limpieza con foto(s) y notas
@@ -215,17 +269,19 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
     List<List<int>>? multipleImageBytes,
     required String notes,
   }) async {
-    final authState = ref.read(authViewModelProvider);
-    final user = authState.user;
+    final user = _staffUser;
+    if (user == null) return false;
 
-    final result = await _completeTaskUseCase(
+    final session = _sessionVersion;
+    final result = await ref.read(completeTaskWithEvidenceUseCaseProvider)(
       taskId: taskId,
-      staffId: user?.id ?? 'staff_demo',
-      staffName: user?.name ?? 'Personal de Campo',
+      staffId: user.id,
+      staffName: user.name,
       evidenceImageBytes: imageBytes,
       multipleEvidenceBytes: multipleImageBytes,
       notes: notes,
     );
+    if (!_isCurrentSession(session)) return false;
 
     return result.fold(
       onSuccess: (resolvedTask) {
@@ -237,8 +293,10 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
           currentTasks.insert(0, resolvedTask);
         }
         final isCompletingActiveNav = state.activeNavigationTask?.id == taskId;
+        _loadVersion++;
         state = state.copyWith(
           tasks: currentTasks,
+          isLoading: false,
           clearActiveNavigation: isCompletingActiveNav,
         );
         return true;

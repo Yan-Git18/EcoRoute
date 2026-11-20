@@ -10,6 +10,7 @@ import 'package:ecoroute/features/citizen/domain/entities/report_entity.dart';
 import 'package:ecoroute/features/staff/domain/entities/staff_task_entity.dart';
 import 'package:ecoroute/features/staff/domain/repositories/staff_repository.dart';
 import 'package:ecoroute/features/staff/presentation/viewmodels/staff_home_viewmodel.dart';
+import 'package:ecoroute/features/staff/presentation/viewmodels/staff_navigation_link.dart';
 import 'package:ecoroute/features/staff/presentation/views/staff_route_map_screen.dart';
 
 class MockStaffAuthViewModel extends AuthViewModel {
@@ -239,6 +240,7 @@ void main() {
           ),
       ];
     final mockLoc = MockStaffLocationService();
+    Uri? opened;
 
     await tester.pumpWidget(
       ProviderScope(
@@ -246,6 +248,10 @@ void main() {
           authViewModelProvider.overrideWith(() => MockStaffAuthViewModel(testStaff)),
           staffRepositoryProvider.overrideWithValue(mockRepo),
           locationServiceProvider.overrideWithValue(mockLoc),
+          staffNavigationLauncherProvider.overrideWithValue((uri) async {
+            opened = uri;
+            return true;
+          }),
         ],
         child: const MaterialApp(
           home: StaffRouteMapScreen(),
@@ -258,14 +264,14 @@ void main() {
     // 1. Inicialmente se muestran múltiples paradas pendientes y ninguna ruta activa
     expect(find.text('#0102 • Contenedor lleno'), findsOneWidget);
     expect(find.text('#0103 • Residuos en vía pública'), findsOneWidget);
-    expect(find.text('Ruta óptima activa'), findsNothing);
+    expect(find.text('Ruta aproximada'), findsNothing);
 
     // 2. Tocar una parada pendiente en el mapa abre su tarjeta inferior sin activar ruta aún
     await tester.tap(find.text('#0102 • Contenedor lleno'));
     await tester.pumpAndSettle();
 
     expect(find.text('Iniciar'), findsOneWidget);
-    expect(find.text('Ruta óptima activa'), findsNothing);
+    expect(find.text('Ruta aproximada'), findsNothing);
     expect(find.text('#0103 • Residuos en vía pública'), findsOneWidget);
 
     // 3. Presionar "Iniciar" desde la tarjeta del mapa muestra el diálogo de confirmación
@@ -279,7 +285,7 @@ void main() {
     await tester.tap(find.text('Cancelar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Ruta óptima activa'), findsNothing);
+    expect(find.text('Ruta aproximada'), findsNothing);
     expect(find.text('#0103 • Residuos en vía pública'), findsOneWidget);
 
     // 5. Presionar "Iniciar" y confirmar "Sí, iniciar" activa la ruta y limpia las demás paradas
@@ -289,9 +295,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Ruta hacia #0102'), findsOneWidget);
-    expect(find.text('Ruta óptima activa'), findsOneWidget);
+    expect(find.text('Ruta aproximada'), findsOneWidget);
     expect(find.text('#0103 • Residuos en vía pública'), findsNothing);
     expect(find.text('Completar con evidencia'), findsOneWidget);
+    await tester.tap(find.byTooltip('Abrir en Google Maps'));
+    await tester.pumpAndSettle();
+    expect(opened?.host, 'www.google.com');
+    expect(opened?.queryParameters['destination'], '-7.1638,-78.5002');
   });
 }
 

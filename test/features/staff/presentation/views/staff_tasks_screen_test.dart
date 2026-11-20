@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ecoroute/core/errors/failures.dart';
 import 'package:ecoroute/core/services/location_service.dart';
 import 'package:ecoroute/core/utils/result.dart';
 import 'package:ecoroute/features/auth/domain/entities/user_entity.dart';
@@ -47,14 +50,21 @@ class MockStaffAuthViewModel extends AuthViewModel {
       isInitialized: true,
     );
   }
+
+  void changeUser(UserEntity user) {
+    state = state.copyWith(user: user);
+  }
 }
 
 class MockStaffRepository implements StaffRepository {
   List<StaffTaskEntity> tasks = [];
+  Future<Result<List<StaffTaskEntity>>> Function(String)? loadTasks;
   int updateTaskStatusCalls = 0;
 
   @override
   Future<Result<List<StaffTaskEntity>>> getAssignedTasks(String staffId) async {
+    final load = loadTasks;
+    if (load != null) return load(staffId);
     return Success(tasks);
   }
 
@@ -146,6 +156,41 @@ final sampleTasks = [
 ];
 
 void main() {
+  testWidgets('Ignora una carga de otra sesión y permite reintentar un fallo', (
+    tester,
+  ) async {
+    final oldTasks = Completer<Result<List<StaffTaskEntity>>>();
+    final newUser = testStaff.copyWith(id: 'staff-2');
+    final auth = MockStaffAuthViewModel(testStaff);
+    final repository = MockStaffRepository()
+      ..loadTasks = (staffId) async => staffId == testStaff.id
+          ? oldTasks.future
+          : const FailureResult(ServerFailure(message: 'Falló la carga'));
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        authViewModelProvider.overrideWith(() => auth),
+        staffRepositoryProvider.overrideWithValue(repository),
+      ],
+      child: const MaterialApp(home: StaffTasksScreen()),
+    ));
+    await tester.pump();
+    auth.changeUser(newUser);
+    await tester.pumpAndSettle();
+    expect(find.text('Falló la carga'), findsOneWidget);
+
+    oldTasks.complete(Success([sampleTasks.first]));
+    repository.loadTasks = (_) async => Success([sampleTasks.last]);
+    await tester.pumpAndSettle();
+    expect(find.text(sampleTasks.first.reportNumber), findsNothing);
+    expect(find.text('Falló la carga'), findsOneWidget);
+
+    await tester.tap(find.text('Reintentar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Falló la carga'), findsNothing);
+    expect(find.text(sampleTasks.last.reportNumber), findsOneWidget);
+  });
+
   testWidgets('Renderiza StaffTasksScreen con buscador, chips de filtro y lista de tareas',
       (tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
@@ -340,9 +385,9 @@ void main() {
 
     // Debe haberse redirigido a StaffRouteMapScreen mostrando solo la ruta hacia #0102
     expect(find.text('Ruta hacia #0102'), findsOneWidget);
-    expect(find.text('Ruta óptima activa'), findsOneWidget);
+    expect(find.text('Ruta aproximada'), findsOneWidget);
     expect(find.textContaining('En ruta a #0102'), findsOneWidget);
-    expect(find.textContaining('Distancia:'), findsWidgets);
+    expect(find.textContaining('Aprox.'), findsWidgets);
     expect(find.textContaining('Llegada'), findsWidgets);
 
     // 6. Volver a la lista de tareas e intentar iniciar la segunda tarea (#0103)
