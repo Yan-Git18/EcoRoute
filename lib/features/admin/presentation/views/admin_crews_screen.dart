@@ -358,7 +358,10 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
                                 } else {
                                   messenger.showSnackBar(
                                     SnackBar(
-                                      content: Text(adminReportsState.errorMessage ?? 'Error al eliminar cuadrilla.'),
+                                      content: Text(
+                                        ref.read(adminReportsViewModelProvider).errorMessage ??
+                                            'Error al eliminar cuadrilla.',
+                                      ),
                                       backgroundColor: const Color(0xFFDC2626),
                                       behavior: SnackBarBehavior.floating,
                                     ),

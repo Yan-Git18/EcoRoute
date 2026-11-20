@@ -32,29 +32,21 @@ class FirebaseCategoryRemoteDataSourceImpl implements CategoryRemoteDataSource {
       final snapshot = await _firestore
           .collection('report_categories')
           .where('isActive', isEqualTo: true)
-          .orderBy('order')
           .get();
 
       if (snapshot.docs.isEmpty) {
-        // Semillero automático de categorías estándar en Firestore si la colección está vacía
-        final defaultDtos = ReportCategoryEntity.defaultCategories
+        return ReportCategoryEntity.defaultCategories
             .map(ReportCategoryDto.fromEntity)
             .toList();
-
-        for (final cat in defaultDtos) {
-          try {
-            await _firestore
-                .collection('report_categories')
-                .doc(cat.id)
-                .set(cat.toMap());
-          } catch (_) {}
-        }
-        return defaultDtos;
       }
 
       return snapshot.docs
           .map((doc) => ReportCategoryDto.fromFirestore(doc.id, doc.data()))
-          .toList();
+          .toList()
+        ..sort((a, b) {
+          final byOrder = a.order.compareTo(b.order);
+          return byOrder == 0 ? a.id.compareTo(b.id) : byOrder;
+        });
     } catch (_) {
       return ReportCategoryEntity.defaultCategories
           .map(ReportCategoryDto.fromEntity)

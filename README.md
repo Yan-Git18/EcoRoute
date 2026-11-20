@@ -24,19 +24,31 @@ samples, guidance on mobile development, and a full API reference.
 
 ### Firebase
 
-Las [reglas de Firestore](firebase/citizen.firestore.rules) limitan la edición de roles, reportes, conteos y avisos a las operaciones permitidas en cada flujo. Para publicar las reglas usa `firebase deploy --only firestore:rules --project <id-del-proyecto>`. Publica esta versión de las reglas antes de habilitar el cierre de tareas con más de una foto de evidencia.
+Las [reglas de Firestore](firebase/citizen.firestore.rules) limitan la edición de roles, reportes, conteos y avisos a las operaciones permitidas en cada flujo. Coordina su publicación con la migración y la actualización de los clientes.
 
 Para ejecutar el análisis y las pruebas de Flutter usa `flutter analyze` y `flutter test`. Para probar las transacciones y los permisos nuevos localmente ejecuta lo siguiente desde la raíz.
 
 ```sh
-firebase emulators:exec --config firebase.emulator.json --only firestore,auth --project demo-ecoroute "node --test firebase/tests/*.test.mjs"
+firebase emulators:exec --config firebase.emulator.json --only firestore,auth --project demo-ecoroute "node firebase/tests/firestore.test.mjs"
+node firebase/tests/push-worker.test.mjs
 ```
+
+### Migración del mapa comunitario y el despacho
+
+`reports/{id}` guarda el contacto y el historial privado. El mapa consulta `communityReports/{id}`, que conserva la ubicación, el estado y las fotos compartidas. El historial de cambios queda disponible para el autor y el personal autorizado.
+
+Para actualizar una base con reportes existentes, prepara las nuevas versiones de Android y web y coordina una ventana de mantenimiento.
+
+1. Crea un respaldo de Firestore. Configura `ECOROUTE_MIGRATION_ACCESS_TOKEN` con un token OAuth temporal de una cuenta con permisos para leer y escribir documentos. Ejecuta `node firebase/migrate-report-operations.mjs --project <id-del-proyecto>` para revisar cuántos reportes y cuadrillas se migrarán.
+2. Publica las reglas con `firebase deploy --only firestore:rules --project <id-del-proyecto>`. Durante la ventana, mantén pausados los despachos y las actualizaciones de reportes en los clientes. Las versiones anteriores son incompatibles con las nuevas reglas de escritura.
+3. Ejecuta `node firebase/migrate-report-operations.mjs --project <id-del-proyecto> --apply`. El script crea las copias comunitarias, reconstruye los conteos de cuadrillas y registra las tareas que ya están en curso. También normaliza las referencias antiguas de fotos y retira los vínculos operativos a cuadrillas que ya no existen. La migración se puede repetir mientras las escrituras de los clientes sigan pausadas.
+4. Revisa los IDs de `unattendedActiveReports` que devuelve el script. Son reportes en curso sin un trabajador activo que pueda cerrarlos. Publica las versiones actualizadas para iniciar la prueba manual.
 
 ### Despacho a personal de limpieza
 
 En **Admin → Gestión de Personal**, selecciona una cuadrilla al promover una cuenta o usa el botón de cuadrilla para cambiar la asignación de un trabajador existente. En **Reportes**, despacha el reporte a una cuadrilla. Un miembro puede iniciar la tarea disponible y queda como responsable del cierre con evidencia, incluso si después cambia de cuadrilla. El personal sin cuadrilla puede consultar sus tareas personales.
 
-Coordina la publicación de las reglas con la actualización de la app de Staff. Las reglas nuevas requieren consultas por asignación y una fecha de cierre generada por Firestore. Revisa desde Admin cualquier reporte antiguo que figure asignado sin cuadrilla ni responsable y vuelve a despacharlo a la cuadrilla correspondiente.
+Firestore permite iniciar una sola tarea por trabajador. El cierre libera la tarea activa y guarda la evidencia, el historial y el aviso que corresponda en la misma operación. Para dar de baja una cuadrilla, primero reasigna sus reportes abiertos y su personal. Revisa desde Admin cualquier reporte antiguo que figure asignado sin cuadrilla ni responsable y vuelve a despacharlo a la cuadrilla correspondiente.
 
 Inicio y Perfil muestran la zona y el vehículo de la cuadrilla registrada. En **Mi perfil → Mis estadísticas**, el trabajador inicia, pausa, reanuda o termina su turno. Admin ve el estado de cada persona y cuántos miembros tienen un turno activo por cuadrilla. La disponibilidad de la unidad se sigue gestionando desde Admin.
 

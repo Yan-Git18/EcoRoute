@@ -97,7 +97,7 @@ class MockWizardReportRepository implements ReportRepository {
   }) async {
     if (failSave) {
       return const FailureResult(
-        ServerFailure(message: 'No se pudieron guardar las fotos.'),
+        ServerFailure(message: 'Permisos insuficientes en Firestore.', code: 'permission-denied'),
       );
     }
     return Success(report);
@@ -210,7 +210,12 @@ void main() {
     await tester.tap(find.text('Enviar reporte'));
     await tester.pumpAndSettle();
 
-    expect(find.text('No se pudieron guardar las fotos.'), findsOneWidget);
+    expect(
+      find.text('No pudimos enviar tu reporte en este momento. Inténtalo más tarde.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Firestore'), findsNothing);
+    expect(find.text('Adjunta (1 foto)'), findsOneWidget);
     expect(find.text(description), findsOneWidget);
     expect(find.text('Completa la información'), findsOneWidget);
 

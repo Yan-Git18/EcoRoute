@@ -102,7 +102,7 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
           : _firestore.collection('crews').doc();
       final crewWithId = crew.copyWith(id: docRef.id);
       final dto = MunicipalCrewDto.fromDomain(crewWithId);
-      await docRef.set(dto.toMap());
+      await docRef.set({...dto.toMap(), 'openReportCount': 0, 'memberCount': 0});
       return dto;
     } catch (e) {
       throw ServerException(message: 'Error al registrar cuadrilla en Firestore: $e');
@@ -129,7 +129,20 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     if (!_isFirebaseReady && _customFirestore == null) return;
 
     try {
-      await _firestore.collection('crews').doc(crewId).delete();
+      final crew = _firestore.collection('crews').doc(crewId);
+      await _firestore.runTransaction((transaction) async {
+        final data = (await transaction.get(crew)).data();
+        if (data == null) return;
+        if (data['openReportCount'] != 0 || data['memberCount'] != 0) {
+          throw const ServerException(
+            message: 'Reasigna los reportes abiertos y el personal antes de dar de baja la cuadrilla.',
+            code: 'crew-in-use',
+          );
+        }
+        transaction.delete(crew);
+      });
+    } on ServerException {
+      rethrow;
     } catch (e) {
       throw ServerException(message: 'Error al eliminar cuadrilla en Firestore: $e');
     }
@@ -164,24 +177,19 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
         updateMap['priority'] = priority.toDbString();
       }
 
-      final updated = await writeReportStatus(report: docRef, changes: updateMap);
-
-      // Registrar auditoría en historial
-      try {
-        await docRef.collection('history').add({
-          'previousStatus': 'pending',
-          'newStatus': 'assigned',
-          'changedByUserId': adminId,
-          'changedByUserName': adminName,
-          'changedByUserRole': 'admin',
-          'comment': instructions?.isNotEmpty == true
+      final updated = await writeReportStatus(
+        report: docRef,
+        changes: updateMap,
+        audit: ReportAudit(
+          userId: adminId,
+          userName: adminName,
+          role: 'admin',
+          comment: instructions?.isNotEmpty == true
               ? instructions!
               : 'Asignado a ${crew.name} (${crew.vehicleCode}) por el Administrador Municipal.',
-          'timestamp': FieldValue.serverTimestamp(),
-        });
-      } catch (_) {}
-
-      return ReportDto.fromMap(updated.fields, reportId);
+        ),
+      );
+      return ReportDto.fromMap(updated, reportId);
     } catch (e) {
       throw ServerException(message: 'Error al asignar cuadrilla al reporte: $e');
     }
@@ -195,10 +203,10 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     if (!_isFirebaseReady && _customFirestore == null) return;
 
     try {
-      await _firestore.collection('reports').doc(reportId).update({
-        'priority': priority.toDbString(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      await writeReportStatus(
+        report: _firestore.collection('reports').doc(reportId),
+        changes: {'priority': priority.toDbString()},
+      );
     } catch (e) {
       throw ServerException(message: 'Error al actualizar prioridad: $e');
     }
@@ -266,13 +274,29 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      if (teamId != null && teamId.isNotEmpty) {
-        updateData['teamId'] = teamId;
-      } else if (newRole == UserRole.citizen) {
-        updateData['teamId'] = FieldValue.delete();
-      }
-
-      await _firestore.collection('users').doc(userId).update(updateData);
+      final user = _firestore.collection('users').doc(userId);
+      await _firestore.runTransaction((transaction) async {
+        final current = (await transaction.get(user)).data();
+        if (current == null) throw const ServerException(message: 'El usuario no existe.');
+        final storedTeam = current['teamId'];
+        final previousTeam = storedTeam is String && storedTeam.isNotEmpty ? storedTeam : null;
+        final nextTeam = newRole == UserRole.citizen
+            ? null
+            : (teamId?.isNotEmpty == true ? teamId : previousTeam);
+        if (nextTeam != storedTeam) {
+          updateData['teamId'] = nextTeam ?? FieldValue.delete();
+        }
+        if (nextTeam != previousTeam) {
+          for (final (crewId, delta) in [(previousTeam, -1), (nextTeam, 1)]) {
+            if (crewId == null || crewId.isEmpty) continue;
+            transaction.update(_firestore.collection('crews').doc(crewId), {
+              'memberCount': FieldValue.increment(delta),
+              'memberActivity': {'userId': userId, 'updatedAt': FieldValue.serverTimestamp()},
+            });
+          }
+        }
+        transaction.update(user, updateData);
+      });
     } catch (e) {
       throw ServerException(message: 'Error al actualizar rol del usuario: $e');
     }

@@ -139,32 +139,23 @@ class FirebaseStaffRemoteDataSourceImpl implements StaffRemoteDataSource {
         updateData['resolutionNotes'] = notes;
       }
 
-      final result = await writeReportStatus(
+      final fields = await writeReportStatus(
         report: docRef,
         changes: updateData,
+        audit: ReportAudit(
+          userId: staffId,
+          userName: staffName,
+          role: 'staff',
+          comment: notes ?? 'Estado actualizado por el personal de limpieza.',
+        ),
         evidencePhotos: evidencePhotos,
       );
-      final changed = result.changed;
-      final fields = result.fields;
-      final updatedTask = StaffTaskDto.fromFirestore(taskId, {
+      return StaffTaskDto.fromFirestore(taskId, {
         ...fields,
         if (fields['resolvedAt'] is FieldValue) 'resolvedAt': fields['updatedAt'],
       });
-      if (!changed) return updatedTask;
-
-      // Registrar auditoría en la subcolección 'history'
-      try {
-        await docRef.collection('history').add({
-          'newStatus': newStatus.toDbString(),
-          'changedByUserId': staffId,
-          'changedByUserName': staffName,
-          'changedByUserRole': 'staff',
-          'comment': notes ?? 'Estado actualizado por el personal de limpieza.',
-          'timestamp': FieldValue.serverTimestamp(),
-        });
-      } catch (_) {}
-
-      return updatedTask;
+    } on ServerException {
+      rethrow;
     } on FirebaseException catch (e) {
       throw ServerException(
         message: e.code == 'permission-denied'

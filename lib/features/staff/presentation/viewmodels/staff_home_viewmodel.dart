@@ -175,7 +175,9 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
       },
       onFailure: (failure) {
         state = state.copyWith(errorMessage: failure.message);
-        if (failure.code == 'permission-denied') loadTasks();
+        if (failure.code == 'permission-denied' || failure.code == 'active-task-exists') {
+          loadTasks();
+        }
         return false;
       },
     );

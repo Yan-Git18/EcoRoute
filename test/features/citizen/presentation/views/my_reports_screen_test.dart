@@ -22,6 +22,10 @@ class MockAuthViewModel extends AuthViewModel {
       isInitialized: true,
     );
   }
+
+  void switchUser(UserEntity user) {
+    state = state.copyWith(user: user);
+  }
 }
 
 class MockReportRepository implements ReportRepository {
@@ -43,7 +47,7 @@ class MockReportRepository implements ReportRepository {
 
   @override
   Future<Result<List<ReportEntity>>> getMyReports(String citizenId) async {
-    return Success(reports);
+    return Success(reports.where((report) => report.citizenId == citizenId).toList());
   }
 
   @override
@@ -105,6 +109,7 @@ void main() {
   });
 
   testWidgets('Muestra tarjetas de reportes cuando el usuario tiene reportes registrados', (WidgetTester tester) async {
+    final auth = MockAuthViewModel(testCitizen);
     final mockRepo = MockReportRepository();
     mockRepo.reports = [
       ReportEntity(
@@ -146,7 +151,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          authViewModelProvider.overrideWith(() => MockAuthViewModel(testCitizen)),
+          authViewModelProvider.overrideWith(() => auth),
           reportRepositoryProvider.overrideWithValue(mockRepo),
         ],
         child: const MaterialApp(
@@ -170,5 +175,16 @@ void main() {
 
     expect(find.text('#0008'), findsOneWidget);
     expect(find.text('#0012'), findsNothing);
+
+    auth.switchUser(UserEntity(
+      id: 'c-2',
+      name: 'María',
+      email: 'maria@ecoroute.com',
+      role: UserRole.citizen,
+      createdAt: DateTime(2025, 9, 13),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('#0008'), findsNothing);
+    expect(find.text('No tienes reportes aún'), findsOneWidget);
   });
 }

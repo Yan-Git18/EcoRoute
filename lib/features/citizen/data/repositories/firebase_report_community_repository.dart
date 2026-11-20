@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import '../../../../core/errors/failures.dart';
+import '../../../../core/services/community_report_document.dart';
 import '../../../../core/utils/result.dart';
 import '../../domain/entities/report_community.dart';
 import '../../domain/entities/report_entity.dart';
@@ -67,15 +68,13 @@ class FirebaseReportCommunityRepository implements ReportCommunityRepository {
     final summary = report.collection('community').doc('summary');
     try {
       return await FirebaseFirestore.instance.runTransaction<Result<void>>((transaction) async {
-        final current = (await transaction.get(report)).data();
+        final current = (await transaction.get(communityReportRef(report))).data();
         if (current == null) return _invalid('El reporte ya no está disponible.');
         final previous = (await transaction.get(participant)).data();
         final status = ReportStatus.fromString(current['status'] as String? ?? '');
         final supported = previous?['supported'] == true;
-        final isAuthor = current['citizenId'] == uid;
         if (rating == null) {
           if (supported) return const Success<void>(null);
-          if (isAuthor) return _invalid('Ya eres el autor de este reporte.');
           if (status == ReportStatus.resolved || status == ReportStatus.cancelled) {
             return _invalid('El reporte ya no admite apoyos.');
           }
@@ -86,7 +85,6 @@ class FirebaseReportCommunityRepository implements ReportCommunityRepository {
           if (previousRating == rating) return const Success<void>(null);
           if (previousRating != null) return _invalid('Ya calificaste esta limpieza.');
           if (status != ReportStatus.resolved) return _invalid('El reporte sigue en atención.');
-          if (!isAuthor && !supported) return _invalid('Solo pueden calificar el autor y quienes apoyaron.');
           transaction.set(participant, {'rating': rating}, SetOptions(merge: true));
           transaction.set(summary, {
             'ratingCount': FieldValue.increment(1),

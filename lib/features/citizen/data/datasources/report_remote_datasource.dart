@@ -1,8 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 import '../../../../core/errors/exceptions.dart';
+import '../../../../core/services/community_report_document.dart';
 import '../../../../core/services/firestore_media.dart';
+import '../../../../core/services/report_status_transaction.dart';
 import '../models/report_dto.dart';
 
 /// Contrato abstracto para la fuente de datos remota de reportes de residuos en Firestore.
@@ -45,52 +49,44 @@ class FirebaseReportRemoteDataSourceImpl implements ReportRemoteDataSource {
         paths.add(photo.path);
         batch.set(photo, FirestoreMedia.document(photos[i]));
       }
-      final fields = report.toMap();
-      if (paths.isNotEmpty) fields['imagePaths'] = paths;
+      final eventId = const Uuid().v4();
+      final fields = {
+        ...report.toMap(),
+        'imagePaths': paths,
+        'createdAt': FieldValue.serverTimestamp(),
+        'statusEventId': eventId,
+      };
+      final audit = ReportAudit(
+        userId: report.citizenId,
+        userName: report.citizenName,
+        role: 'citizen',
+        comment: 'Reporte registrado por el ciudadano.',
+      );
       batch.set(docRef, fields);
+      batch.set(communityReportRef(docRef), communityReportDocument(fields));
+      batch.set(docRef.collection('history').doc(eventId), audit.event('none', 'pending'));
       await batch.commit();
 
-      // Registrar auditoría inicial en la subcolección 'history'
-      final initialHistoryItem = ReportHistoryItemDto(
-        previousStatus: 'none',
-        newStatus: report.status,
-        changedByUserId: report.citizenId,
-        changedByUserName: report.citizenName,
-        changedByUserRole: 'citizen',
-        comment: 'Reporte registrado por el ciudadano.',
-        timestamp: report.createdAt,
-      );
-
-      try {
-        await docRef.collection('history').add({
-          'previousStatus': initialHistoryItem.previousStatus,
-          'newStatus': initialHistoryItem.newStatus,
-          'changedByUserId': initialHistoryItem.changedByUserId,
-          'changedByUserName': initialHistoryItem.changedByUserName,
-          'changedByUserRole': initialHistoryItem.changedByUserRole,
-          'comment': initialHistoryItem.comment,
-          'timestamp': FieldValue.serverTimestamp(),
-        });
-      } catch (_) {}
-
-      return ReportDto.fromDomain(
-        report.toDomain().copyWith(
-          imageUrls: [...paths.map(FirestoreMedia.location), ...report.imageUrls],
-          history: [initialHistoryItem.toDomain()],
-        ),
+      return ReportDto.fromMap(
+        {...fields, 'createdAt': Timestamp.fromDate(report.createdAt), 'updatedAt': null},
+        report.id,
+        history: [
+          ReportHistoryItemDto.fromMap({
+            ...audit.event('none', 'pending'),
+            'timestamp': Timestamp.fromDate(report.createdAt),
+          }),
+        ],
       );
     } on FirebaseException catch (e) {
-      if (e.code == 'permission-denied') {
-        throw const ServerException(
-          message: 'Permisos insuficientes en Cloud Firestore. Verifique las Reglas de Seguridad para la colección "reports".',
-          code: 'permission-denied',
-        );
+      if (kDebugMode) {
+        debugPrint('Error de Firestore al enviar reporte [${e.code}]: ${e.message}');
       }
       throw ServerException(
-        message: 'Error al registrar el reporte en la base de datos: ${e.message ?? e.code}',
+        message: e.message ?? e.code,
         code: e.code,
       );
     } catch (e) {
+      if (kDebugMode) debugPrint('Error inesperado al enviar reporte: $e');
       throw ServerException(message: 'Error inesperado al guardar el reporte: $e');
     }
   }
@@ -123,25 +119,30 @@ class FirebaseReportRemoteDataSourceImpl implements ReportRemoteDataSource {
 
     try {
       final docRef = _firestore.collection('reports').doc(reportId);
-      final doc = await docRef.get();
-      if (!doc.exists || doc.data() == null) {
-        throw const ServerException(message: 'El reporte solicitado no existe.');
+      DocumentSnapshot<Map<String, dynamic>>? privateReport;
+      try {
+        privateReport = await docRef.get(const GetOptions(source: Source.server));
+      } on FirebaseException catch (error) {
+        if (error.code != 'permission-denied' && error.code != 'unavailable') rethrow;
+      }
+      final privateData = privateReport?.data();
+      if (privateData != null) {
+        final history = await docRef.collection('history')
+            .orderBy('timestamp').get(const GetOptions(source: Source.server));
+        return ReportDto.fromMap(
+          privateData,
+          reportId,
+          history: history.docs.map((doc) => ReportHistoryItemDto.fromMap(doc.data())).toList(),
+        );
       }
 
-      List<ReportHistoryItemDto> historyList = [];
-      try {
-        final historySnapshot = await docRef.collection('history').get();
-        historyList = historySnapshot.docs
-            .map((hDoc) => ReportHistoryItemDto.fromMap(hDoc.data()))
-            .toList();
-        historyList.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-      } catch (_) {}
-
-      return ReportDto.fromMap(
-        doc.data()!,
-        doc.id,
-        history: historyList,
-      );
+      final publicData = (await communityReportRef(docRef).get()).data();
+      if (publicData == null) {
+        throw const ServerException(message: 'El reporte solicitado no existe.');
+      }
+      return ReportDto.fromMap(publicData, reportId);
+    } on ServerException {
+      rethrow;
     } catch (e) {
       throw ServerException(message: 'Error al consultar el reporte: $e');
     }
@@ -152,7 +153,7 @@ class FirebaseReportRemoteDataSourceImpl implements ReportRemoteDataSource {
     if (!_isFirebaseReady && _customFirestore == null) return [];
 
     try {
-      final snapshot = await _firestore.collection('reports').get();
+      final snapshot = await _firestore.collection(communityReportsCollection).get();
       final list = snapshot.docs
           .map((doc) => ReportDto.fromMap(doc.data(), doc.id))
           .toList();
@@ -165,25 +166,22 @@ class FirebaseReportRemoteDataSourceImpl implements ReportRemoteDataSource {
 
   @override
   Future<void> cancelReport({required String reportId, String? reason}) async {
-    if (!_isFirebaseReady && _customFirestore == null) return;
+    final user = _isFirebaseReady ? FirebaseAuth.instance.currentUser : null;
+    if (user == null) throw const ServerException(message: 'Inicia sesión para cancelar el reporte.');
 
     try {
       final docRef = _firestore.collection('reports').doc(reportId);
-      await docRef.update({
-        'status': 'cancelled',
-        'cancellationReason': reason ?? 'Cancelado por el ciudadano',
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      try {
-        await docRef.collection('history').add({
-          'previousStatus': 'pending',
-          'newStatus': 'cancelled',
-          'changedByUserRole': 'citizen',
-          'comment': reason ?? 'Reporte cancelado por el ciudadano.',
-          'timestamp': FieldValue.serverTimestamp(),
-        });
-      } catch (_) {}
+      final comment = reason ?? 'Reporte cancelado por el ciudadano.';
+      await writeReportStatus(
+        report: docRef,
+        changes: {'status': 'cancelled', 'cancellationReason': comment},
+        audit: ReportAudit(
+          userId: user.uid,
+          userName: user.displayName ?? 'Ciudadano',
+          role: 'citizen',
+          comment: comment,
+        ),
+      );
     } catch (e) {
       throw ServerException(message: 'Error al cancelar el reporte: $e');
     }

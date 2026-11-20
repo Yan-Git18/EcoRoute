@@ -33,20 +33,25 @@ final myReportsViewModelProvider =
 /// Ubicación: `lib/features/citizen/presentation/viewmodels/my_reports_viewmodel.dart`
 /// Capa: Presentation (ViewModel)
 class MyReportsViewModel extends Notifier<MyReportsState> {
-  late final GetMyReportsUseCase _getMyReportsUseCase;
+  int _loadVersion = 0;
 
   @override
   MyReportsState build() {
-    _getMyReportsUseCase = ref.watch(getMyReportsUseCaseProvider);
-
-    // Cargar reportes del usuario al instanciar
-    Future.microtask(() => loadReports());
-
-    return const MyReportsState(isLoading: true);
+    final citizenId = ref.watch(
+      authViewModelProvider.select((auth) => auth.user?.id),
+    );
+    final version = ++_loadVersion;
+    if (citizenId != null) {
+      Future.microtask(() async {
+        if (ref.mounted && version == _loadVersion) await loadReports();
+      });
+    }
+    return MyReportsState(isLoading: citizenId != null);
   }
 
   /// Carga la lista de reportes asociados al ciudadano logueado
   Future<void> loadReports() async {
+    final version = ++_loadVersion;
     state = state.copyWith(isLoading: true, clearError: true);
 
     final authState = ref.read(authViewModelProvider);
@@ -58,7 +63,11 @@ class MyReportsViewModel extends Notifier<MyReportsState> {
       return;
     }
 
-    final result = await _getMyReportsUseCase(citizenId);
+    final result = await ref.read(getMyReportsUseCaseProvider)(citizenId);
+    if (!ref.mounted || version != _loadVersion ||
+        ref.read(authViewModelProvider).user?.id != citizenId) {
+      return;
+    }
 
     result.fold(
       onSuccess: (reports) {

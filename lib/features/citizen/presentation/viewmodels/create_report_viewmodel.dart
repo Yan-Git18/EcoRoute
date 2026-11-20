@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/constants/geo_constants.dart';
+import '../../../../core/errors/failures.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/services/media_picker_service.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
@@ -160,6 +161,11 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
     state = state.copyWith(isLocating: true, clearError: true);
 
     final result = await _locationService.getCurrentPosition();
+    if (!ref.mounted) return;
+    if (result.errorMessage != null || result.isPermissionDenied) {
+      state = state.copyWith(isLocating: false, errorMessage: result.errorMessage);
+      return;
+    }
     final isInside = AppGeoConstants.isInsideCajamarca(result.latitude, result.longitude);
 
     if (isInside) {
@@ -170,7 +176,6 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
         userLongitude: result.longitude,
         address: result.address ?? AppGeoConstants.defaultAddress,
         isLocating: false,
-        errorMessage: result.errorMessage,
       );
     } else {
       // El usuario está fuera del radio de Cajamarca: se registra su GPS de referencia
@@ -384,7 +389,14 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
       onFailure: (failure) {
         state = state.copyWith(
           isSubmitting: false,
-          errorMessage: failure.message,
+          errorMessage: switch (failure) {
+            ValidationFailure() => failure.message,
+            _ when failure.code == 'unauthenticated' =>
+              'Tu sesión venció. Vuelve a iniciar sesión para enviar el reporte.',
+            _ when failure.code == 'unavailable' || failure.code == 'deadline-exceeded' =>
+              'No pudimos conectarnos para enviar tu reporte. Revisa tu conexión e inténtalo de nuevo.',
+            _ => 'No pudimos enviar tu reporte en este momento. Inténtalo más tarde.',
+          },
         );
         return false;
       },

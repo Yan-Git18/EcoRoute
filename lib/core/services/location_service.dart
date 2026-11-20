@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
@@ -36,6 +37,7 @@ class GeolocatorLocationServiceImpl implements LocationService {
   static const double _fallbackLat = AppGeoConstants.cajamarcaCenterLat;
   static const double _fallbackLng = AppGeoConstants.cajamarcaCenterLng;
   static const String _defaultFallbackAddress = AppGeoConstants.defaultAddress;
+  static const _androidLocation = MethodChannel('ecoroute/location');
 
   @override
   Future<LocationDataResult> getCurrentPosition() async {
@@ -74,25 +76,48 @@ class GeolocatorLocationServiceImpl implements LocationService {
         );
       }
 
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-      );
+      final coordinates = await _getCoordinates();
+      if (coordinates == null) {
+        return const LocationDataResult(
+          latitude: _fallbackLat,
+          longitude: _fallbackLng,
+          address: _defaultFallbackAddress,
+          errorMessage: 'El GPS no encontró tu ubicación. Puedes marcarla en el mapa.',
+        );
+      }
 
-      final address = await getAddressFromCoordinates(position.latitude, position.longitude);
+      final (latitude, longitude) = coordinates;
+      final address = await getAddressFromCoordinates(latitude, longitude);
 
       return LocationDataResult(
-        latitude: position.latitude,
-        longitude: position.longitude,
+        latitude: latitude,
+        longitude: longitude,
         address: address,
       );
-    } catch (e) {
-      return LocationDataResult(
+    } catch (_) {
+      return const LocationDataResult(
         latitude: _fallbackLat,
         longitude: _fallbackLng,
         address: _defaultFallbackAddress,
-        errorMessage: 'Error al obtener la posición GPS: $e',
+        errorMessage: 'No se pudo obtener la ubicación. Puedes marcarla en el mapa.',
       );
     }
+  }
+
+  Future<(double, double)?> _getCoordinates() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      final coordinates = await _androidLocation
+          .invokeListMethod<double>('getCurrentCoordinates')
+          .timeout(const Duration(seconds: 12), onTimeout: () => null);
+      return coordinates == null ? null : (coordinates[0], coordinates[1]);
+    }
+    final position = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 12),
+      ),
+    );
+    return (position.latitude, position.longitude);
   }
 
   @override

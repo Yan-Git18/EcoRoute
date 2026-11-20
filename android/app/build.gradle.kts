@@ -47,3 +47,7 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    implementation("androidx.core:core:1.16.0")
+}
