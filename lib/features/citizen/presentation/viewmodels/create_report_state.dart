@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
 import '../../../../core/constants/geo_constants.dart';
 import '../../domain/entities/report_category_entity.dart';
 import '../../domain/entities/report_entity.dart';
@@ -15,8 +16,7 @@ class CreateReportState {
   final ReportCategoryEntity? selectedCategory;
   final List<XFile> imageFiles;
   final List<Uint8List> imageBytesList;
-  final double latitude;
-  final double longitude;
+  final LatLng? reportPoint;
   final double? userLatitude;
   final double? userLongitude;
   final String address;
@@ -37,11 +37,10 @@ class CreateReportState {
     this.imageBytesList = const [],
     XFile? imageFile,
     Uint8List? imageBytes,
-    this.latitude = AppGeoConstants.cajamarcaCenterLat, // Centro de Cajamarca, Perú
-    this.longitude = AppGeoConstants.cajamarcaCenterLng,
+    this.reportPoint,
     this.userLatitude,
     this.userLongitude,
-    this.address = AppGeoConstants.defaultAddress,
+    this.address = '',
     this.reference = '',
     this.description = '',
     this.priority = ReportPriority.medium,
@@ -61,12 +60,19 @@ class CreateReportState {
   bool get canAddMoreImages => imagesCount < maxImages;
 
   bool get hasUserLocation => userLatitude != null && userLongitude != null;
-  bool get isLocationInsideCajamarca => AppGeoConstants.isInsideCajamarca(latitude, longitude);
+  bool get isLocationInsideCajamarca {
+    final point = reportPoint;
+    return point != null &&
+        AppGeoConstants.isInsideCajamarca(point.latitude, point.longitude);
+  }
 
   bool get canAdvanceFromStep1 => selectedCategory != null;
-  bool get canAdvanceFromStep2 => hasImage; // La fotografía es obligatoria (al menos una foto tomada)
-  bool get canAdvanceFromStep3 => address.trim().isNotEmpty && isLocationInsideCajamarca;
-  bool get canAdvanceFromStep4 => description.trim().length >= 5;
+  bool get canAdvanceFromStep2 =>
+      hasImage; // La fotografía es obligatoria (al menos una foto tomada)
+  bool get canAdvanceFromStep3 =>
+      !isLocating && isLocationInsideCajamarca && address.trim().isNotEmpty;
+  bool get canAdvanceFromStep4 =>
+      canAdvanceFromStep3 && description.trim().length >= 5;
 
   CreateReportState copyWith({
     int? currentStep,
@@ -78,8 +84,7 @@ class CreateReportState {
     XFile? imageFile,
     Uint8List? imageBytes,
     bool clearImage = false,
-    double? latitude,
-    double? longitude,
+    LatLng? reportPoint,
     double? userLatitude,
     double? userLongitude,
     String? address,
@@ -107,11 +112,12 @@ class CreateReportState {
     return CreateReportState(
       currentStep: currentStep ?? this.currentStep,
       categories: categories ?? this.categories,
-      selectedCategory: clearSelectedCategory ? null : (selectedCategory ?? this.selectedCategory),
+      selectedCategory: clearSelectedCategory
+          ? null
+          : (selectedCategory ?? this.selectedCategory),
       imageFiles: nextFiles,
       imageBytesList: nextBytes,
-      latitude: latitude ?? this.latitude,
-      longitude: longitude ?? this.longitude,
+      reportPoint: reportPoint ?? this.reportPoint,
       userLatitude: userLatitude ?? this.userLatitude,
       userLongitude: userLongitude ?? this.userLongitude,
       address: address ?? this.address,

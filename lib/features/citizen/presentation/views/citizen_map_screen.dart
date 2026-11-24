@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/enums/report_filter.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../domain/repositories/report_repository.dart';
 import '../viewmodels/citizen_map_state.dart';
 import '../viewmodels/citizen_map_viewmodel.dart';
 import '../widgets/citizen_bottom_nav_bar.dart';
@@ -34,12 +35,13 @@ class _CitizenMapScreenState extends ConsumerState<CitizenMapScreen> {
   void initState() {
     super.initState();
     Future.microtask(() {
-      ref.read(citizenMapViewModelProvider.notifier).loadReports();
+      if (mounted) ref.read(citizenMapViewModelProvider.notifier).loadReports();
     });
   }
 
   void _recenterMap(CitizenMapState state) {
     ref.read(citizenMapViewModelProvider.notifier).requestUserLocation().then((_) {
+      if (!mounted) return;
       final updatedState = ref.read(citizenMapViewModelProvider);
       _mapKey.currentState?.animateToLocation(
         updatedState.userLatitude,
@@ -78,16 +80,34 @@ class _CitizenMapScreenState extends ConsumerState<CitizenMapScreen> {
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Color(0xFF475569)),
             tooltip: 'Actualizar reportes',
-            onPressed: () => viewModel.refresh(),
+            onPressed: state.isLoading ? null : viewModel.refresh,
           ),
           const SizedBox(width: 4),
         ],
       ),
-      body: state.isLoading
-          ? const _MapLoadingView()
-          : state.isListView
-              ? _buildNearbyListView(state, viewModel)
-              : _buildInteractiveMapView(state, viewModel),
+      body: Column(
+        children: [
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Text(
+              'Últimos ${ReportRepository.communityReportWindowDays} días · Hasta ${ReportRepository.communityReportLimit} reportes recientes',
+              textAlign: TextAlign.center,
+            ),
+          ),
+          if (state.errorMessage != null)
+            TextButton(
+              onPressed: viewModel.refresh,
+              child: const Text('No se pudo actualizar el mapa. Reintentar'),
+            ),
+          Expanded(
+            child: state.isLoading
+                ? const _MapLoadingView()
+                : state.isListView
+                    ? _buildNearbyListView(state, viewModel)
+                    : _buildInteractiveMapView(state, viewModel),
+          ),
+        ],
+      ),
       bottomNavigationBar: const CitizenBottomNavBar(currentIndex: 1),
     );
   }
@@ -173,7 +193,7 @@ class _CitizenMapScreenState extends ConsumerState<CitizenMapScreen> {
                   Expanded(
                     child: Text(
                       state.allReports.isEmpty
-                          ? 'No hay incidencias registradas aún en Cajamarca.'
+                          ? 'No hay incidencias en este período.'
                           : 'Sin incidencias para el filtro seleccionado.',
                       style: const TextStyle(
                         fontSize: 12.5,
@@ -537,7 +557,7 @@ class _EmptyNearbyReportsView extends StatelessWidget {
             const SizedBox(height: 18),
             Text(
               hasNoReportsAtAll
-                  ? 'Aún no hay reportes registrados'
+                  ? 'No hay reportes recientes'
                   : 'No se encontraron reportes cercanos',
               textAlign: TextAlign.center,
               style: const TextStyle(
@@ -549,7 +569,7 @@ class _EmptyNearbyReportsView extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               hasNoReportsAtAll
-                  ? 'No existen incidencias reportadas en Cajamarca en este momento. Si detectas acumulación de residuos, puedes registrar un reporte.'
+                  ? 'No se encontraron incidencias en Cajamarca en los últimos ${ReportRepository.communityReportWindowDays} días.'
                   : (filter == ReportFilter.all
                       ? 'No hay incidencias registradas en esta área geográfica o con los términos buscados.'
                       : 'No hay reportes ${filter.label.toLowerCase()} en tu zona inmediata.'),

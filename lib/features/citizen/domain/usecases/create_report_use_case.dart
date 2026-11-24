@@ -1,3 +1,4 @@
+import '../../../../core/constants/geo_constants.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/utils/result.dart';
 import '../entities/report_entity.dart';
@@ -34,7 +35,18 @@ class CreateReportUseCase {
 
     if (report.address.trim().isEmpty) {
       return const FailureResult(
-        ValidationFailure(message: 'Debe especificar una dirección o ubicación válida.'),
+        ValidationFailure(
+          message: 'Debe especificar una dirección o ubicación válida.',
+        ),
+      );
+    }
+
+    if (!AppGeoConstants.isInsideCajamarca(report.latitude, report.longitude)) {
+      return const FailureResult(
+        ValidationFailure(
+          message:
+              'La ubicación debe estar dentro del área de servicio de Cajamarca.',
+        ),
       );
     }
 

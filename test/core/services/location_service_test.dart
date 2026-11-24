@@ -33,13 +33,14 @@ void main() {
   test('Android consulta coordenadas por el canal nativo', () async {
     messenger.setMockMethodCallHandler(channel, (call) async {
       expect(call.method, 'getCurrentCoordinates');
-      return [-7.158, -78.518];
+      return [-7.147, -78.505];
     });
 
     final result = await GeolocatorLocationServiceImpl().getCurrentPosition();
 
-    expect(result.latitude, -7.158);
-    expect(result.longitude, -78.518);
+    expect(result.latitude, -7.147);
+    expect(result.longitude, -78.505);
+    expect(result.address, 'Ubicación seleccionada (-7.14700, -78.50500)');
     expect(result.errorMessage, isNull);
   });
 

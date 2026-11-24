@@ -52,7 +52,7 @@ class AdminBottomNavBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final pendingCount = ref.watch(adminReportsViewModelProvider).pendingCount;
+    final pendingCount = ref.watch(adminReportsViewModelProvider).totals?.pending ?? 0;
 
     return EcoBottomNavBar(
       currentIndex: currentIndex,

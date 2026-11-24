@@ -24,7 +24,9 @@ class CreateReportWizardScreen extends ConsumerWidget {
 
     // Escucha de mensajes de error o validación
     ref.listen(createReportViewModelProvider, (previous, next) {
-      if (next.errorMessage != null && next.errorMessage != previous?.errorMessage) {
+      if (next.currentStep != 3 &&
+          next.errorMessage != null &&
+          next.errorMessage != previous?.errorMessage) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(next.errorMessage!),
@@ -146,7 +148,11 @@ class _WizardBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isStep4 = currentStep == 4;
+    final buttonLabel = switch (currentStep) {
+      3 => 'Confirmar ubicación',
+      4 => 'Enviar reporte',
+      _ => 'Siguiente',
+    };
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
@@ -179,7 +185,7 @@ class _WizardBottomBar extends StatelessWidget {
                   ),
                 )
               : Text(
-                  isStep4 ? 'Enviar reporte' : 'Siguiente',
+                  buttonLabel,
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,

@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/constants/geo_constants.dart';
@@ -48,7 +49,9 @@ final createReportUseCaseProvider = Provider<CreateReportUseCase>((ref) {
 });
 
 final createReportViewModelProvider =
-    NotifierProvider<CreateReportViewModel, CreateReportState>(CreateReportViewModel.new);
+    NotifierProvider.autoDispose<CreateReportViewModel, CreateReportState>(
+      CreateReportViewModel.new,
+    );
 
 // --- ViewModel (MVVM) ---
 
@@ -64,6 +67,7 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
   late final CreateReportUseCase _createReportUseCase;
   late final LocationService _locationService;
   late final MediaPickerService _mediaPickerService;
+  int _locationRequest = 0;
 
   @override
   CreateReportState build() {
@@ -72,19 +76,17 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
     _locationService = ref.watch(locationServiceProvider);
     _mediaPickerService = ref.watch(mediaPickerServiceProvider);
 
-    // Cargar catálogo de categorías y obtener ubicación inicial
-    Future.microtask(() {
-      loadCategories();
-      getCurrentLocation();
-    });
+    Future.microtask(loadCategories);
 
     return const CreateReportState();
   }
 
   /// Carga el catálogo de categorías de incidentes
   Future<void> loadCategories() async {
+    if (!ref.mounted) return;
     state = state.copyWith(isLoadingCategories: true, clearError: true);
     final result = await _getCategoriesUseCase();
+    if (!ref.mounted) return;
 
     result.fold(
       onSuccess: (categories) {
@@ -116,11 +118,13 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
   Future<void> pickImageFromCamera() async {
     if (state.imagesCount >= CreateReportState.maxImages) {
       state = state.copyWith(
-        errorMessage: 'Has alcanzado el límite máximo de ${CreateReportState.maxImages} fotografías.',
+        errorMessage:
+            'Has alcanzado el límite máximo de ${CreateReportState.maxImages} fotografías.',
       );
       return;
     }
     final result = await _mediaPickerService.pickImageFromCamera();
+    if (!ref.mounted) return;
     _handleSingleMediaResult(result);
   }
 
@@ -156,104 +160,109 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
     state = state.copyWith(clearImage: true);
   }
 
-  /// Obtiene la posición GPS actual y realiza geocodificación inversa (Paso 3)
-  Future<void> getCurrentLocation() async {
+  /// Obtiene la posición actual para ubicar el incidente.
+  Future<bool> getCurrentLocation() async {
+    final request = ++_locationRequest;
     state = state.copyWith(isLocating: true, clearError: true);
 
     final result = await _locationService.getCurrentPosition();
-    if (!ref.mounted) return;
+    if (!ref.mounted || request != _locationRequest) return false;
     if (result.errorMessage != null || result.isPermissionDenied) {
-      state = state.copyWith(isLocating: false, errorMessage: result.errorMessage);
-      return;
+      state = state.copyWith(
+        isLocating: false,
+        errorMessage:
+            result.errorMessage ??
+            'No pudimos usar tu ubicación. Marca el incidente en el mapa.',
+      );
+      return false;
     }
-    final isInside = AppGeoConstants.isInsideCajamarca(result.latitude, result.longitude);
 
-    if (isInside) {
+    if (!AppGeoConstants.isInsideCajamarca(result.latitude, result.longitude)) {
       state = state.copyWith(
-        latitude: result.latitude,
-        longitude: result.longitude,
-        userLatitude: result.latitude,
-        userLongitude: result.longitude,
-        address: result.address ?? AppGeoConstants.defaultAddress,
         isLocating: false,
+        errorMessage:
+            'Tu ubicación está fuera del área de servicio. Marca el incidente en el mapa de Cajamarca.',
       );
-    } else {
-      // El usuario está fuera del radio de Cajamarca: se registra su GPS de referencia
-      // pero el PIN del reporte se posiciona en el centro de Cajamarca para evitar reportes en otras ciudades/países
-      state = state.copyWith(
-        latitude: AppGeoConstants.cajamarcaCenterLat,
-        longitude: AppGeoConstants.cajamarcaCenterLng,
-        userLatitude: result.latitude,
-        userLongitude: result.longitude,
-        address: AppGeoConstants.defaultAddress,
-        isLocating: false,
-        errorMessage: 'Tu GPS indica que estás fuera de Cajamarca. Por favor ubica el PIN en la zona de Cajamarca donde ocurrió la incidencia.',
-      );
+      return false;
     }
+
+    state = state.copyWith(
+      reportPoint: LatLng(result.latitude, result.longitude),
+      userLatitude: result.latitude,
+      userLongitude: result.longitude,
+      address: _addressForPoint(
+        result.latitude,
+        result.longitude,
+        result.address,
+      ),
+      isLocating: false,
+    );
+    return true;
   }
 
-  /// Actualiza coordenadas del incidente y busca dirección vía geocoding inverso
+  /// Ubica el incidente donde el ciudadano marca el mapa.
   Future<void> updateCoordinates(double lat, double lng) async {
+    final request = ++_locationRequest;
     final isInside = AppGeoConstants.isInsideCajamarca(lat, lng);
-    if (!isInside) {
-      state = state.copyWith(
-        latitude: lat,
-        longitude: lng,
-        errorMessage: 'El punto seleccionado está fuera del área de servicio de Cajamarca.',
-      );
-      return;
-    }
-
     state = state.copyWith(
-      latitude: lat,
-      longitude: lng,
-      isLocating: true,
+      reportPoint: LatLng(lat, lng),
+      address: isInside ? describeLocationCoordinates(lat, lng) : '',
+      isLocating: isInside,
       clearError: true,
     );
+    if (!isInside) return;
 
     final address = await _locationService.getAddressFromCoordinates(lat, lng);
-
+    if (!ref.mounted || request != _locationRequest) return;
     state = state.copyWith(
-      latitude: lat,
-      longitude: lng,
-      address: address,
+      address: _addressForPoint(lat, lng, address),
       isLocating: false,
     );
   }
 
-  /// Busca una dirección por texto y ubica el pin en sus coordenadas dentro de Cajamarca
+  /// Busca una dirección por texto y ubica el pin en sus coordenadas.
   Future<bool> searchAndSetAddress(String query) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return false;
+    final request = ++_locationRequest;
     state = state.copyWith(isLocating: true, clearError: true);
-    final result = await _locationService.getCoordinatesFromAddress(trimmed);
-    if (result != null) {
-      if (!AppGeoConstants.isInsideCajamarca(result.latitude, result.longitude)) {
-        state = state.copyWith(
-          isLocating: false,
-          errorMessage: 'La dirección "$trimmed" se encuentra fuera del área urbana de Cajamarca.',
-        );
-        return false;
-      }
 
-      state = state.copyWith(
-        latitude: result.latitude,
-        longitude: result.longitude,
-        address: result.address ?? trimmed,
-        isLocating: false,
-      );
-      return true;
-    } else {
+    final result = await _locationService.getCoordinatesFromAddress(trimmed);
+    if (!ref.mounted || request != _locationRequest) return false;
+    if (result == null) {
       state = state.copyWith(
         isLocating: false,
-        errorMessage: 'No se encontró la dirección "$trimmed" en Cajamarca.',
+        errorMessage:
+            'No se encontró la dirección "$trimmed" en Cajamarca. Puedes marcar el punto en el mapa.',
       );
       return false;
     }
+    if (!AppGeoConstants.isInsideCajamarca(result.latitude, result.longitude)) {
+      state = state.copyWith(
+        isLocating: false,
+        errorMessage:
+            'La dirección "$trimmed" se encuentra fuera del área de servicio de Cajamarca.',
+      );
+      return false;
+    }
+
+    state = state.copyWith(
+      reportPoint: LatLng(result.latitude, result.longitude),
+      address: _addressForPoint(
+        result.latitude,
+        result.longitude,
+        result.address,
+      ),
+      isLocating: false,
+    );
+    return true;
   }
 
-  void setManualAddress(String address) {
-    state = state.copyWith(address: address);
+  String _addressForPoint(double lat, double lng, String? address) {
+    final resolved = address?.trim();
+    return resolved == null || resolved.isEmpty
+        ? describeLocationCoordinates(lat, lng)
+        : resolved;
   }
 
   void setReference(String reference) {
@@ -285,15 +294,10 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
     }
 
     if (state.currentStep == 3 && !state.canAdvanceFromStep3) {
-      if (!state.isLocationInsideCajamarca) {
-        state = state.copyWith(
-          errorMessage: 'EcoRoute solo opera en Cajamarca. Por favor ubica el PIN dentro de la ciudad.',
-        );
-      } else {
-        state = state.copyWith(
-          errorMessage: 'Por favor, especifica una dirección o ubicación válida.',
-        );
-      }
+      state = state.copyWith(
+        errorMessage:
+            'Usa tu ubicación actual o marca el incidente dentro del área de Cajamarca.',
+      );
       return;
     }
 
@@ -336,9 +340,18 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
   /// Enviar y registrar el reporte (Paso 4 -> Paso 5)
   Future<bool> submitReport() async {
     if (state.isSubmitting) return false;
+    final point = state.reportPoint;
+    if (point == null || !state.canAdvanceFromStep3) {
+      state = state.copyWith(
+        errorMessage:
+            'Selecciona la ubicación del incidente dentro del área de Cajamarca.',
+      );
+      return false;
+    }
     if (!state.canAdvanceFromStep4) {
       state = state.copyWith(
-        errorMessage: 'Por favor ingrese una descripción de al menos 5 caracteres.',
+        errorMessage:
+            'Por favor ingrese una descripción de al menos 5 caracteres.',
       );
       return false;
     }
@@ -363,10 +376,12 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
       description: state.description.trim(),
       priority: state.priority,
       status: ReportStatus.pending,
-      latitude: state.latitude,
-      longitude: state.longitude,
+      latitude: point.latitude,
+      longitude: point.longitude,
       address: state.address.trim(),
-      reference: state.reference.trim().isNotEmpty ? state.reference.trim() : null,
+      reference: state.reference.trim().isNotEmpty
+          ? state.reference.trim()
+          : null,
       imageUrls: const [],
       createdAt: DateTime.now(),
     );
@@ -376,6 +391,7 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
       imageBytes: state.imageBytes,
       multipleImageBytes: state.imageBytesList,
     );
+    if (!ref.mounted) return false;
 
     return result.fold(
       onSuccess: (savedReport) {
@@ -405,8 +421,8 @@ class CreateReportViewModel extends Notifier<CreateReportState> {
 
   /// Reinicia el formulario para crear un nuevo reporte
   void resetForm() {
+    _locationRequest++;
     state = const CreateReportState();
     loadCategories();
-    getCurrentLocation();
   }
 }

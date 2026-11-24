@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/utils/result.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/repositories/admin_repository_impl.dart';
+import '../../domain/entities/admin_report_page.dart';
 import '../../domain/entities/municipal_crew_entity.dart';
 import '../../domain/repositories/admin_repository.dart';
 import '../../domain/usecases/create_crew_use_case.dart';
@@ -43,9 +46,9 @@ final deleteCrewUseCaseProvider = Provider<DeleteCrewUseCase>((ref) {
 });
 
 final adminReportsViewModelProvider =
-    NotifierProvider<AdminReportsViewModel, AdminReportsState>(() {
-  return AdminReportsViewModel();
-});
+    NotifierProvider.autoDispose<AdminReportsViewModel, AdminReportsState>(() {
+      return AdminReportsViewModel();
+    });
 
 // --- Notifier / ViewModel ---
 
@@ -55,6 +58,10 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
   late final CreateCrewUseCase _createCrewUseCase;
   late final UpdateCrewUseCase _updateCrewUseCase;
   late final DeleteCrewUseCase _deleteCrewUseCase;
+  Future<void>? _activeLoad;
+  int _dataRevision = 0;
+  int _pageGeneration = 0;
+  int _totalsRequest = 0;
 
   @override
   AdminReportsState build() {
@@ -65,30 +72,68 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
     _deleteCrewUseCase = ref.watch(deleteCrewUseCaseProvider);
 
     // Carga inicial asíncrona
-    Future.microtask(() => loadReports());
+    Future.microtask(() async {
+      if (ref.mounted) await refresh();
+    });
     return const AdminReportsState(isLoading: true);
   }
 
-  Future<void> loadReports() async {
-    state = state.copyWith(isLoading: true, clearError: true);
+  Future<void> _loadReports() async {
+    _pageGeneration++;
+    state = state.copyWith(isLoading: true, isLoadingMore: false, loadMoreFailed: false);
 
-    final reportsResult = await _repository.getAllReports();
-    final crewsResult = await _getCrewsUseCase();
+    late Result<AdminReportPage<ReportEntity>> reportsResult;
+    late Result<List<MunicipalCrewEntity>> crewsResult;
+    late Result<AdminReportTotals> totalsResult;
+    int revision;
+    // Si se guardó un cambio durante la consulta, vuelve a leer antes de publicar.
+    do {
+      revision = _dataRevision;
+      (reportsResult, crewsResult, totalsResult) = await (
+        _repository.getReportsPage(),
+        _getCrewsUseCase(),
+        _repository.getReportTotals(),
+      ).wait;
+      if (!ref.mounted) return;
+    } while (revision != _dataRevision);
 
-    final List<ReportEntity> reports = switch (reportsResult) {
-      Success(data: final list) => list,
-      FailureResult() => state.reports,
-    };
-
-    final List<MunicipalCrewEntity> crews = switch (crewsResult) {
-      Success(data: final list) => List<MunicipalCrewEntity>.from(list),
-      FailureResult() => state.crews,
-    };
-
+    final page = reportsResult.dataOrNull;
     state = state.copyWith(
       isLoading: false,
-      reports: reports,
-      crews: crews,
+      reports: page?.items,
+      nextCursor: page?.nextCursor,
+      clearNextCursor: page != null && page.nextCursor == null,
+      crews: crewsResult.dataOrNull,
+      totals: totalsResult.dataOrNull,
+      totalsLoadFailed: totalsResult.isFailure,
+      hasLoadedReports: state.hasLoadedReports || reportsResult.isSuccess,
+      hasLoadedCrews: state.hasLoadedCrews || crewsResult.isSuccess,
+      reportsLoadFailed: reportsResult.isFailure,
+      crewsLoadFailed: crewsResult.isFailure,
+    );
+  }
+
+  Future<void> loadMoreReports() async {
+    final cursor = state.nextCursor;
+    if (cursor == null || state.isLoading || state.isLoadingMore) return;
+
+    final generation = _pageGeneration;
+    state = state.copyWith(isLoadingMore: true, loadMoreFailed: false);
+    final result = await _repository.getReportsPage(after: cursor);
+    if (!ref.mounted || generation != _pageGeneration) return;
+
+    final page = result.dataOrNull;
+    if (page == null) {
+      state = state.copyWith(isLoadingMore: false, loadMoreFailed: true);
+      return;
+    }
+
+    final seen = state.reports.map((report) => report.id).toSet();
+    state = state.copyWith(
+      isLoadingMore: false,
+      reports: [...state.reports, ...page.items.where((report) => seen.add(report.id))],
+      nextCursor: page.nextCursor,
+      clearNextCursor: page.nextCursor == null,
     );
   }
 
@@ -118,35 +163,39 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
       priority: priority,
       instructions: instructions,
     );
+    if (!ref.mounted) return false;
 
     switch (result) {
       case Success(data: final updatedReport):
+        _dataRevision++;
         final updatedReports = state.reports.map((r) {
           return r.id == updatedReport.id ? updatedReport : r;
         }).toList();
 
-        state = state.copyWith(
-          isAssigning: false,
-          reports: updatedReports,
-        );
+        state = state.copyWith(isAssigning: false, reports: updatedReports);
+        if (_activeLoad == null) unawaited(_refreshTotals());
         return true;
 
       case FailureResult(failure: final f):
-        state = state.copyWith(
-          isAssigning: false,
-          errorMessage: f.message,
-        );
+        state = state.copyWith(isAssigning: false, errorMessage: f.message);
         return false;
     }
   }
 
+  Future<void> _refreshTotals() async {
+    final request = ++_totalsRequest;
+    final generation = _pageGeneration;
+    final result = await _repository.getReportTotals();
+    if (!ref.mounted || request != _totalsRequest || generation != _pageGeneration) return;
+    state = state.copyWith(totals: result.dataOrNull, totalsLoadFailed: result.isFailure);
+  }
+
   Future<void> updatePriority(String reportId, ReportPriority priority) async {
-    final result = await _repository.updateReportPriority(
-      reportId: reportId,
-      priority: priority,
-    );
+    final result = await _repository.updateReportPriority(reportId: reportId, priority: priority);
+    if (!ref.mounted) return;
 
     if (result is Success<ReportEntity>) {
+      _dataRevision++;
       final updatedReport = result.data;
       final updatedReports = state.reports.map((r) {
         return r.id == updatedReport.id ? updatedReport : r;
@@ -179,10 +228,13 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
     );
 
     final result = await _updateCrewUseCase.call(updated);
+    if (!ref.mounted) return false;
     switch (result) {
       case Success(data: final savedCrew):
-        final newCrews = List<MunicipalCrewEntity>.from(state.crews);
-        newCrews[existingIndex] = savedCrew;
+        _dataRevision++;
+        final newCrews = state.crews.map((crew) {
+          return crew.id == crewId ? savedCrew : crew;
+        }).toList();
         state = state.copyWith(crews: newCrews);
         return true;
       case FailureResult(failure: final f):
@@ -193,8 +245,10 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
 
   Future<bool> createCrew(MunicipalCrewEntity crew) async {
     final result = await _createCrewUseCase.call(crew);
+    if (!ref.mounted) return false;
     switch (result) {
       case Success(data: final created):
+        _dataRevision++;
         final filtered = state.crews.where((c) => c.id != created.id).toList();
         state = state.copyWith(crews: [created, ...filtered]);
         return true;
@@ -206,11 +260,11 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
 
   Future<bool> deleteCrew(String crewId) async {
     final result = await _deleteCrewUseCase.call(crewId);
+    if (!ref.mounted) return false;
     switch (result) {
       case Success():
-        state = state.copyWith(
-          crews: state.crews.where((c) => c.id != crewId).toList(),
-        );
+        _dataRevision++;
+        state = state.copyWith(crews: state.crews.where((c) => c.id != crewId).toList());
         return true;
       case FailureResult(failure: final f):
         state = state.copyWith(errorMessage: f.message);
@@ -218,7 +272,7 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
     }
   }
 
-  Future<void> refresh() async {
-    await loadReports();
-  }
+  Future<void> refresh() => _activeLoad ??= _loadReports().whenComplete(() {
+    _activeLoad = null;
+  });
 }

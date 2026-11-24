@@ -3,55 +3,53 @@ import '../../../../core/errors/failures.dart';
 import '../../../../core/utils/result.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
+import '../../domain/entities/admin_report_page.dart';
 import '../../domain/entities/municipal_crew_entity.dart';
 import '../../domain/repositories/admin_repository.dart';
 import '../datasources/admin_remote_datasource.dart';
 
 /// Implementación del repositorio de administración municipal.
 ///
-/// Principio SRP: Integra el data source de Firestore con una caché en memoria
-/// reactiva para garantizar actualizaciones instantáneas en la UI.
+/// Convierte las respuestas de Firestore en resultados de dominio.
 class AdminRepositoryImpl implements AdminRepository {
   final AdminRemoteDataSource _remoteDataSource;
 
-  static final Map<String, ReportEntity> _adminReportsCache = {};
-  static final Map<String, MunicipalCrewEntity> _adminCrewsCache = {};
-
   AdminRepositoryImpl({AdminRemoteDataSource? remoteDataSource})
-      : _remoteDataSource = remoteDataSource ?? FirebaseAdminRemoteDataSourceImpl();
+    : _remoteDataSource = remoteDataSource ?? FirebaseAdminRemoteDataSourceImpl();
 
   @override
-  Future<Result<List<ReportEntity>>> getAllReports() async {
-    final Map<String, ReportEntity> combined = Map.from(_adminReportsCache);
-
+  Future<Result<AdminReportPage<ReportEntity>>> getReportsPage({AdminReportCursor? after}) async {
     try {
-      final dtos = await _remoteDataSource.getAllReports();
-      for (final dto in dtos) {
-        final entity = dto.toDomain();
-        combined[entity.id] = entity;
-        _adminReportsCache[entity.id] = entity;
-      }
-    } catch (_) {}
+      final page = await _remoteDataSource.getReportsPage(after: after);
+      return Success(AdminReportPage(
+        page.items.map((dto) => dto.toDomain()).toList(),
+        nextCursor: page.nextCursor,
+      ));
+    } on ServerException catch (e) {
+      return FailureResult(ServerFailure(message: e.message, code: e.code));
+    } catch (_) {
+      return const FailureResult(ServerFailure(message: 'No se pudieron consultar los reportes.'));
+    }
+  }
 
-    final list = combined.values.toList();
-    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return Success(list);
+  @override
+  Future<Result<AdminReportTotals>> getReportTotals() async {
+    try {
+      return Success(await _remoteDataSource.getReportTotals());
+    } catch (_) {
+      return const FailureResult(ServerFailure(message: 'No se pudieron consultar los totales.'));
+    }
   }
 
   @override
   Future<Result<List<MunicipalCrewEntity>>> getAvailableCrews() async {
     try {
       final dtos = await _remoteDataSource.getAvailableCrews();
-      for (final dto in dtos) {
-        final entity = dto.toDomain();
-        _adminCrewsCache[entity.id] = entity;
-      }
-      return Success(_adminCrewsCache.values.toList());
-    } catch (e) {
-      if (_adminCrewsCache.isNotEmpty) {
-        return Success(_adminCrewsCache.values.toList());
-      }
-      return FailureResult(ServerFailure(message: 'Error al consultar cuadrillas: $e'));
+      return Success(dtos.map((dto) => dto.toDomain()).toList());
+    } on ServerException catch (e) {
+      return FailureResult(ServerFailure(message: e.message, code: e.code));
+    } catch (_) {
+      return const FailureResult(ServerFailure(message: 'No se pudieron consultar las cuadrillas.'));
     }
   }
 
@@ -59,9 +57,7 @@ class AdminRepositoryImpl implements AdminRepository {
   Future<Result<MunicipalCrewEntity>> createCrew(MunicipalCrewEntity crew) async {
     try {
       final dto = await _remoteDataSource.createCrew(crew);
-      final entity = dto.toDomain();
-      _adminCrewsCache[entity.id] = entity;
-      return Success(entity);
+      return Success(dto.toDomain());
     } on ServerException catch (e) {
       return FailureResult(ServerFailure(message: e.message, code: e.code));
     } catch (e) {
@@ -73,7 +69,6 @@ class AdminRepositoryImpl implements AdminRepository {
   Future<Result<MunicipalCrewEntity>> updateCrew(MunicipalCrewEntity crew) async {
     try {
       await _remoteDataSource.updateCrew(crew);
-      _adminCrewsCache[crew.id] = crew;
       return Success(crew);
     } on ServerException catch (e) {
       return FailureResult(ServerFailure(message: e.message, code: e.code));
@@ -86,7 +81,6 @@ class AdminRepositoryImpl implements AdminRepository {
   Future<Result<void>> deleteCrew(String crewId) async {
     try {
       await _remoteDataSource.deleteCrew(crewId);
-      _adminCrewsCache.remove(crewId);
       return const Success(null);
     } on ServerException catch (e) {
       return FailureResult(ServerFailure(message: e.message, code: e.code));
@@ -113,9 +107,7 @@ class AdminRepositoryImpl implements AdminRepository {
         priority: priority,
         instructions: instructions,
       );
-      final updated = saved.toDomain();
-      _adminReportsCache[reportId] = updated;
-      return Success(updated);
+      return Success(saved.toDomain());
     } on ServerException catch (e) {
       return FailureResult(ServerFailure(message: e.message, code: e.code));
     } catch (e) {
@@ -129,17 +121,10 @@ class AdminRepositoryImpl implements AdminRepository {
     required ReportPriority priority,
   }) async {
     try {
-      try {
-        await _remoteDataSource.updateReportPriority(reportId: reportId, priority: priority);
-      } catch (_) {}
-
-      final existing = _adminReportsCache[reportId];
-      if (existing != null) {
-        final updated = existing.copyWith(priority: priority);
-        _adminReportsCache[reportId] = updated;
-        return Success(updated);
-      }
-      return const FailureResult(ServerFailure(message: 'Reporte no encontrado'));
+      final saved = await _remoteDataSource.updateReportPriority(reportId: reportId, priority: priority);
+      return Success(saved.toDomain());
+    } on ServerException catch (e) {
+      return FailureResult(ServerFailure(message: e.message, code: e.code));
     } catch (e) {
       return FailureResult(ServerFailure(message: 'Error al actualizar prioridad: $e'));
     }

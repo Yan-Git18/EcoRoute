@@ -70,8 +70,8 @@ void main() {
     description: 'Bolsas de basura acumuladas en la esquina.',
     priority: ReportPriority.high,
     status: ReportStatus.pending,
-    latitude: -12.046,
-    longitude: -77.042,
+    latitude: -7.147,
+    longitude: -78.505,
     address: 'Av. Las Palmeras 412',
     imageUrls: const ['https://example.com/photo.jpg'],
     createdAt: DateTime.now(),
@@ -155,34 +155,55 @@ void main() {
     expect(result.failureOrNull?.message, contains('dirección'));
   });
 
-  test('debe retornar ValidationFailure si no se incluye ninguna fotografía', () async {
-    final reportWithoutImages = validReport.copyWith(imageUrls: const []);
-    final result = await useCase(report: reportWithoutImages);
+  test(
+    'debe retornar ValidationFailure si no se incluye ninguna fotografía',
+    () async {
+      final reportWithoutImages = validReport.copyWith(imageUrls: const []);
+      final result = await useCase(report: reportWithoutImages);
 
-    expect(result.isFailure, true);
-    expect(result.failureOrNull, isA<ValidationFailure>());
-    expect(result.failureOrNull?.message, contains('fotografía'));
-  });
+      expect(result.isFailure, true);
+      expect(result.failureOrNull, isA<ValidationFailure>());
+      expect(result.failureOrNull?.message, contains('fotografía'));
+    },
+  );
 
-  test('debe retornar Success cuando se incluye fotografía vía imageBytes', () async {
-    final reportWithoutUrls = validReport.copyWith(imageUrls: const []);
+  test('rechaza un reporte fuera de Cajamarca antes de guardar', () async {
     final result = await useCase(
-      report: reportWithoutUrls,
-      imageBytes: [1, 2, 3],
+      report: validReport.copyWith(latitude: -12.046, longitude: -77.042),
+      imageBytes: [1],
     );
 
-    expect(result.isSuccess, true);
-    expect(fakeRepository.lastCreatedReport?.id, 'rep-1');
+    expect(result.failureOrNull?.message, contains('Cajamarca'));
+    expect(fakeRepository.lastCreatedReport, isNull);
   });
 
-  test('debe retornar Success y guardar el reporte cuando todos los campos son válidos', () async {
-    final result = await useCase(
-      report: validReport,
-      multipleImageBytes: [[1, 2, 3]],
-    );
+  test(
+    'debe retornar Success cuando se incluye fotografía vía imageBytes',
+    () async {
+      final reportWithoutUrls = validReport.copyWith(imageUrls: const []);
+      final result = await useCase(
+        report: reportWithoutUrls,
+        imageBytes: [1, 2, 3],
+      );
 
-    expect(result.isSuccess, true);
-    expect(result.dataOrNull?.reportNumber, '#0012');
-    expect(fakeRepository.lastCreatedReport?.id, 'rep-1');
-  });
+      expect(result.isSuccess, true);
+      expect(fakeRepository.lastCreatedReport?.id, 'rep-1');
+    },
+  );
+
+  test(
+    'debe retornar Success y guardar el reporte cuando todos los campos son válidos',
+    () async {
+      final result = await useCase(
+        report: validReport,
+        multipleImageBytes: [
+          [1, 2, 3],
+        ],
+      );
+
+      expect(result.isSuccess, true);
+      expect(result.dataOrNull?.reportNumber, '#0012');
+      expect(fakeRepository.lastCreatedReport?.id, 'rep-1');
+    },
+  );
 }

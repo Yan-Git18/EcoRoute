@@ -6,12 +6,14 @@ import '../../../auth/data/models/user_dto.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../citizen/data/models/report_dto.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
+import '../../domain/entities/admin_report_page.dart';
 import '../../domain/entities/municipal_crew_entity.dart';
 import '../models/municipal_crew_dto.dart';
 
 /// Contrato para la fuente remota de datos del administrador municipal.
 abstract class AdminRemoteDataSource {
-  Future<List<ReportDto>> getAllReports();
+  Future<AdminReportPage<ReportDto>> getReportsPage({AdminReportCursor? after});
+  Future<AdminReportTotals> getReportTotals();
   Future<List<MunicipalCrewDto>> getAvailableCrews();
   Future<MunicipalCrewDto> createCrew(MunicipalCrewEntity crew);
   Future<void> updateCrew(MunicipalCrewEntity crew);
@@ -24,10 +26,7 @@ abstract class AdminRemoteDataSource {
     ReportPriority? priority,
     String? instructions,
   });
-  Future<void> updateReportPriority({
-    required String reportId,
-    required ReportPriority priority,
-  });
+  Future<ReportDto> updateReportPriority({required String reportId, required ReportPriority priority});
 
   /// Obtiene únicamente los usuarios con rol de personal (staff).
   /// Protege la privacidad evitando consultar cuentas ciudadanas.
@@ -44,49 +43,101 @@ abstract class AdminRemoteDataSource {
   });
 }
 
+class _FirestoreReportCursor implements AdminReportCursor {
+  const _FirestoreReportCursor(this.document);
+
+  final QueryDocumentSnapshot<Map<String, dynamic>> document;
+}
+
 /// Implementación concreta con Cloud Firestore.
 class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
   final FirebaseFirestore? _customFirestore;
 
-  FirebaseAdminRemoteDataSourceImpl({FirebaseFirestore? firestore})
-      : _customFirestore = firestore;
+  FirebaseAdminRemoteDataSourceImpl({FirebaseFirestore? firestore}) : _customFirestore = firestore;
 
   bool get _isFirebaseReady => Firebase.apps.isNotEmpty;
   FirebaseFirestore get _firestore => _customFirestore ?? FirebaseFirestore.instance;
+  static const _readTimeout = Duration(seconds: 12);
 
   @override
-  Future<List<ReportDto>> getAllReports() async {
+  Future<AdminReportPage<ReportDto>> getReportsPage({AdminReportCursor? after}) async {
     if (!_isFirebaseReady && _customFirestore == null) {
-      return [];
+      throw const ServerException(message: 'Base de datos no inicializada.');
     }
 
     try {
-      final snapshot = await _firestore
+      var query = _firestore
           .collection('reports')
-          .orderBy('createdAt', descending: true)
-          .get();
-
-      return snapshot.docs
-          .map((doc) => ReportDto.fromMap(doc.data(), doc.id))
-          .toList();
+          .orderBy('createdAt', descending: true);
+      if (after != null) {
+        query = query.startAfterDocument((after as _FirestoreReportCursor).document);
+      }
+      final snapshot = await query
+          .limit(AdminReportPage.pageSize + 1)
+          .get(const GetOptions(source: Source.server))
+          .timeout(_readTimeout);
+      final page = snapshot.docs.take(AdminReportPage.pageSize).toList();
+      return AdminReportPage(
+        page.map((doc) => ReportDto.fromMap(doc.data(), doc.id)).toList(),
+        nextCursor: snapshot.docs.length > AdminReportPage.pageSize
+            ? _FirestoreReportCursor(page.last)
+            : null,
+      );
+    } on FirebaseException catch (e) {
+      throw ServerException(message: 'No se pudieron consultar los reportes.', code: e.code);
     } catch (e) {
       throw ServerException(message: 'Error al consultar reportes en Firestore: $e');
     }
   }
 
   @override
+  Future<AdminReportTotals> getReportTotals() async {
+    final reports = _firestore.collection('reports');
+    Future<int> countReports(Query<Map<String, dynamic>> query) async =>
+        (await query.count().get().timeout(_readTimeout)).count!;
+
+    Future<int> countStatus(ReportStatus status) => countReports(
+      reports.where('status', whereIn: [
+        status.toDbString(),
+        status.toDbString().toUpperCase(),
+        status.label.toLowerCase(),
+        status.label,
+        status.label.toUpperCase(),
+      ]),
+    );
+
+    final (total, assigned, inProgress, resolved, cancelled) = await (
+      countReports(reports),
+      countStatus(ReportStatus.assigned),
+      countStatus(ReportStatus.inProgress),
+      countStatus(ReportStatus.resolved),
+      countStatus(ReportStatus.cancelled),
+    ).wait;
+    return (
+      total: total,
+      pending: (total - assigned - inProgress - resolved - cancelled).clamp(0, total),
+      assigned: assigned,
+      inProgress: inProgress,
+      resolved: resolved,
+    );
+  }
+
+  @override
   Future<List<MunicipalCrewDto>> getAvailableCrews() async {
     if (!_isFirebaseReady && _customFirestore == null) {
-      return [];
+      throw const ServerException(message: 'Base de datos no inicializada.');
     }
 
     try {
-      final snapshot = await _firestore.collection('crews').get();
-      return snapshot.docs
-          .map((doc) => MunicipalCrewDto.fromMap(doc.data(), doc.id))
-          .toList();
-    } catch (_) {
-      return [];
+      final snapshot = await _firestore
+          .collection('crews')
+          .get(const GetOptions(source: Source.server))
+          .timeout(_readTimeout);
+      return snapshot.docs.map((doc) => MunicipalCrewDto.fromMap(doc.data(), doc.id)).toList();
+    } on FirebaseException catch (e) {
+      throw ServerException(message: 'No se pudieron consultar las cuadrillas.', code: e.code);
+    } catch (e) {
+      throw ServerException(message: 'Error al consultar cuadrillas en Firestore: $e');
     }
   }
 
@@ -196,17 +247,20 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
   }
 
   @override
-  Future<void> updateReportPriority({
+  Future<ReportDto> updateReportPriority({
     required String reportId,
     required ReportPriority priority,
   }) async {
-    if (!_isFirebaseReady && _customFirestore == null) return;
+    if (!_isFirebaseReady && _customFirestore == null) {
+      throw const ServerException(message: 'Base de datos no inicializada.');
+    }
 
     try {
-      await writeReportStatus(
+      final updated = await writeReportStatus(
         report: _firestore.collection('reports').doc(reportId),
         changes: {'priority': priority.toDbString()},
       );
+      return ReportDto.fromMap(updated, reportId);
     } catch (e) {
       throw ServerException(message: 'Error al actualizar prioridad: $e');
     }

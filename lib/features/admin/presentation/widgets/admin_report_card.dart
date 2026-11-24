@@ -9,7 +9,7 @@ import '../../../citizen/presentation/widgets/report_community_summary_label.dar
 /// Capa: Presentation (Widgets Admin)
 class AdminReportCard extends StatelessWidget {
   final ReportEntity report;
-  final VoidCallback onAssign;
+  final VoidCallback? onAssign;
   final VoidCallback onViewDetail;
 
   const AdminReportCard({

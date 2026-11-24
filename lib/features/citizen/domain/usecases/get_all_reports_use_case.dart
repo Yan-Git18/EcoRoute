@@ -2,7 +2,7 @@ import '../../../../core/utils/result.dart';
 import '../entities/report_entity.dart';
 import '../repositories/report_repository.dart';
 
-/// Caso de uso para obtener todos los reportes comunitarios para el mapa urbano y reportes cercanos.
+/// Caso de uso para obtener los reportes comunitarios recientes del mapa.
 ///
 /// Principio SRP: Responsabilidad única de orquestar la obtención de reportes públicos para la comunidad.
 ///

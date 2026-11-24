@@ -10,7 +10,7 @@ import '../../../citizen/domain/entities/report_entity.dart';
 class AdminMapReportPreviewCard extends StatelessWidget {
   final ReportEntity report;
   final VoidCallback onClose;
-  final VoidCallback onAssignCrew;
+  final VoidCallback? onAssignCrew;
 
   const AdminMapReportPreviewCard({
     super.key,

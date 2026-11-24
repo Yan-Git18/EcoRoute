@@ -32,6 +32,9 @@ abstract class LocationService {
   Future<LocationDataResult?> getCoordinatesFromAddress(String address);
 }
 
+String describeLocationCoordinates(double lat, double lng) =>
+    'Ubicación seleccionada (${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)})';
+
 /// Implementación concreta de LocationService con Geolocator y Geocoding.
 class GeolocatorLocationServiceImpl implements LocationService {
   static const double _fallbackLat = AppGeoConstants.cajamarcaCenterLat;
@@ -122,28 +125,24 @@ class GeolocatorLocationServiceImpl implements LocationService {
 
   @override
   Future<String> getAddressFromCoordinates(double lat, double lng) async {
-    String resolvedAddress = 'Ubicación seleccionada (${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)})';
-
     try {
       if (!kIsWeb) {
         final geocoding = Geocoding();
-        final placemarks = await geocoding.placemarkFromCoordinates(lat, lng);
+        final placemarks = await geocoding
+            .placemarkFromCoordinates(lat, lng)
+            .timeout(const Duration(seconds: 5));
         if (placemarks.isNotEmpty) {
           final p = placemarks.first;
           final street = p.street ?? p.name ?? '';
           final subLocality = p.subLocality ?? p.locality ?? '';
           if (street.isNotEmpty) {
-            resolvedAddress = '$street${subLocality.isNotEmpty ? ', $subLocality' : ''}';
+            return '$street${subLocality.isNotEmpty ? ', $subLocality' : ''}';
           }
         }
-      } else {
-        resolvedAddress = _defaultFallbackAddress;
       }
-    } catch (_) {
-      resolvedAddress = _defaultFallbackAddress;
-    }
+    } catch (_) {}
 
-    return resolvedAddress;
+    return describeLocationCoordinates(lat, lng);
   }
 
   @override
@@ -157,10 +156,15 @@ class GeolocatorLocationServiceImpl implements LocationService {
         final query = trimmed.toLowerCase().contains('cajamarca')
             ? trimmed
             : '$trimmed, Cajamarca, Perú';
-        final locations = await geocoding.locationFromAddress(query);
+        final locations = await geocoding
+            .locationFromAddress(query)
+            .timeout(const Duration(seconds: 5));
         if (locations.isNotEmpty) {
           final loc = locations.first;
-          final resolvedAddress = await getAddressFromCoordinates(loc.latitude, loc.longitude);
+          final resolvedAddress = await getAddressFromCoordinates(
+            loc.latitude,
+            loc.longitude,
+          );
           return LocationDataResult(
             latitude: loc.latitude,
             longitude: loc.longitude,

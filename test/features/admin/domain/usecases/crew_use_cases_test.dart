@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ecoroute/core/errors/failures.dart';
 import 'package:ecoroute/core/utils/result.dart';
+import 'package:ecoroute/features/admin/domain/entities/admin_report_page.dart';
 import 'package:ecoroute/features/admin/domain/entities/municipal_crew_entity.dart';
 import 'package:ecoroute/features/admin/domain/repositories/admin_repository.dart';
 import 'package:ecoroute/features/admin/domain/usecases/create_crew_use_case.dart';
@@ -9,6 +10,8 @@ import 'package:ecoroute/features/admin/domain/usecases/get_crews_use_case.dart'
 import 'package:ecoroute/features/admin/domain/usecases/update_crew_use_case.dart';
 import 'package:ecoroute/features/auth/domain/entities/user_entity.dart';
 import 'package:ecoroute/features/citizen/domain/entities/report_entity.dart';
+
+import '../../admin_report_fixtures.dart';
 
 class FakeAdminRepository implements AdminRepository {
   List<MunicipalCrewEntity> crews = [];
@@ -49,7 +52,11 @@ class FakeAdminRepository implements AdminRepository {
   }
 
   @override
-  Future<Result<List<ReportEntity>>> getAllReports() async => const Success([]);
+  Future<Result<AdminReportPage<ReportEntity>>> getReportsPage({AdminReportCursor? after}) async =>
+      const Success(AdminReportPage([]));
+
+  @override
+  Future<Result<AdminReportTotals>> getReportTotals() async => Success(totalsForReports(const []));
 
   @override
   Future<Result<ReportEntity>> assignReportToCrew({

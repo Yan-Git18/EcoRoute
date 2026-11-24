@@ -7,6 +7,7 @@ import '../../../../core/errors/exceptions.dart';
 import '../../../../core/services/community_report_document.dart';
 import '../../../../core/services/firestore_media.dart';
 import '../../../../core/services/report_status_transaction.dart';
+import '../../domain/repositories/report_repository.dart';
 import '../models/report_dto.dart';
 
 /// Contrato abstracto para la fuente de datos remota de reportes de residuos en Firestore.
@@ -153,12 +154,18 @@ class FirebaseReportRemoteDataSourceImpl implements ReportRemoteDataSource {
     if (!_isFirebaseReady && _customFirestore == null) return [];
 
     try {
-      final snapshot = await _firestore.collection(communityReportsCollection).get();
-      final list = snapshot.docs
+      final cutoff = DateTime.now().toUtc().subtract(
+        const Duration(days: ReportRepository.communityReportWindowDays),
+      );
+      final snapshot = await _firestore
+          .collection(communityReportsCollection)
+          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
+          .orderBy('createdAt', descending: true)
+          .limit(ReportRepository.communityReportLimit)
+          .get();
+      return snapshot.docs
           .map((doc) => ReportDto.fromMap(doc.data(), doc.id))
           .toList();
-      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return list;
     } catch (e) {
       throw ServerException(message: 'Error al consultar reportes comunitarios: $e');
     }

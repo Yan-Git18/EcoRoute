@@ -36,6 +36,7 @@ class MockLocationService implements LocationService {
 
 class MockReportRepository implements ReportRepository {
   List<ReportEntity> reports = [];
+  int mapLoads = 0;
 
   @override
   Future<Result<List<ReportCategoryEntity>>> getCategories() async {
@@ -63,6 +64,7 @@ class MockReportRepository implements ReportRepository {
 
   @override
   Future<Result<List<ReportEntity>>> getAllReports() async {
+    mapLoads++;
     return Success(reports);
   }
 
@@ -137,6 +139,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    expect(mockRepo.mapLoads, 1);
+    expect(find.text('Últimos 30 días · Hasta 100 reportes recientes'), findsOneWidget);
 
     // 1. Selector de modo de vista presente con "Mapa" y "Cercanos"
     expect(find.text('Mapa'), findsWidgets);

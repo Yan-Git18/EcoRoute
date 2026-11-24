@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { migrateReportOperations } from "../migrate-report-operations.mjs";
 
-const project = "demo-ecoroute";
+const project = process.env.GCLOUD_PROJECT ?? "demo-ecoroute";
 const firestore = process.env.FIRESTORE_EMULATOR_HOST;
 const auth = process.env.FIREBASE_AUTH_EMULATOR_HOST;
 const emulator = { skip: (!firestore || !auth) && "Requires Firestore and Auth emulators" };
@@ -193,6 +193,127 @@ async function start(staff, item, owner) {
   await commit(staff.token, 200, started.change, ...started.related, started.notice);
   Object.assign(item.data, { status: string("in_progress"), ...extra });
 }
+
+test("la bandeja pagina por cursor y el mapa devuelve solo los reportes recientes", emulator, async (t) => {
+  const admin = await register("admin");
+  const citizen = await register();
+  const now = Date.now();
+  const timestampAtDaysAgo = (days) => ({
+    timestampValue: new Date(now - days * 86_400_000).toISOString(),
+  });
+  const from = (collectionId) => [{ collectionId }];
+  const orderBy = [
+    { field: { fieldPath: "createdAt" }, direction: "DESCENDING" },
+    { field: { fieldPath: "__name__" }, direction: "DESCENDING" },
+  ];
+  const recentCount = 110;
+  const totalCount = 180;
+  const fixture = Array.from({ length: totalCount }, (_, index) => {
+    const item = report(citizen);
+    const createdAt = timestampAtDaysAgo(index < recentCount ? 7 : 45);
+    const status = index < 15 ? string(index % 2 === 0 ? "resolved" : "Resuelto") : item.data.status;
+    return [
+      write(item.path, { ...item.data, status, createdAt }, { timestamp: null }),
+      write(item.publicPath, {
+        createdAt, status, latitude: item.data.latitude, longitude: item.data.longitude,
+      }, { timestamp: null }),
+    ];
+  }).flat();
+
+  async function query(token, structuredQuery) {
+    const started = performance.now();
+    const response = await request(":runQuery", token, { structuredQuery });
+    assert.equal(response.status, 200, response.ok ? undefined : await response.text());
+    const rows = await response.json();
+    return {
+      documents: rows.filter((row) => row.document).map((row) => row.document),
+      ms: Math.round(performance.now() - started),
+    };
+  }
+
+  async function count(token, structuredQuery) {
+    const response = await request(":runAggregationQuery", token, {
+      structuredAggregationQuery: {
+        structuredQuery,
+        aggregations: [{ count: {}, alias: "total" }],
+      },
+    });
+    assert.equal(response.status, 200, response.ok ? undefined : await response.text());
+    const rows = await response.json();
+    return Number(rows.find((row) => row.result).result.aggregateFields.total.integerValue);
+  }
+
+  async function measurePair(token, fullQuery, limitedQuery) {
+    const full = [];
+    const limited = [];
+    for (let i = 0; i < 5; i++) {
+      if (i % 2 === 0) {
+        full.push((await query(token, fullQuery)).ms);
+        limited.push((await query(token, limitedQuery)).ms);
+      } else {
+        limited.push((await query(token, limitedQuery)).ms);
+        full.push((await query(token, fullQuery)).ms);
+      }
+    }
+    const median = (sample) => sample.sort((a, b) => a - b)[2];
+    return [median(full), median(limited)];
+  }
+
+  await commit("owner", 200, ...fixture);
+  try {
+    const reportsQuery = { from: from("reports"), orderBy };
+    const firstPageQuery = { ...reportsQuery, limit: 31 };
+    const adminFull = await query(admin.token, reportsQuery);
+    const first = await query(admin.token, firstPageQuery);
+    const firstPage = first.documents.slice(0, 30);
+    const last = firstPage.at(-1);
+    const second = await query(admin.token, {
+      from: from("reports"), orderBy, limit: 31,
+      startAt: { before: false, values: [last.fields.createdAt, { referenceValue: last.name }] },
+    });
+    assert.equal(adminFull.documents.length, totalCount);
+    assert.equal(first.documents.length, 31);
+    assert.equal(last.fields.createdAt.timestampValue, second.documents[0].fields.createdAt.timestampValue);
+    assert.deepEqual(
+      [...firstPage, ...second.documents.slice(0, 30)].map((document) => document.name),
+      adminFull.documents.slice(0, 60).map((document) => document.name),
+    );
+
+    assert.equal(await count(admin.token, { from: from("reports") }), totalCount);
+    assert.equal(await count(admin.token, {
+      from: from("reports"),
+      where: { fieldFilter: {
+        field: { fieldPath: "status" }, op: "IN",
+        value: array(["resolved", "RESOLVED", "resuelto", "Resuelto", "RESUELTO"].map(string)),
+      } },
+    }), 15);
+
+    const communityQuery = { from: from("communityReports") };
+    const mapFull = await query(citizen.token, communityQuery);
+    const mapQuery = {
+      ...communityQuery,
+      where: { fieldFilter: {
+        field: { fieldPath: "createdAt" }, op: "GREATER_THAN_OR_EQUAL", value: timestampAtDaysAgo(30),
+      } },
+      orderBy: orderBy.slice(0, 1),
+    };
+    const recentQuery = { ...mapQuery, limit: 100 };
+    const recent = await query(citizen.token, recentQuery);
+    const inWindow = await query(citizen.token, mapQuery);
+    assert.equal(mapFull.documents.length, totalCount);
+    assert.equal(recent.documents.length, 100);
+    assert.equal(inWindow.documents.length, recentCount);
+    assert.ok(recent.documents.every((document) => Date.parse(document.fields.createdAt.timestampValue)
+      >= Date.parse(timestampAtDaysAgo(30).timestampValue)));
+
+    const [adminFullMs, firstPageMs] = await measurePair(admin.token, reportsQuery, firstPageQuery);
+    const [mapFullMs, recentMs] = await measurePair(citizen.token, communityQuery, recentQuery);
+    t.diagnostic(`Municipio: ${adminFull.documents.length} documentos (${adminFullMs} ms) → ${first.documents.length} (${firstPageMs} ms).`);
+    t.diagnostic(`Mapa ciudadano: ${mapFull.documents.length} documentos (${mapFullMs} ms) → ${recent.documents.length} (${recentMs} ms).`);
+  } finally {
+    await commit("owner", 200, ...fixture.map(({ update }) => ({ delete: update.name })));
+  }
+});
 
 test("el acceso operativo sigue a la cuadrilla y la toma de la tarea tiene un solo ganador", emulator, async () => {
   const [owner, admin, first, second, outsider, unassigned] = await Promise.all([

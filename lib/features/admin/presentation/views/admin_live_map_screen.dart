@@ -13,6 +13,7 @@ import '../../domain/entities/municipal_crew_entity.dart';
 import '../viewmodels/admin_reports_viewmodel.dart';
 import '../widgets/admin_assign_crew_modal.dart';
 import '../widgets/admin_bottom_nav_bar.dart';
+import '../widgets/admin_load_notice.dart';
 import '../widgets/admin_map_crew_preview_card.dart';
 import '../widgets/admin_map_report_preview_card.dart';
 
@@ -46,8 +47,8 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
   final MapController _mapController = MapController();
 
   AdminMapFilter _activeFilter = AdminMapFilter.all;
-  ReportEntity? _selectedReport;
-  MunicipalCrewEntity? _selectedCrew;
+  String? _selectedReportId;
+  String? _selectedCrewId;
   bool _showLegend = false;
 
   // Centro urbano de referencia (Cajamarca / Municipalidad)
@@ -102,6 +103,10 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
 
     final reports = adminReportsState.reports;
     final crews = adminReportsState.crews;
+    final hasReports = adminReportsState.hasLoadedReports;
+    final hasCrews = adminReportsState.hasLoadedCrews;
+    final selectedReport = reports.where((report) => report.id == _selectedReportId).firstOrNull;
+    final selectedCrew = crews.where((crew) => crew.id == _selectedCrewId).firstOrNull;
 
     final visibleReports = _getFilteredReports(reports);
     final visibleCrews = _getFilteredCrews(crews);
@@ -138,7 +143,7 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
               ),
             ),
             Text(
-              '${reports.length} incidencias • ${crews.length} personal en calle',
+              '${hasReports ? reports.length : '—'} incidencias cargadas',
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
@@ -148,6 +153,21 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
           ],
         ),
         actions: [
+          if (adminReportsState.nextCursor != null)
+            IconButton(
+              icon: const Icon(Icons.expand_more),
+              tooltip: 'Cargar más incidencias en el mapa',
+              onPressed: adminReportsState.isLoading || adminReportsState.isLoadingMore
+                  ? null
+                  : () async {
+                      await viewModel.loadMoreReports();
+                      if (context.mounted && ref.read(adminReportsViewModelProvider).loadMoreFailed) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('No se pudo cargar la página siguiente.')),
+                        );
+                      }
+                    },
+            ),
           IconButton(
             icon: Icon(
               _showLegend ? Icons.info_rounded : Icons.info_outline_rounded,
@@ -159,139 +179,154 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Color(0xFF475569)),
             tooltip: 'Actualizar mapa',
-            onPressed: () => viewModel.refresh(),
+            onPressed: adminReportsState.isLoading ? null : viewModel.refresh,
           ),
           const SizedBox(width: 4),
         ],
       ),
-      body: Stack(
+      body: Column(
         children: [
-          // 1. Capa de Mapa Real con OpenStreetMap o fallback de test
-          Positioned.fill(
-            child: _isFlutterTest
-                ? _buildTestVectorMap(visibleReports, visibleCrews)
-                : _buildOpenStreetMap(visibleReports, visibleCrews),
-          ),
-
-          // 2. Barra Flotante de Filtros Rápidos (Chips)
-          Positioned(
-            top: 12,
-            left: 16,
-            right: 16,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              child: Row(
+          AdminLoadNotice(state: adminReportsState, onRetry: viewModel.refresh),
+          if (adminReportsState.isLoadingMore)
+            const LinearProgressIndicator(semanticsLabel: 'Cargando más incidencias'),
+          if (hasReports || hasCrews)
+            Expanded(
+              child: Stack(
                 children: [
-                  _MapFilterChip(
-                    label: 'Todos (${reports.length})',
-                    isSelected: _activeFilter == AdminMapFilter.all,
-                    onTap: () => setState(() => _activeFilter = AdminMapFilter.all),
+                  // 1. Capa de Mapa Real con OpenStreetMap o fallback de test
+                  Positioned.fill(
+                    child: _isFlutterTest
+                        ? _buildTestVectorMap(visibleReports, visibleCrews)
+                        : _buildOpenStreetMap(visibleReports, visibleCrews),
                   ),
-                  const SizedBox(width: 8),
-                  _MapFilterChip(
-                    label: 'Urgentes ($urgentCount)',
-                    isSelected: _activeFilter == AdminMapFilter.urgent,
-                    color: const Color(0xFFDC2626),
-                    icon: Icons.priority_high_rounded,
-                    onTap: () => setState(() => _activeFilter = AdminMapFilter.urgent),
+
+                  // 2. Barra Flotante de Filtros Rápidos (Chips)
+                  Positioned(
+                    top: 12,
+                    left: 16,
+                    right: 16,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      child: Row(
+                        children: [
+                          _MapFilterChip(
+                            label: 'Todos (${hasReports ? reports.length : '—'})',
+                            isSelected: _activeFilter == AdminMapFilter.all,
+                            onTap: () => setState(() => _activeFilter = AdminMapFilter.all),
+                          ),
+                          const SizedBox(width: 8),
+                          _MapFilterChip(
+                            label: 'Urgentes (${hasReports ? urgentCount : '—'})',
+                            isSelected: _activeFilter == AdminMapFilter.urgent,
+                            color: const Color(0xFFDC2626),
+                            icon: Icons.priority_high_rounded,
+                            onTap: () => setState(() => _activeFilter = AdminMapFilter.urgent),
+                          ),
+                          const SizedBox(width: 8),
+                          _MapFilterChip(
+                            label: 'Pendientes (${hasReports ? pendingCount : '—'})',
+                            isSelected: _activeFilter == AdminMapFilter.pending,
+                            color: const Color(0xFFD97706),
+                            icon: Icons.pending_actions_rounded,
+                            onTap: () => setState(() => _activeFilter = AdminMapFilter.pending),
+                          ),
+                          const SizedBox(width: 8),
+                          _MapFilterChip(
+                            label: 'Personal (${hasCrews ? crews.length : '—'})',
+                            isSelected: _activeFilter == AdminMapFilter.crews,
+                            color: const Color(0xFF047857),
+                            icon: Icons.local_shipping_rounded,
+                            onTap: () => setState(() => _activeFilter = AdminMapFilter.crews),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  _MapFilterChip(
-                    label: 'Pendientes ($pendingCount)',
-                    isSelected: _activeFilter == AdminMapFilter.pending,
-                    color: const Color(0xFFD97706),
-                    icon: Icons.pending_actions_rounded,
-                    onTap: () => setState(() => _activeFilter = AdminMapFilter.pending),
+
+                  // 3. Leyenda explicativa flotante
+                  if (_showLegend)
+                    Positioned(
+                      top: 60,
+                      left: 16,
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withAlpha(245),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: const [
+                            BoxShadow(color: Color(0x18000000), blurRadius: 10, offset: Offset(0, 3)),
+                          ],
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Leyenda de Monitoreo',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                            ),
+                            SizedBox(height: 6),
+                            _LegendItem(color: Color(0xFFDC2626), label: 'Urgente / Alta'),
+                            _LegendItem(color: Color(0xFFD97706), label: 'Media Prioridad'),
+                            _LegendItem(color: Color(0xFF059669), label: 'Baja Prioridad'),
+                            _LegendItem(color: Color(0xFF0A5835), label: 'Personal Activo (Camión)'),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  // 4. Botón flotante para recentrar mapa
+                  Positioned(
+                    bottom: (selectedReport != null || selectedCrew != null) ? 260 : 20,
+                    right: 16,
+                    child: FloatingActionButton.small(
+                      heroTag: 'recenter_admin_map',
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF0A5835),
+                      elevation: 4,
+                      onPressed: () => _recenterMap(),
+                      child: const Icon(Icons.my_location_rounded, size: 20),
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  _MapFilterChip(
-                    label: 'Personal (${crews.length})',
-                    isSelected: _activeFilter == AdminMapFilter.crews,
-                    color: const Color(0xFF047857),
-                    icon: Icons.local_shipping_rounded,
-                    onTap: () => setState(() => _activeFilter = AdminMapFilter.crews),
-                  ),
+
+                  // 5. Tarjeta emergente para reporte seleccionado
+                  if (selectedReport != null)
+                    Positioned(
+                      bottom: 16,
+                      left: 16,
+                      right: 16,
+                      child: AdminMapReportPreviewCard(
+                        report: selectedReport,
+                        onClose: () => setState(() => _selectedReportId = null),
+                        onAssignCrew: hasCrews
+                            ? () {
+                                _openAssignModal(
+                                  report: selectedReport,
+                                  adminId: adminId,
+                                  adminName: adminName,
+                                );
+                              }
+                            : null,
+                      ),
+                    ),
+
+                  // 6. Tarjeta emergente para cuadrilla seleccionada
+                  if (selectedCrew != null)
+                    Positioned(
+                      bottom: 16,
+                      left: 16,
+                      right: 16,
+                      child: AdminMapCrewPreviewCard(
+                        crew: selectedCrew,
+                        onClose: () => setState(() => _selectedCrewId = null),
+                        onViewTasks: () {
+                          context.push(RouteNames.adminReports);
+                        },
+                      ),
+                    ),
                 ],
-              ),
-            ),
-          ),
-
-          // 3. Leyenda explicativa flotante
-          if (_showLegend)
-            Positioned(
-              top: 60,
-              left: 16,
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(245),
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: const [
-                    BoxShadow(color: Color(0x18000000), blurRadius: 10, offset: Offset(0, 3)),
-                  ],
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('Leyenda de Monitoreo', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                    SizedBox(height: 6),
-                    _LegendItem(color: Color(0xFFDC2626), label: 'Urgente / Alta'),
-                    _LegendItem(color: Color(0xFFD97706), label: 'Media Prioridad'),
-                    _LegendItem(color: Color(0xFF059669), label: 'Baja Prioridad'),
-                    _LegendItem(color: Color(0xFF0A5835), label: 'Personal Activo (Camión)'),
-                  ],
-                ),
-              ),
-            ),
-
-          // 4. Botón flotante para recentrar mapa
-          Positioned(
-            bottom: (_selectedReport != null || _selectedCrew != null) ? 260 : 20,
-            right: 16,
-            child: FloatingActionButton.small(
-              heroTag: 'recenter_admin_map',
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF0A5835),
-              elevation: 4,
-              onPressed: () => _recenterMap(),
-              child: const Icon(Icons.my_location_rounded, size: 20),
-            ),
-          ),
-
-          // 5. Tarjeta emergente para reporte seleccionado
-          if (_selectedReport != null)
-            Positioned(
-              bottom: 16,
-              left: 16,
-              right: 16,
-              child: AdminMapReportPreviewCard(
-                report: _selectedReport!,
-                onClose: () => setState(() => _selectedReport = null),
-                onAssignCrew: () {
-                  _openAssignModal(
-                    report: _selectedReport!,
-                    adminId: adminId,
-                    adminName: adminName,
-                  );
-                },
-              ),
-            ),
-
-          // 6. Tarjeta emergente para cuadrilla seleccionada
-          if (_selectedCrew != null)
-            Positioned(
-              bottom: 16,
-              left: 16,
-              right: 16,
-              child: AdminMapCrewPreviewCard(
-                crew: _selectedCrew!,
-                onClose: () => setState(() => _selectedCrew = null),
-                onViewTasks: () {
-                  context.push(RouteNames.adminReports);
-                },
               ),
             ),
         ],
@@ -311,10 +346,10 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
         maxZoom: 19.0,
         interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
         onTap: (_, __) {
-          if (_selectedReport != null || _selectedCrew != null) {
+          if (_selectedReportId != null || _selectedCrewId != null) {
             setState(() {
-              _selectedReport = null;
-              _selectedCrew = null;
+              _selectedReportId = null;
+              _selectedCrewId = null;
             });
           }
         },
@@ -345,7 +380,7 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
 
   // Marcador interactivo de Cuadrilla Municipal
   Marker _buildCrewMarker(MunicipalCrewEntity crew) {
-    final isSelected = _selectedCrew?.id == crew.id;
+    final isSelected = _selectedCrewId == crew.id;
 
     return Marker(
       point: LatLng(crew.latitude, crew.longitude),
@@ -356,8 +391,8 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
         behavior: HitTestBehavior.opaque,
         onTap: () {
           setState(() {
-            _selectedCrew = crew;
-            _selectedReport = null;
+            _selectedCrewId = crew.id;
+            _selectedReportId = null;
           });
           _recenterMap(crew.latitude, crew.longitude);
         },
@@ -412,7 +447,7 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
 
   // Marcador interactivo de Reporte Ciudadano
   Marker _buildReportMarker(ReportEntity report) {
-    final isSelected = _selectedReport?.id == report.id;
+    final isSelected = _selectedReportId == report.id;
     final pinColor = _getReportPinColor(report);
 
     return Marker(
@@ -424,8 +459,8 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
         behavior: HitTestBehavior.opaque,
         onTap: () {
           setState(() {
-            _selectedReport = report;
-            _selectedCrew = null;
+            _selectedReportId = report.id;
+            _selectedCrewId = null;
           });
           _recenterMap(report.latitude, report.longitude);
         },
@@ -518,12 +553,18 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
               // Botón rápido para simular clic en reporte en tests
               if (reports.isNotEmpty)
                 ElevatedButton(
-                  onPressed: () => setState(() => _selectedReport = reports.first),
+                  onPressed: () => setState(() {
+                    _selectedReportId = reports.first.id;
+                    _selectedCrewId = null;
+                  }),
                   child: const Text('Simular Selección de Reporte'),
                 ),
               if (crews.isNotEmpty)
                 ElevatedButton(
-                  onPressed: () => setState(() => _selectedCrew = crews.first),
+                  onPressed: () => setState(() {
+                    _selectedCrewId = crews.first.id;
+                    _selectedReportId = null;
+                  }),
                   child: const Text('Simular Selección de Cuadrilla'),
                 ),
             ],
@@ -556,13 +597,6 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
         );
 
         if (success && mounted) {
-          setState(() {
-            _selectedReport = _selectedReport?.copyWith(
-              status: ReportStatus.assigned,
-              assignedToTeamName: crew.name,
-              assignedVehicle: '${crew.vehicleCode} • ${crew.vehiclePlate}',
-            );
-          });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('${report.reportNumber} despachado a ${crew.name}.'),

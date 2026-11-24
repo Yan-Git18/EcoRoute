@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -57,32 +58,38 @@ class MockWizardMediaPickerService implements MediaPickerService {
 }
 
 class MockWizardLocationService implements LocationService {
+  LocationDataResult gpsResult = const LocationDataResult(
+    latitude: -7.147,
+    longitude: -78.505,
+    address: 'Av. del Maestro',
+  );
+  Completer<LocationDataResult>? pendingGps;
+  int gpsRequests = 0;
+
   @override
   Future<LocationDataResult> getCurrentPosition() async {
-    return const LocationDataResult(
-      latitude: AppGeoConstants.cajamarcaCenterLat,
-      longitude: AppGeoConstants.cajamarcaCenterLng,
-      address: AppGeoConstants.defaultAddress,
-    );
+    gpsRequests++;
+    return pendingGps?.future ?? gpsResult;
   }
 
   @override
   Future<String> getAddressFromCoordinates(double lat, double lng) async {
-    return AppGeoConstants.defaultAddress;
+    return describeLocationCoordinates(lat, lng);
   }
 
   @override
   Future<LocationDataResult?> getCoordinatesFromAddress(String address) async {
     return const LocationDataResult(
-      latitude: AppGeoConstants.cajamarcaCenterLat,
-      longitude: AppGeoConstants.cajamarcaCenterLng,
-      address: AppGeoConstants.defaultAddress,
+      latitude: -7.155,
+      longitude: -78.520,
+      address: 'Jr. del Batán',
     );
   }
 }
 
 class MockWizardReportRepository implements ReportRepository {
   bool failSave = false;
+  ReportEntity? savedReport;
 
   @override
   Future<Result<List<ReportCategoryEntity>>> getCategories() async {
@@ -97,9 +104,13 @@ class MockWizardReportRepository implements ReportRepository {
   }) async {
     if (failSave) {
       return const FailureResult(
-        ServerFailure(message: 'Permisos insuficientes en Firestore.', code: 'permission-denied'),
+        ServerFailure(
+          message: 'Permisos insuficientes en Firestore.',
+          code: 'permission-denied',
+        ),
       );
     }
+    savedReport = report;
     return Success(report);
   }
 
@@ -186,17 +197,28 @@ void main() {
 
     // 6. Verificamos elementos del Paso 3: Selección de ubicación
     expect(find.text('Selecciona la ubicación'), findsOneWidget);
-    expect(find.text('Buscar o ingresar dirección...'), findsOneWidget);
-    expect(find.text('Punto del incidente'), findsOneWidget);
+    expect(find.text('Buscar dirección en Cajamarca'), findsOneWidget);
+    expect(find.text('Punto del incidente'), findsNothing);
     expect(find.text('Usar mi ubicación actual'), findsOneWidget);
     expect(find.text('Referencia adicional (opcional)'), findsOneWidget);
+    expect(mockLocation.gpsRequests, 0);
+    expect(
+      tester
+          .widget<ElevatedButton>(
+            find.widgetWithText(ElevatedButton, 'Confirmar ubicación'),
+          )
+          .onPressed,
+      isNull,
+    );
 
     // 7. Pulsamos en 'Usar mi ubicación actual' y verificamos actualización
     await tester.tap(find.text('Usar mi ubicación actual'));
     await tester.pumpAndSettle();
+    expect(find.text('Punto del incidente'), findsOneWidget);
+    expect(find.text('Av. del Maestro'), findsOneWidget);
 
     // 8. Verificamos que el botón de Siguiente permite avanzar al Paso 4
-    await tester.tap(find.text('Siguiente'));
+    await tester.tap(find.text('Confirmar ubicación'));
     await tester.pumpAndSettle();
 
     // 9. Verificamos que avanzó al Paso 4 (Completa la información)
@@ -225,9 +247,11 @@ void main() {
     await tester.tap(find.text('Enviar reporte'));
     await tester.pumpAndSettle();
     expect(find.text('¡Reporte enviado!'), findsOneWidget);
+    expect(mockRepo.savedReport?.latitude, -7.147);
+    expect(mockRepo.savedReport?.longitude, -78.505);
   });
 
-  testWidgets('Paso 3 de ubicación: Permite buscar dirección y reubicar el PIN en el mapa', (WidgetTester tester) async {
+  testWidgets('El GPS denegado o fuera de cobertura requiere marcar o buscar un punto', (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 2.0;
     addTearDown(() => tester.view.resetPhysicalSize());
@@ -264,22 +288,98 @@ void main() {
     await tester.pumpAndSettle();
 
     // Verificamos controles del mapa interactivo
-    expect(find.text('Cajamarca • Toca o arrastra el PIN'), findsOneWidget);
-    expect(find.text('Punto del incidente'), findsOneWidget);
-    expect(find.byIcon(Icons.location_on_rounded), findsWidgets);
+    final confirmButton = find.widgetWithText(
+      ElevatedButton,
+      'Confirmar ubicación',
+    );
+    expect(find.text('Cajamarca • Toca para marcar'), findsOneWidget);
+    expect(find.text('Punto del incidente'), findsNothing);
     expect(find.byTooltip('Acercar mapa'), findsOneWidget);
     expect(find.byTooltip('Alejar mapa'), findsOneWidget);
-    expect(find.byTooltip('Recentrar en el PIN'), findsOneWidget);
+    expect(find.byTooltip('Recentrar en el PIN'), findsNothing);
 
-    // Escribir en el buscador de dirección
-    final searchInput = find.byType(TextField).first;
-    await tester.enterText(searchInput, AppGeoConstants.defaultAddress);
+    mockLocation.gpsResult = const LocationDataResult(
+      latitude: AppGeoConstants.cajamarcaCenterLat,
+      longitude: AppGeoConstants.cajamarcaCenterLng,
+      address: AppGeoConstants.defaultAddress,
+      isPermissionDenied: true,
+    );
+    await tester.tap(find.text('Usar mi ubicación actual'));
     await tester.pumpAndSettle();
+    expect(tester.widget<ElevatedButton>(confirmButton).onPressed, isNull);
+    expect(find.text('Punto del incidente'), findsNothing);
 
-    // Presionar el icono de búsqueda
+    mockLocation.gpsResult = const LocationDataResult(
+      latitude: -12.046,
+      longitude: -77.042,
+    );
+    await tester.tap(find.text('Usar mi ubicación actual'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<ElevatedButton>(confirmButton).onPressed, isNull);
+    expect(find.text('Punto del incidente'), findsNothing);
+
+    await tester.enterText(find.byType(TextField).first, 'Batán');
+    await tester.pumpAndSettle();
+    expect(tester.widget<ElevatedButton>(confirmButton).onPressed, isNull);
     await tester.tap(find.byTooltip('Buscar en el mapa'));
     await tester.pumpAndSettle();
+    expect(find.text('Jr. del Batán'), findsOneWidget);
+    expect(tester.widget<ElevatedButton>(confirmButton).onPressed, isNotNull);
 
-    expect(find.text(AppGeoConstants.defaultAddress), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('report-location-map')));
+    await tester.pumpAndSettle();
+    expect(find.text('Jr. del Batán'), findsNothing);
+    expect(find.text('Punto del incidente'), findsOneWidget);
+    expect(find.byTooltip('Recentrar en el PIN'), findsOneWidget);
+    expect(tester.widget<ElevatedButton>(confirmButton).onPressed, isNotNull);
+    await tester.tap(confirmButton);
+    await tester.pumpAndSettle();
+    expect(find.text('Completa la información'), findsOneWidget);
   });
+
+  test(
+    'El GPS tardío no reemplaza el punto marcado y un nuevo reporte empieza sin punto',
+    () async {
+      final gps = Completer<LocationDataResult>();
+      final location = MockWizardLocationService()..pendingGps = gps;
+      final repository = MockWizardReportRepository();
+      final container = ProviderContainer(
+        overrides: [
+          locationServiceProvider.overrideWithValue(location),
+          reportRepositoryProvider.overrideWithValue(repository),
+        ],
+      );
+      addTearDown(container.dispose);
+      container.listen(createReportViewModelProvider, (_, _) {});
+      final viewModel = container.read(createReportViewModelProvider.notifier);
+
+      viewModel.setDescription('Residuos acumulados en la vía');
+      expect(await viewModel.submitReport(), isFalse);
+      expect(repository.savedReport, isNull);
+
+      final gpsRequest = viewModel.getCurrentLocation();
+      await viewModel.updateCoordinates(-7.140, -78.500);
+      gps.complete(location.gpsResult);
+
+      expect(await gpsRequest, isFalse);
+      expect(
+        container.read(createReportViewModelProvider).reportPoint?.latitude,
+        -7.140,
+      );
+      expect(
+        container.read(createReportViewModelProvider).canAdvanceFromStep3,
+        isTrue,
+      );
+
+      await viewModel.updateCoordinates(-12.046, -77.042);
+      expect(
+        container.read(createReportViewModelProvider).canAdvanceFromStep3,
+        isFalse,
+      );
+      viewModel.resetForm();
+      expect(container.read(createReportViewModelProvider).reportPoint, isNull);
+      expect(location.gpsRequests, 1);
+      await Future<void>.delayed(Duration.zero);
+    },
+  );
 }

@@ -9,6 +9,7 @@ import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../viewmodels/admin_reports_viewmodel.dart';
 import '../widgets/admin_bottom_nav_bar.dart';
+import '../widgets/admin_load_notice.dart';
 
 /// Pantalla del panel de control para el Administrador
 /// Capa: Presentation (Administrador)
@@ -20,8 +21,13 @@ class AdminDashboardScreen extends ConsumerWidget {
     final authState = ref.watch(authViewModelProvider);
     final user = authState.user;
     final adminReportsState = ref.watch(adminReportsViewModelProvider);
+    final totals = adminReportsState.totals;
+    final pendingCount = totals?.pending ?? 0;
+    final viewModel = ref.read(adminReportsViewModelProvider.notifier);
 
-    final pendingReports = adminReportsState.reports.where((r) => r.status == ReportStatus.pending).toList();
+    final pendingReports = adminReportsState.reports
+        .where((r) => r.status == ReportStatus.pending)
+        .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -31,7 +37,7 @@ class AdminDashboardScreen extends ConsumerWidget {
             padding: const EdgeInsets.only(right: 8),
             child: EcoNotificationButton(
               onTap: () => context.push(RouteNames.adminReports),
-              hasUnread: adminReportsState.pendingCount > 0,
+              hasUnread: pendingCount > 0,
               size: 40,
             ),
           ),
@@ -45,7 +51,7 @@ class AdminDashboardScreen extends ConsumerWidget {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () => ref.read(adminReportsViewModelProvider.notifier).refresh(),
+        onRefresh: viewModel.refresh,
         color: const Color(0xFF0A5835),
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -98,52 +104,55 @@ class AdminDashboardScreen extends ConsumerWidget {
               const SizedBox(height: 24),
 
               // Métricas Globales Reactivas
-              const EcoSectionHeader(title: 'Resumen Municipal de Reportes'),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _AdminStatCard(
-                      title: 'Total Reportes',
-                      value: '${adminReportsState.totalCount}',
-                      color: AppColors.primary,
-                      icon: Icons.assignment_rounded,
+              AdminLoadNotice(state: adminReportsState, onRetry: viewModel.refresh),
+              if (totals != null || adminReportsState.hasLoadedReports) ...[
+                const EcoSectionHeader(title: 'Resumen Municipal de Reportes'),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _AdminStatCard(
+                        title: 'Total Reportes',
+                        value: totals?.total.toString() ?? '—',
+                        color: AppColors.primary,
+                        icon: Icons.assignment_rounded,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _AdminStatCard(
-                      title: 'Pendientes',
-                      value: '${adminReportsState.pendingCount}',
-                      color: AppColors.statusPending,
-                      icon: Icons.pending_actions_rounded,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _AdminStatCard(
+                        title: 'Pendientes',
+                        value: totals?.pending.toString() ?? '—',
+                        color: AppColors.statusPending,
+                        icon: Icons.pending_actions_rounded,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _AdminStatCard(
-                      title: 'En Proceso',
-                      value: '${adminReportsState.inProgressCount + adminReportsState.assignedCount}',
-                      color: AppColors.statusInProgress,
-                      icon: Icons.sync_rounded,
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _AdminStatCard(
+                        title: 'En Proceso',
+                        value: totals == null ? '—' : '${totals.inProgress + totals.assigned}',
+                        color: AppColors.statusInProgress,
+                        icon: Icons.sync_rounded,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _AdminStatCard(
-                      title: 'Resueltos',
-                      value: '${adminReportsState.resolvedCount}',
-                      color: AppColors.statusResolved,
-                      icon: Icons.check_circle_rounded,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _AdminStatCard(
+                        title: 'Resueltos',
+                        value: totals?.resolved.toString() ?? '—',
+                        color: AppColors.statusResolved,
+                        icon: Icons.check_circle_rounded,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
+                  ],
+                ),
+                const SizedBox(height: 24),
+              ],
 
               // Accesos de Gestión
               const EcoSectionHeader(title: 'Módulos de Gestión'),
@@ -153,7 +162,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                 subtitle: 'Revisar, clasificar y asignar a personal',
                 icon: Icons.rule_folder_rounded,
                 color: AppColors.primary,
-                badgeText: adminReportsState.pendingCount > 0 ? '${adminReportsState.pendingCount} por atender' : null,
+                badgeText: pendingCount > 0 ? '$pendingCount por atender' : null,
                 onTap: () => context.push(RouteNames.adminReports),
               ),
               const SizedBox(height: 10),
@@ -196,7 +205,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 24),
                 EcoSectionHeader(
                   title: 'Incidencias Pendientes Urgentes',
-                  actionText: 'Ver todas (${pendingReports.length})',
+                  actionText: 'Ver todos los reportes',
                   onActionTap: () => context.push(RouteNames.adminReports),
                 ),
                 const SizedBox(height: 12),

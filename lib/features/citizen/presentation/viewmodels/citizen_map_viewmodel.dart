@@ -31,6 +31,7 @@ class CitizenMapViewModel extends Notifier<CitizenMapState> {
   late final GetAllReportsUseCase _getAllReportsUseCase;
   late final LocationService _locationService;
   bool _isDisposed = false;
+  Future<void>? _activeLoad;
 
   @override
   CitizenMapState build() {
@@ -42,10 +43,8 @@ class CitizenMapViewModel extends Notifier<CitizenMapState> {
       _isDisposed = true;
     });
 
-    // Cargar datos y geolocalizar al inicializar
+    // La pantalla solicita los reportes al entrar. El GPS no bloquea esa consulta.
     Future.microtask(() async {
-      if (_isDisposed) return;
-      await loadReports();
       if (_isDisposed) return;
       await requestUserLocation();
     });
@@ -53,8 +52,12 @@ class CitizenMapViewModel extends Notifier<CitizenMapState> {
     return const CitizenMapState(isLoading: true);
   }
 
-  /// Carga todos los reportes comunitarios para el mapa y lista de cercanos.
-  Future<void> loadReports() async {
+  Future<void> loadReports() => _activeLoad ??= _loadReports().whenComplete(() {
+    _activeLoad = null;
+  });
+
+  /// Carga los reportes comunitarios recientes para el mapa y la lista de cercanos.
+  Future<void> _loadReports() async {
     if (_isDisposed) return;
     state = state.copyWith(isLoading: true, clearError: true);
 
@@ -64,9 +67,12 @@ class CitizenMapViewModel extends Notifier<CitizenMapState> {
     result.fold(
       onSuccess: (reports) {
         if (!_isDisposed) {
+          final selected = reports.where((report) => report.id == state.selectedReport?.id).firstOrNull;
           state = state.copyWith(
             allReports: reports,
             isLoading: false,
+            selectedReport: selected,
+            clearSelectedReport: selected == null,
           );
         }
       },

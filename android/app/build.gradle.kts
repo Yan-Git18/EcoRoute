@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -7,6 +9,18 @@ plugins {
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+val useLegacySigning = providers.environmentVariable("ECOROUTE_ANDROID_LEGACY_SIGNING")
+    .map { it.equals("true", ignoreCase = true) }
+    .getOrElse(false)
+val signingPropertiesFile = rootProject.file("key.properties")
+val signingProperties = Properties()
+if (!useLegacySigning && signingPropertiesFile.isFile) {
+    signingPropertiesFile.inputStream().use { signingProperties.load(it) }
+}
+val releaseKeyStore = signingProperties.getProperty("storeFile")
+    ?.takeIf { it.isNotBlank() }
+    ?.let { rootProject.file(it) }
 
 android {
     namespace = "com.example.ecoroute"
@@ -29,11 +43,18 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = releaseKeyStore
+            storePassword = signingProperties.getProperty("storePassword")
+            keyAlias = signingProperties.getProperty("keyAlias")
+            keyPassword = signingProperties.getProperty("keyPassword")
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (useLegacySigning) "debug" else "release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -42,6 +63,28 @@ android {
             )
         }
     }
+}
+
+val checkReleaseSigning = tasks.register("checkReleaseSigning") {
+    doLast {
+        if (!useLegacySigning) {
+            check(signingPropertiesFile.isFile) {
+                "Configura android/key.properties para firmar la versión de publicación. Consulta el README."
+            }
+            check(listOf("storeFile", "storePassword", "keyAlias", "keyPassword").all {
+                !signingProperties.getProperty(it).isNullOrBlank()
+            }) {
+                "Completa storeFile, storePassword, keyAlias y keyPassword en android/key.properties."
+            }
+            check(releaseKeyStore?.isFile == true) {
+                "El archivo de firma indicado en storeFile no existe."
+            }
+        }
+    }
+}
+
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn(checkReleaseSigning)
 }
 
 flutter {

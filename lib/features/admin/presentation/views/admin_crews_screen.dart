@@ -6,6 +6,7 @@ import '../../domain/entities/municipal_crew_entity.dart';
 import '../viewmodels/admin_reports_state.dart';
 import '../viewmodels/admin_reports_viewmodel.dart';
 import '../widgets/admin_bottom_nav_bar.dart';
+import '../widgets/admin_load_notice.dart';
 import '../widgets/admin_crew_card.dart';
 import '../widgets/admin_crew_create_modal.dart';
 import '../widgets/admin_crew_edit_modal.dart';
@@ -103,14 +104,15 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
                 letterSpacing: -0.3,
               ),
             ),
-            Text(
-              '${crews.length} equipos registrados • $onRouteCount en servicio',
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF047857),
+            if (adminReportsState.hasLoadedCrews)
+              Text(
+                '${crews.length} equipos registrados • $onRouteCount en servicio',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF047857),
+                ),
               ),
-            ),
           ],
         ),
         actions: [
@@ -132,249 +134,266 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Color(0xFF475569)),
             tooltip: 'Actualizar cuadrillas',
-            onPressed: () => viewModel.refresh(),
+            onPressed: adminReportsState.isLoading ? null : viewModel.refresh,
           ),
           const SizedBox(width: 4),
         ],
       ),
       body: Column(
         children: [
+          AdminLoadNotice(state: adminReportsState, onRetry: viewModel.refresh, showReports: false),
           // 1. Resumen de Métricas de Cuadrillas y Buscador
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-            child: Column(
-              children: [
-                // Fila de Métricas Rápidas
-                Row(
-                  children: [
-                    Expanded(
-                      child: _FleetStatPill(
-                        label: 'Total Equipos',
-                        count: '${crews.length}',
-                        color: const Color(0xFF0A5835),
-                        icon: Icons.groups_rounded,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _FleetStatPill(
-                        label: 'En Ruta',
-                        count: '$onRouteCount',
-                        color: const Color(0xFF2563EB),
-                        icon: Icons.navigation_rounded,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _FleetStatPill(
-                        label: 'Disponibles',
-                        count: '$availableCount',
-                        color: const Color(0xFF059669),
-                        icon: Icons.check_circle_outline_rounded,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _FleetStatPill(
-                        label: 'Incidencias',
-                        count: '${crews.fold(0, (acc, c) => acc + c.activeTasksCount)}',
-                        color: const Color(0xFFD97706),
-                        icon: Icons.assignment_turned_in_rounded,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                // Buscador
-                TextField(
-                  controller: _searchController,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    hintText: 'Buscar por cuadrilla, zona, responsable o unidad...',
-                    hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-                    prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF64748B)),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear_rounded, size: 18),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() {});
-                            },
-                          )
-                        : null,
-                    filled: true,
-                    fillColor: const Color(0xFFF1F5F9),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Chips de Filtro
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  child: Row(
+          if (adminReportsState.hasLoadedCrews)
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+              child: Column(
+                children: [
+                  // Fila de Métricas Rápidas
+                  Row(
                     children: [
-                      _FilterChipItem(
-                        label: 'Todas',
-                        count: crews.length,
-                        isSelected: _selectedFilter == 'all',
-                        onTap: () => setState(() => _selectedFilter = 'all'),
+                      Expanded(
+                        child: _FleetStatPill(
+                          label: 'Total Equipos',
+                          count: '${crews.length}',
+                          color: const Color(0xFF0A5835),
+                          icon: Icons.groups_rounded,
+                        ),
                       ),
                       const SizedBox(width: 8),
-                      _FilterChipItem(
-                        label: 'En Ruta',
-                        count: onRouteCount,
-                        color: const Color(0xFF2563EB),
-                        isSelected: _selectedFilter == 'onRoute',
-                        onTap: () => setState(() => _selectedFilter = 'onRoute'),
+                      Expanded(
+                        child: _FleetStatPill(
+                          label: 'En Ruta',
+                          count: '$onRouteCount',
+                          color: const Color(0xFF2563EB),
+                          icon: Icons.navigation_rounded,
+                        ),
                       ),
                       const SizedBox(width: 8),
-                      _FilterChipItem(
-                        label: 'Disponibles',
-                        count: availableCount,
-                        color: const Color(0xFF059669),
-                        isSelected: _selectedFilter == 'available',
-                        onTap: () => setState(() => _selectedFilter = 'available'),
+                      Expanded(
+                        child: _FleetStatPill(
+                          label: 'Disponibles',
+                          count: '$availableCount',
+                          color: const Color(0xFF059669),
+                          icon: Icons.check_circle_outline_rounded,
+                        ),
                       ),
                       const SizedBox(width: 8),
-                      _FilterChipItem(
-                        label: 'En Mantenimiento',
-                        count: maintenanceCount,
-                        color: const Color(0xFFDC2626),
-                        isSelected: _selectedFilter == 'maintenance',
-                        onTap: () => setState(() => _selectedFilter = 'maintenance'),
+                      Expanded(
+                        child: _FleetStatPill(
+                          label: 'Incidencias',
+                          count: '${crews.fold(0, (acc, c) => acc + c.activeTasksCount)}',
+                          color: const Color(0xFFD97706),
+                          icon: Icons.assignment_turned_in_rounded,
+                        ),
                       ),
                     ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 12),
+
+                  // Buscador
+                  TextField(
+                    controller: _searchController,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: 'Buscar por cuadrilla, zona, responsable o unidad...',
+                      hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                      prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF64748B)),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear_rounded, size: 18),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {});
+                              },
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: const Color(0xFFF1F5F9),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Chips de Filtro
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      children: [
+                        _FilterChipItem(
+                          label: 'Todas',
+                          count: crews.length,
+                          isSelected: _selectedFilter == 'all',
+                          onTap: () => setState(() => _selectedFilter = 'all'),
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterChipItem(
+                          label: 'En Ruta',
+                          count: onRouteCount,
+                          color: const Color(0xFF2563EB),
+                          isSelected: _selectedFilter == 'onRoute',
+                          onTap: () => setState(() => _selectedFilter = 'onRoute'),
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterChipItem(
+                          label: 'Disponibles',
+                          count: availableCount,
+                          color: const Color(0xFF059669),
+                          isSelected: _selectedFilter == 'available',
+                          onTap: () => setState(() => _selectedFilter = 'available'),
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterChipItem(
+                          label: 'En Mantenimiento',
+                          count: maintenanceCount,
+                          color: const Color(0xFFDC2626),
+                          isSelected: _selectedFilter == 'maintenance',
+                          onTap: () => setState(() => _selectedFilter = 'maintenance'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
           const Divider(height: 1, color: Color(0xFFE2E8F0)),
 
           // 2. Lista de Personal
-          Expanded(
-            child: filteredCrews.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0A5835).withAlpha(15),
-                              shape: BoxShape.circle,
+          if (adminReportsState.hasLoadedCrews)
+            Expanded(
+              child: filteredCrews.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0A5835).withAlpha(15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.groups_outlined,
+                                size: 48,
+                                color: Color(0xFF0A5835),
+                              ),
                             ),
-                            child: const Icon(Icons.groups_outlined, size: 48, color: Color(0xFF0A5835)),
-                          ),
-                          const SizedBox(height: 14),
-                          const Text(
-                            'No se encontraron cuadrillas',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
-                          ),
-                          const SizedBox(height: 6),
-                          const Text(
-                            'Intenta con otro término de búsqueda o registra una nueva cuadrilla.',
-                            style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
+                            const SizedBox(height: 14),
+                            const Text(
+                              'No se encontraron cuadrillas',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Intenta con otro término de búsqueda o registra una nueva cuadrilla.',
+                              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    itemCount: filteredCrews.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 14),
-                    itemBuilder: (context, index) {
-                      final crew = filteredCrews[index];
-                      return AdminCrewCard(
-                        crew: crew,
-                        onViewOnMap: () => context.push(RouteNames.adminLiveMap),
-                        onEdit: () {
-                          AdminCrewEditModal.show(
-                            context: context,
-                            crew: crew,
-                            onConfirm: ({
-                              required status,
-                              required zone,
-                              required isAvailable,
-                              leadStaffName,
-                              vehicleCode,
-                              vehiclePlate,
-                            }) async {
-                              final messenger = ScaffoldMessenger.of(context);
-                              final success = await viewModel.updateCrew(
-                                crewId: crew.id,
-                                status: status,
-                                zone: zone,
-                                isAvailable: isAvailable,
-                                leadStaffName: leadStaffName,
-                                vehicleCode: vehicleCode,
-                                vehiclePlate: vehiclePlate,
-                              );
-                              if (mounted) {
-                                if (success) {
-                                  messenger.showSnackBar(
-                                    SnackBar(
-                                      content: Text('Unidad ${crew.vehicleCode} actualizada correctamente.'),
-                                      backgroundColor: const Color(0xFF047857),
-                                      behavior: SnackBarBehavior.floating,
-                                    ),
-                                  );
-                                } else {
-                                  messenger.showSnackBar(
-                                    SnackBar(
-                                      content: Text(adminReportsState.errorMessage ?? 'Error al actualizar cuadrilla.'),
-                                      backgroundColor: const Color(0xFFDC2626),
-                                      behavior: SnackBarBehavior.floating,
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                            onDelete: () async {
-                              final messenger = ScaffoldMessenger.of(context);
-                              final success = await viewModel.deleteCrew(crew.id);
-                              if (mounted) {
-                                if (success) {
-                                  messenger.showSnackBar(
-                                    SnackBar(
-                                      content: Text('Cuadrilla ${crew.name} eliminada correctamente.'),
-                                      backgroundColor: const Color(0xFF047857),
-                                      behavior: SnackBarBehavior.floating,
-                                    ),
-                                  );
-                                } else {
-                                  messenger.showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        ref.read(adminReportsViewModelProvider).errorMessage ??
-                                            'Error al eliminar cuadrilla.',
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: filteredCrews.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 14),
+                      itemBuilder: (context, index) {
+                        final crew = filteredCrews[index];
+                        return AdminCrewCard(
+                          crew: crew,
+                          onViewOnMap: () => context.push(RouteNames.adminLiveMap),
+                          onEdit: () {
+                            AdminCrewEditModal.show(
+                              context: context,
+                              crew: crew,
+                              onConfirm:
+                                  ({
+                                    required status,
+                                    required zone,
+                                    required isAvailable,
+                                    leadStaffName,
+                                    vehicleCode,
+                                    vehiclePlate,
+                                  }) async {
+                                    final messenger = ScaffoldMessenger.of(context);
+                                    final success = await viewModel.updateCrew(
+                                      crewId: crew.id,
+                                      status: status,
+                                      zone: zone,
+                                      isAvailable: isAvailable,
+                                      leadStaffName: leadStaffName,
+                                      vehicleCode: vehicleCode,
+                                      vehiclePlate: vehiclePlate,
+                                    );
+                                    if (mounted) {
+                                      if (success) {
+                                        messenger.showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Unidad ${crew.vehicleCode} actualizada correctamente.',
+                                            ),
+                                            backgroundColor: const Color(0xFF047857),
+                                            behavior: SnackBarBehavior.floating,
+                                          ),
+                                        );
+                                      } else {
+                                        messenger.showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              adminReportsState.errorMessage ??
+                                                  'Error al actualizar cuadrilla.',
+                                            ),
+                                            backgroundColor: const Color(0xFFDC2626),
+                                            behavior: SnackBarBehavior.floating,
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  },
+                              onDelete: () async {
+                                final messenger = ScaffoldMessenger.of(context);
+                                final success = await viewModel.deleteCrew(crew.id);
+                                if (mounted) {
+                                  if (success) {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text('Cuadrilla ${crew.name} eliminada correctamente.'),
+                                        backgroundColor: const Color(0xFF047857),
+                                        behavior: SnackBarBehavior.floating,
                                       ),
-                                      backgroundColor: const Color(0xFFDC2626),
-                                      behavior: SnackBarBehavior.floating,
-                                    ),
-                                  );
+                                    );
+                                  } else {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          ref.read(adminReportsViewModelProvider).errorMessage ??
+                                              'Error al eliminar cuadrilla.',
+                                        ),
+                                        backgroundColor: const Color(0xFFDC2626),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  }
                                 }
-                              }
-                            },
-                          );
-                        },
-                      );
-                    },
-                  ),
-          ),
+                              },
+                            );
+                          },
+                        );
+                      },
+                    ),
+            ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(

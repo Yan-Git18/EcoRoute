@@ -1,6 +1,7 @@
 import '../../../../core/utils/result.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
+import '../entities/admin_report_page.dart';
 import '../entities/municipal_crew_entity.dart';
 
 /// Contrato del repositorio para la administración municipal de reportes y cuadrillas.
@@ -10,8 +11,9 @@ import '../entities/municipal_crew_entity.dart';
 /// Ubicación: `lib/features/admin/domain/repositories/admin_repository.dart`
 /// Capa: Domain (Admin)
 abstract class AdminRepository {
-  /// Obtiene todos los reportes comunitarios para la bandeja administrativa.
-  Future<Result<List<ReportEntity>>> getAllReports();
+  Future<Result<AdminReportPage<ReportEntity>>> getReportsPage({AdminReportCursor? after});
+
+  Future<Result<AdminReportTotals>> getReportTotals();
 
   /// Obtiene la lista de cuadrillas municipales registradas y su disponibilidad.
   Future<Result<List<MunicipalCrewEntity>>> getAvailableCrews();

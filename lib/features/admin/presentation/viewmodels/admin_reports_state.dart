@@ -1,4 +1,5 @@
 import '../../../citizen/domain/entities/report_entity.dart';
+import '../../domain/entities/admin_report_page.dart';
 import '../../domain/entities/municipal_crew_entity.dart';
 
 /// Opciones de filtrado para la bandeja de administración municipal.
@@ -16,6 +17,15 @@ enum AdminReportFilter {
 /// Estado inmutable de la bandeja de reportes de administración municipal.
 class AdminReportsState {
   final bool isLoading;
+  final bool hasLoadedReports;
+  final bool hasLoadedCrews;
+  final bool reportsLoadFailed;
+  final bool crewsLoadFailed;
+  final bool totalsLoadFailed;
+  final bool isLoadingMore;
+  final bool loadMoreFailed;
+  final AdminReportTotals? totals;
+  final AdminReportCursor? nextCursor;
   final List<ReportEntity> reports;
   final List<MunicipalCrewEntity> crews;
   final AdminReportFilter selectedFilter;
@@ -25,6 +35,15 @@ class AdminReportsState {
 
   const AdminReportsState({
     this.isLoading = false,
+    this.hasLoadedReports = false,
+    this.hasLoadedCrews = false,
+    this.reportsLoadFailed = false,
+    this.crewsLoadFailed = false,
+    this.totalsLoadFailed = false,
+    this.isLoadingMore = false,
+    this.loadMoreFailed = false,
+    this.totals,
+    this.nextCursor,
     this.reports = const [],
     this.crews = const [],
     this.selectedFilter = AdminReportFilter.all,
@@ -32,12 +51,6 @@ class AdminReportsState {
     this.errorMessage,
     this.isAssigning = false,
   });
-
-  int get totalCount => reports.length;
-  int get pendingCount => reports.where((r) => r.status == ReportStatus.pending).length;
-  int get assignedCount => reports.where((r) => r.status == ReportStatus.assigned).length;
-  int get inProgressCount => reports.where((r) => r.status == ReportStatus.inProgress).length;
-  int get resolvedCount => reports.where((r) => r.status == ReportStatus.resolved).length;
 
   List<ReportEntity> get filteredReports {
     // 1. Filtro por estado
@@ -67,6 +80,16 @@ class AdminReportsState {
 
   AdminReportsState copyWith({
     bool? isLoading,
+    bool? hasLoadedReports,
+    bool? hasLoadedCrews,
+    bool? reportsLoadFailed,
+    bool? crewsLoadFailed,
+    bool? totalsLoadFailed,
+    bool? isLoadingMore,
+    bool? loadMoreFailed,
+    AdminReportTotals? totals,
+    AdminReportCursor? nextCursor,
+    bool clearNextCursor = false,
     List<ReportEntity>? reports,
     List<MunicipalCrewEntity>? crews,
     AdminReportFilter? selectedFilter,
@@ -77,6 +100,15 @@ class AdminReportsState {
   }) {
     return AdminReportsState(
       isLoading: isLoading ?? this.isLoading,
+      hasLoadedReports: hasLoadedReports ?? this.hasLoadedReports,
+      hasLoadedCrews: hasLoadedCrews ?? this.hasLoadedCrews,
+      reportsLoadFailed: reportsLoadFailed ?? this.reportsLoadFailed,
+      crewsLoadFailed: crewsLoadFailed ?? this.crewsLoadFailed,
+      totalsLoadFailed: totalsLoadFailed ?? this.totalsLoadFailed,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      loadMoreFailed: loadMoreFailed ?? this.loadMoreFailed,
+      totals: totals ?? this.totals,
+      nextCursor: clearNextCursor ? null : (nextCursor ?? this.nextCursor),
       reports: reports ?? this.reports,
       crews: crews ?? this.crews,
       selectedFilter: selectedFilter ?? this.selectedFilter,

@@ -5,6 +5,9 @@ import '../entities/report_entity.dart';
 /// Contrato del repositorio de reportes ciudadanos.
 /// Capa: Domain (Repositories)
 abstract class ReportRepository {
+  static const communityReportWindowDays = 30;
+  static const communityReportLimit = 100;
+
   /// Obtiene el catálogo de categorías de incidencias.
   Future<Result<List<ReportCategoryEntity>>> getCategories();
 
@@ -21,7 +24,7 @@ abstract class ReportRepository {
   /// Obtiene el detalle de un reporte por su ID.
   Future<Result<ReportEntity>> getReportById(String reportId);
 
-  /// Obtiene todos los reportes comunitarios públicos para el mapa y vista de cercanos.
+  /// Obtiene los reportes comunitarios recientes para el mapa y la lista de cercanos.
   Future<Result<List<ReportEntity>>> getAllReports();
 
   /// Cancela un reporte ciudadano que se encuentra en estado pendiente.

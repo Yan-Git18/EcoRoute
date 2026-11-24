@@ -9,6 +9,7 @@ import '../viewmodels/admin_reports_state.dart';
 import '../viewmodels/admin_reports_viewmodel.dart';
 import '../widgets/admin_assign_crew_modal.dart';
 import '../widgets/admin_bottom_nav_bar.dart';
+import '../widgets/admin_load_notice.dart';
 import '../widgets/admin_report_card.dart';
 
 /// Pantalla dedicada a la Bandeja Central y Asignación de Incidencias (Admin Fase 1).
@@ -71,155 +72,180 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
                 letterSpacing: -0.3,
               ),
             ),
-            Text(
-              '${filteredList.length} incidencias en supervisión',
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF64748B),
+            if (adminState.hasLoadedReports)
+              Text(
+                '${filteredList.length} incidencias cargadas',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF64748B),
+                ),
               ),
-            ),
           ],
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Color(0xFF475569)),
             tooltip: 'Actualizar reportes',
-            onPressed: () => viewModel.refresh(),
+            onPressed: adminState.isLoading ? null : viewModel.refresh,
           ),
           const SizedBox(width: 4),
         ],
       ),
       body: Column(
         children: [
+          AdminLoadNotice(state: adminState, onRetry: viewModel.refresh),
           // 1. Buscador y Filtros superiores
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            child: Column(
-              children: [
-                // Buscador
-                Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: (val) => viewModel.setSearchQuery(val),
-                    decoration: InputDecoration(
-                      hintText: 'Buscar por folio (#REP), dirección o vecino...',
-                      hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 20),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear_rounded, size: 18, color: Color(0xFF64748B)),
-                              onPressed: () {
-                                _searchController.clear();
-                                viewModel.setSearchQuery('');
-                              },
-                            )
-                          : null,
-                      filled: false,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          if (adminState.hasLoadedReports)
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Column(
+                children: [
+                  // Buscador
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (val) => viewModel.setSearchQuery(val),
+                      decoration: InputDecoration(
+                      hintText: 'Buscar en reportes cargados',
+                        hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                        prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 20),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(
+                                  Icons.clear_rounded,
+                                  size: 18,
+                                  color: Color(0xFF64748B),
+                                ),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  viewModel.setSearchQuery('');
+                                },
+                              )
+                            : null,
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
+                  const SizedBox(height: 12),
 
-                // Filtros de estado con contadores
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _FilterTab(
-                        label: 'Todos',
-                        count: adminState.totalCount,
-                        isSelected: adminState.selectedFilter == AdminReportFilter.all,
-                        onTap: () => viewModel.setFilter(AdminReportFilter.all),
-                      ),
-                      const SizedBox(width: 8),
-                      _FilterTab(
-                        label: 'Pendientes',
-                        count: adminState.pendingCount,
-                        isSelected: adminState.selectedFilter == AdminReportFilter.pending,
-                        color: AppColors.statusPending,
-                        onTap: () => viewModel.setFilter(AdminReportFilter.pending),
-                      ),
-                      const SizedBox(width: 8),
-                      _FilterTab(
-                        label: 'Asignados',
-                        count: adminState.assignedCount,
-                        isSelected: adminState.selectedFilter == AdminReportFilter.assigned,
-                        color: const Color(0xFF7C3AED),
-                        onTap: () => viewModel.setFilter(AdminReportFilter.assigned),
-                      ),
-                      const SizedBox(width: 8),
-                      _FilterTab(
-                        label: 'En Proceso',
-                        count: adminState.inProgressCount,
-                        isSelected: adminState.selectedFilter == AdminReportFilter.inProgress,
-                        color: AppColors.statusInProgress,
-                        onTap: () => viewModel.setFilter(AdminReportFilter.inProgress),
-                      ),
-                      const SizedBox(width: 8),
-                      _FilterTab(
-                        label: 'Resueltos',
-                        count: adminState.resolvedCount,
-                        isSelected: adminState.selectedFilter == AdminReportFilter.resolved,
-                        color: AppColors.statusResolved,
-                        onTap: () => viewModel.setFilter(AdminReportFilter.resolved),
-                      ),
-                    ],
+                  // Filtros de estado con contadores
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _FilterTab(
+                          label: 'Todos',
+                          count: adminState.totals?.total,
+                          isSelected: adminState.selectedFilter == AdminReportFilter.all,
+                          onTap: () => viewModel.setFilter(AdminReportFilter.all),
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterTab(
+                          label: 'Pendientes',
+                          count: adminState.totals?.pending,
+                          isSelected: adminState.selectedFilter == AdminReportFilter.pending,
+                          color: AppColors.statusPending,
+                          onTap: () => viewModel.setFilter(AdminReportFilter.pending),
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterTab(
+                          label: 'Asignados',
+                          count: adminState.totals?.assigned,
+                          isSelected: adminState.selectedFilter == AdminReportFilter.assigned,
+                          color: const Color(0xFF7C3AED),
+                          onTap: () => viewModel.setFilter(AdminReportFilter.assigned),
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterTab(
+                          label: 'En Proceso',
+                          count: adminState.totals?.inProgress,
+                          isSelected: adminState.selectedFilter == AdminReportFilter.inProgress,
+                          color: AppColors.statusInProgress,
+                          onTap: () => viewModel.setFilter(AdminReportFilter.inProgress),
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterTab(
+                          label: 'Resueltos',
+                          count: adminState.totals?.resolved,
+                          isSelected: adminState.selectedFilter == AdminReportFilter.resolved,
+                          color: AppColors.statusResolved,
+                          onTap: () => viewModel.setFilter(AdminReportFilter.resolved),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
 
           // 2. Listado de incidencias o pantalla vacía
-          Expanded(
-            child: RefreshIndicator(
-              color: const Color(0xFF0A5835),
-              onRefresh: () => viewModel.refresh(),
-              child: filteredList.isEmpty
-                  ? _EmptyAdminReportsView(
-                      hasQuery: _searchController.text.isNotEmpty,
-                      filter: adminState.selectedFilter,
-                      onReset: () {
-                        _searchController.clear();
-                        viewModel.setSearchQuery('');
-                        viewModel.setFilter(AdminReportFilter.all);
-                      },
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: filteredList.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final report = filteredList[index];
-                        return AdminReportCard(
-                          report: report,
-                          onAssign: () => _openAssignCrewModal(
+          if (adminState.hasLoadedReports)
+            Expanded(
+              child: RefreshIndicator(
+                color: const Color(0xFF0A5835),
+                onRefresh: () => viewModel.refresh(),
+                child: filteredList.isEmpty
+                    ? _EmptyAdminReportsView(
+                        hasQuery: _searchController.text.isNotEmpty,
+                        hasMore: adminState.nextCursor != null,
+                        filter: adminState.selectedFilter,
+                        onReset: () {
+                          _searchController.clear();
+                          viewModel.setSearchQuery('');
+                          viewModel.setFilter(AdminReportFilter.all);
+                        },
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: filteredList.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final report = filteredList[index];
+                          return AdminReportCard(
                             report: report,
-                            adminId: adminId,
-                            adminName: adminName,
-                          ),
-                          onViewDetail: () {
-                            context.push(
-                              RouteNames.adminReportLocation(report.id),
-                              extra: report,
-                            );
-                          },
-                        );
-                      },
-                    ),
+                            onAssign: adminState.hasLoadedCrews
+                                ? () => _openAssignCrewModal(
+                                    report: report,
+                                    adminId: adminId,
+                                    adminName: adminName,
+                                  )
+                                : null,
+                            onViewDetail: () {
+                              context.push(RouteNames.adminReportLocation(report.id), extra: report);
+                            },
+                          );
+                        },
+                      ),
+              ),
             ),
-          ),
+          if (adminState.nextCursor != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  if (adminState.loadMoreFailed)
+                    const Text('No se pudo cargar la página siguiente.'),
+                  TextButton.icon(
+                    onPressed: adminState.isLoading || adminState.isLoadingMore
+                        ? null
+                        : viewModel.loadMoreReports,
+                    icon: const Icon(Icons.expand_more),
+                    label: Text(adminState.isLoadingMore ? 'Cargando reportes…' : 'Cargar más reportes'),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
       bottomNavigationBar: const AdminBottomNavBar(currentIndex: 1),
@@ -267,7 +293,7 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
 
 class _FilterTab extends StatelessWidget {
   final String label;
-  final int count;
+  final int? count;
   final bool isSelected;
   final Color? color;
   final VoidCallback onTap;
@@ -316,7 +342,7 @@ class _FilterTab extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
-                '$count',
+                count?.toString() ?? '—',
                 style: TextStyle(
                   fontSize: 10.5,
                   fontWeight: FontWeight.w800,
@@ -333,11 +359,13 @@ class _FilterTab extends StatelessWidget {
 
 class _EmptyAdminReportsView extends StatelessWidget {
   final bool hasQuery;
+  final bool hasMore;
   final AdminReportFilter filter;
   final VoidCallback onReset;
 
   const _EmptyAdminReportsView({
     required this.hasQuery,
+    required this.hasMore,
     required this.filter,
     required this.onReset,
   });
@@ -364,7 +392,11 @@ class _EmptyAdminReportsView extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             Text(
-              hasQuery ? 'Sin incidencias encontradas' : 'No hay reportes en esta categoría',
+              hasMore
+                  ? 'Sin coincidencias entre los reportes cargados'
+                  : hasQuery
+                      ? 'Sin incidencias encontradas'
+                      : 'No hay reportes en esta categoría',
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
             ),
             const SizedBox(height: 8),

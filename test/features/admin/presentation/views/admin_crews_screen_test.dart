@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ecoroute/core/utils/result.dart';
+import 'package:ecoroute/features/admin/domain/entities/admin_report_page.dart';
 import 'package:ecoroute/features/admin/domain/entities/municipal_crew_entity.dart';
 import 'package:ecoroute/features/admin/domain/repositories/admin_repository.dart';
 import 'package:ecoroute/features/admin/presentation/viewmodels/admin_reports_viewmodel.dart';
@@ -14,6 +15,8 @@ import 'package:ecoroute/features/auth/domain/entities/user_entity.dart';
 import 'package:ecoroute/features/auth/presentation/viewmodels/auth_state.dart';
 import 'package:ecoroute/features/auth/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ecoroute/features/citizen/domain/entities/report_entity.dart';
+
+import '../../admin_report_fixtures.dart';
 
 class MockAdminAuthViewModel extends AuthViewModel {
   final UserEntity? testUser;
@@ -33,7 +36,11 @@ class MockAdminCrewsRepository implements AdminRepository {
   List<MunicipalCrewEntity> crews = [];
 
   @override
-  Future<Result<List<ReportEntity>>> getAllReports() async => Success(reports);
+  Future<Result<AdminReportPage<ReportEntity>>> getReportsPage({AdminReportCursor? after}) async =>
+      Success(AdminReportPage(reports));
+
+  @override
+  Future<Result<AdminReportTotals>> getReportTotals() async => Success(totalsForReports(reports));
 
   @override
   Future<Result<List<MunicipalCrewEntity>>> getAvailableCrews() async => Success(List.from(crews));
