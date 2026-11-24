@@ -15,6 +15,36 @@ For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
 
+## Versiones de Android
+
+`pubspec.yaml` conserva la versión visible `2.0.0` y fija el código de compilación en `4009`. El APK universal usa ese código directamente. Los APK anteriores generados con `--split-per-abi` recibieron un incremento por arquitectura. Para futuras distribuciones, usa el APK universal y aumenta el código por encima del mayor `versionCode` que hayas distribuido.
+
+### Actualizar instalaciones de prueba
+
+Los APK de prueba anteriores se firmaron con el certificado de depuración de la máquina que los generó. Para actualizar esas instalaciones, el nuevo APK debe conservar ese certificado y el identificador `com.example.ecoroute`. En esa máquina, puedes ejecutar `flutter build apk --debug` o generar un APK optimizado para la prueba del curso desde PowerShell.
+
+```powershell
+$env:ECOROUTE_ANDROID_LEGACY_SIGNING = 'true'
+try {
+    flutter build apk --release
+} finally {
+    Remove-Item Env:ECOROUTE_ANDROID_LEGACY_SIGNING
+}
+```
+
+### Firma para publicación
+
+En las compilaciones de publicación, Gradle usa el almacén de claves indicado en el archivo local `android/key.properties`. Configúralo con la clave de firma que corresponda al canal de distribución, o con la clave de carga si usas Play App Signing. El repositorio excluye ese archivo y los almacenes de claves.
+
+```properties
+storeFile=C:/ruta-privada/ecoroute-upload.jks
+storePassword=CONTRASEÑA_DEL_ALMACÉN
+keyAlias=upload
+keyPassword=CONTRASEÑA_DE_LA_CLAVE
+```
+
+Con esa configuración, ejecuta `flutter build appbundle --release` para Google Play o `flutter build apk --release` para distribución directa. Android requiere un certificado compatible para actualizar una instalación existente. Si los APK del curso y la publicación usan certificados distintos, las instalaciones de prueba requieren una instalación nueva de la versión publicada. Consulta la [guía de firma de Android](https://developer.android.com/studio/publish/app-signing) y la [guía de publicación de Flutter](https://docs.flutter.dev/deployment/android).
+
 ## Perfil ciudadano, comunidad y notificaciones
 
 - El perfil guarda el nombre y el teléfono en `users/{uid}`. El avatar comprimido se guarda en `users/{uid}/media/avatar` con hasta 96 KiB.
@@ -32,6 +62,13 @@ Para ejecutar el análisis y las pruebas de Flutter usa `flutter analyze` y `flu
 firebase emulators:exec --config firebase.emulator.json --only firestore,auth --project demo-ecoroute "node firebase/tests/firestore.test.mjs"
 node firebase/tests/push-worker.test.mjs
 ```
+
+### Carga de reportes
+
+- **Municipio.** La bandeja y el mapa cargan 30 reportes por página, ordenados del más reciente al más antiguo. Firestore devuelve como máximo 31 documentos por solicitud para comprobar si hay otra página. El buscador y los filtros se aplican a los reportes cargados. Los totales municipales se consultan por separado con agregaciones de Firestore.
+- **Ciudadanía.** El mapa y la lista de cercanos muestran hasta 100 incidencias creadas durante los últimos 30 días. La consulta acotada usa la colección comunitaria. El historial personal se sigue consultando desde **Mis reportes**.
+
+La prueba local de Firestore compara las consultas con y sin límites sobre 180 reportes sintéticos e imprime la cantidad de documentos y el tiempo de respuesta. Los tiempos dependen de la máquina y los recuentos de documentos devueltos no incluyen las lecturas de índices ni otros cargos de producción.
 
 ### Migración del mapa comunitario y el despacho
 

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:ecoroute/core/router/route_names.dart';
 import 'package:ecoroute/core/utils/result.dart';
 import 'package:ecoroute/features/admin/domain/entities/admin_report_page.dart';
 import 'package:ecoroute/features/admin/domain/entities/municipal_crew_entity.dart';
 import 'package:ecoroute/features/admin/domain/repositories/admin_repository.dart';
+import 'package:ecoroute/features/admin/presentation/viewmodels/admin_reports_state.dart';
 import 'package:ecoroute/features/admin/presentation/viewmodels/admin_reports_viewmodel.dart';
 import 'package:ecoroute/features/admin/presentation/views/admin_dashboard_screen.dart';
 import 'package:ecoroute/features/auth/domain/entities/user_entity.dart';
@@ -16,14 +19,24 @@ import '../../admin_report_fixtures.dart';
 
 class MockAdminAuthViewModel extends AuthViewModel {
   final UserEntity? testUser;
+  int logoutCalls = 0;
+  String? resetEmail;
   MockAdminAuthViewModel(this.testUser);
 
   @override
   AuthState build() {
-    return AuthState(
-      user: testUser,
-      isInitialized: true,
-    );
+    return AuthState(user: testUser, isInitialized: true);
+  }
+
+  @override
+  Future<void> logout() async {
+    logoutCalls++;
+  }
+
+  @override
+  Future<bool> sendPasswordResetEmail(String email) async {
+    resetEmail = email;
+    return true;
   }
 }
 
@@ -32,11 +45,13 @@ class MockAdminRepository implements AdminRepository {
   List<MunicipalCrewEntity> crews = [];
 
   @override
-  Future<Result<AdminReportPage<ReportEntity>>> getReportsPage({AdminReportCursor? after}) async =>
-      Success(AdminReportPage(reports));
+  Future<Result<AdminReportPage<ReportEntity>>> getReportsPage({
+    AdminReportCursor? after,
+  }) async => Success(AdminReportPage(reports));
 
   @override
-  Future<Result<AdminReportTotals>> getReportTotals() async => Success(totalsForReports(reports));
+  Future<Result<AdminReportTotals>> getReportTotals() async =>
+      Success(totalsForReports(reports));
 
   @override
   Future<Result<List<MunicipalCrewEntity>>> getAvailableCrews() async {
@@ -44,10 +59,14 @@ class MockAdminRepository implements AdminRepository {
   }
 
   @override
-  Future<Result<MunicipalCrewEntity>> createCrew(MunicipalCrewEntity crew) async => Success(crew);
+  Future<Result<MunicipalCrewEntity>> createCrew(
+    MunicipalCrewEntity crew,
+  ) async => Success(crew);
 
   @override
-  Future<Result<MunicipalCrewEntity>> updateCrew(MunicipalCrewEntity crew) async => Success(crew);
+  Future<Result<MunicipalCrewEntity>> updateCrew(
+    MunicipalCrewEntity crew,
+  ) async => Success(crew);
 
   @override
   Future<Result<void>> deleteCrew(String crewId) async => const Success(null);
@@ -76,7 +95,8 @@ class MockAdminRepository implements AdminRepository {
   Future<Result<List<UserEntity>>> getStaffMembers() async => const Success([]);
 
   @override
-  Future<Result<UserEntity?>> searchUserByExactEmail(String email) async => const Success(null);
+  Future<Result<UserEntity?>> searchUserByExactEmail(String email) async =>
+      const Success(null);
 
   @override
   Future<Result<void>> updateUserRole({
@@ -132,51 +152,171 @@ final testReports = [
 ];
 
 void main() {
-  testWidgets('Renderiza AdminDashboardScreen con métricas vivas y módulos de gestión',
-      (tester) async {
-    final mockRepo = MockAdminRepository()..reports = List.from(testReports);
+  testWidgets(
+    'Renderiza AdminDashboardScreen con métricas vivas y módulos de gestión',
+    (tester) async {
+      final mockRepo = MockAdminRepository()..reports = List.from(testReports);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          authViewModelProvider.overrideWith(() => MockAdminAuthViewModel(testAdminUser)),
-          adminRepositoryProvider.overrideWithValue(mockRepo),
-        ],
-        child: const MaterialApp(
-          home: AdminDashboardScreen(),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authViewModelProvider.overrideWith(
+              () => MockAdminAuthViewModel(testAdminUser),
+            ),
+            adminRepositoryProvider.overrideWithValue(mockRepo),
+          ],
+          child: const MaterialApp(home: AdminDashboardScreen()),
         ),
-      ),
-    );
+      );
 
-    await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
 
-    // 1. Título y Banner
-    expect(find.text('Administración Municipal'), findsOneWidget);
-    expect(find.text('Ing. Marco Municipal'), findsOneWidget);
-    expect(find.text('Gestión de Residuos Urbanos • EcoRoute'), findsOneWidget);
+      expect(find.text('Panel municipal'), findsOneWidget);
+      expect(find.byTooltip('Abrir menú de cuenta'), findsOneWidget);
+      expect(find.byIcon(Icons.logout_rounded), findsNothing);
+      expect(find.text('Ing. Marco Municipal'), findsNothing);
+      expect(find.text('Reportes pendientes'), findsOneWidget);
+      expect(find.text('Ver pendientes'), findsOneWidget);
+      expect(find.text('Total'), findsOneWidget);
+      expect(find.text('En proceso'), findsOneWidget);
+      expect(find.text('Resueltos'), findsOneWidget);
+      expect(find.text('Operación'), findsOneWidget);
+      expect(find.text('Flota'), findsOneWidget);
+      expect(find.text('Personal'), findsOneWidget);
+      expect(find.text('Por atender'), findsOneWidget);
+      expect(find.text('Av. Grau 120'), findsOneWidget);
 
-    // 2. Resumen de Métricas
-    expect(find.text('Resumen Municipal de Reportes'), findsOneWidget);
-    expect(find.text('Total Reportes'), findsOneWidget);
-    expect(find.text('Pendientes'), findsOneWidget);
-    expect(find.text('Resueltos'), findsOneWidget);
+      expect(find.text('Inicio'), findsOneWidget);
+      expect(find.text('Reportes'), findsOneWidget);
+      expect(find.text('Mapa'), findsOneWidget);
+      expect(find.text('Cuadrillas'), findsOneWidget);
+    },
+  );
 
-    // 3. Módulos de Gestión
-    expect(find.text('Módulos de Gestión'), findsOneWidget);
-    expect(find.text('Gestión y Asignación de Reportes'), findsOneWidget);
-    expect(find.text('Monitoreo en Mapa en Tiempo Real'), findsOneWidget);
-    expect(find.text('Cuadrillas y Zonas de Operación'), findsOneWidget);
-    expect(find.text('Flota y Camiones Municipales'), findsOneWidget);
+  testWidgets(
+    'El menú abre datos y restablecimiento de contraseña y confirma el cierre de sesión',
+    (tester) async {
+      final auth = MockAdminAuthViewModel(testAdminUser);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authViewModelProvider.overrideWith(() => auth),
+            adminRepositoryProvider.overrideWithValue(MockAdminRepository()),
+          ],
+          child: const MaterialApp(home: AdminDashboardScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    // 4. Incidencia urgente destacada
-    expect(find.text('Incidencias Pendientes Urgentes'), findsOneWidget);
-    expect(find.text('Av. Grau 120'), findsOneWidget);
-    expect(find.text('Atender'), findsOneWidget);
+      Future<void> openMenu() async {
+        await tester.tap(find.byTooltip('Abrir menú de cuenta'));
+        await tester.pumpAndSettle();
+      }
 
-    // 5. Menú de navegación inferior (AdminBottomNavBar)
-    expect(find.text('Inicio'), findsOneWidget);
-    expect(find.text('Reportes'), findsOneWidget);
-    expect(find.text('Mapa'), findsOneWidget);
-    expect(find.text('Cuadrillas'), findsOneWidget);
-  });
+      await openMenu();
+      expect(find.text('Ing. Marco Municipal'), findsOneWidget);
+      expect(find.text('marco@ecoroute.com'), findsOneWidget);
+      await tester.tap(find.text('Datos de la cuenta'));
+      await tester.pumpAndSettle();
+      expect(find.text('Mis datos personales'), findsOneWidget);
+      expect(find.byType(Drawer), findsNothing);
+      await tester.tap(find.text('Cerrar'));
+      await tester.pumpAndSettle();
+
+      await openMenu();
+      await tester.tap(find.text('Cambiar contraseña'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Enviar enlace de restablecimiento'));
+      await tester.pumpAndSettle();
+      expect(auth.resetEmail, testAdminUser.email);
+
+      await openMenu();
+      await tester.tap(find.text('Cerrar sesión'));
+      await tester.pumpAndSettle();
+      expect(find.text('¿Cerrar sesión?'), findsOneWidget);
+      expect(auth.logoutCalls, 0);
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+      expect(auth.logoutCalls, 0);
+
+      await openMenu();
+      await tester.tap(find.text('Cerrar sesión'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cerrar sesión'));
+      await tester.pumpAndSettle();
+      expect(auth.logoutCalls, 1);
+    },
+  );
+
+  testWidgets(
+    'Los accesos abren la bandeja filtrada, el detalle y los módulos operativos',
+    (tester) async {
+      final repository = MockAdminRepository()..reports = List.of(testReports);
+      final container = ProviderContainer(
+        overrides: [
+          authViewModelProvider.overrideWith(
+            () => MockAdminAuthViewModel(testAdminUser),
+          ),
+          adminRepositoryProvider.overrideWithValue(repository),
+        ],
+      );
+      addTearDown(container.dispose);
+      final router = GoRouter(
+        initialLocation: RouteNames.adminDashboard,
+        routes: [
+          GoRoute(
+            path: RouteNames.adminDashboard,
+            builder: (_, _) => const AdminDashboardScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.adminReports,
+            builder: (_, _) => const Scaffold(body: Text('Bandeja municipal')),
+          ),
+          GoRoute(
+            path: RouteNames.adminReportDetail,
+            builder: (_, state) =>
+                Scaffold(body: Text('Detalle: ${state.pathParameters['id']}')),
+          ),
+          GoRoute(
+            path: RouteNames.adminFleet,
+            builder: (_, _) => const Scaffold(body: Text('Módulo flota')),
+          ),
+          GoRoute(
+            path: RouteNames.adminStaff,
+            builder: (_, _) => const Scaffold(body: Text('Módulo personal')),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Ver pendientes'));
+      await tester.pumpAndSettle();
+      expect(find.text('Bandeja municipal'), findsOneWidget);
+      expect(
+        container.read(adminReportsViewModelProvider).selectedFilter,
+        AdminReportFilter.pending,
+      );
+      router.pop();
+      await tester.pumpAndSettle();
+
+      for (final (label, destination) in [
+        ('Acumulación de basura', 'Detalle: rep-1'),
+        ('Flota', 'Módulo flota'),
+        ('Personal', 'Módulo personal'),
+      ]) {
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+        expect(find.text(destination), findsOneWidget);
+        router.pop();
+        await tester.pumpAndSettle();
+      }
+    },
+  );
 }
