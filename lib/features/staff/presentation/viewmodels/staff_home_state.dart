@@ -40,12 +40,17 @@ class StaffHomeState {
   int get inProgressCount => tasks.where((t) => t.isInProgress).length;
   int get resolvedCount => tasks.where((t) => t.isResolved).length;
 
-  int resolvedOn(DateTime date) {
+  Iterable<StaffTaskEntity> resolvedBy(String? staffId) => tasks.where(
+    (task) =>
+        task.isResolved &&
+        (task.teamId == null || task.assignedStaffId == staffId),
+  );
+
+  int resolvedOn(DateTime date, String? staffId) {
     final day = date.toLocal();
-    return tasks.where((task) {
+    return resolvedBy(staffId).where((task) {
       final closed = task.resolvedAt?.toLocal();
-      return task.isResolved &&
-          closed != null &&
+      return closed != null &&
           closed.year == day.year &&
           closed.month == day.month &&
           closed.day == day.day;

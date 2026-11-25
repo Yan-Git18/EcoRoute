@@ -283,7 +283,9 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
       case Success(data: final savedCrew):
         _dataRevision++;
         final newCrews = state.crews.map((crew) {
-          return crew.id == updated.id ? savedCrew : crew;
+          return crew.id == updated.id && crew.vehicleOnly == updated.vehicleOnly
+              ? savedCrew
+              : crew;
         }).toList();
         state = state.copyWith(crews: newCrews, clearError: true);
         await _refreshResources();
@@ -300,7 +302,9 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
     switch (result) {
       case Success(data: final created):
         _dataRevision++;
-        final filtered = state.crews.where((c) => c.id != created.id).toList();
+        final filtered = state.crews
+            .where((c) => c.id != created.id || c.vehicleOnly != created.vehicleOnly)
+            .toList();
         state = state.copyWith(crews: [created, ...filtered], clearError: true);
         await _refreshResources();
         return true;
@@ -311,12 +315,28 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
   }
 
   Future<bool> deleteCrew(String crewId) async {
-    final result = await _deleteCrewUseCase.call(crewId);
+    return _removeResource(crewId, false, _deleteCrewUseCase.call(crewId));
+  }
+
+  Future<bool> deleteVehicle(String vehicleId) {
+    final repository = ref.read(adminRepositoryProvider);
+    return _removeResource(vehicleId, true, repository.deleteVehicle(vehicleId));
+  }
+
+  Future<bool> _removeResource(
+    String id,
+    bool vehicleOnly,
+    Future<Result<void>> deletion,
+  ) async {
+    final result = await deletion;
     if (!ref.mounted) return false;
     switch (result) {
       case Success():
         _dataRevision++;
-        state = state.copyWith(crews: state.crews.where((c) => c.id != crewId).toList(), clearError: true);
+        state = state.copyWith(
+          crews: state.crews.where((c) => c.id != id || c.vehicleOnly != vehicleOnly).toList(),
+          clearError: true,
+        );
         await _refreshResources();
         return true;
       case FailureResult(failure: final f):

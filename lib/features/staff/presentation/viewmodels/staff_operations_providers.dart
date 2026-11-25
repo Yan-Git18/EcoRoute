@@ -39,6 +39,22 @@ final staffCrewProvider = Provider.autoDispose<AsyncValue<StaffCrew?>>((ref) {
   };
 });
 
+final staffCanManageTaskProvider = Provider.autoDispose.family<bool, String?>((
+  ref,
+  teamId,
+) {
+  if (teamId == null) return true;
+  final uid = ref.watch(authViewModelProvider.select((auth) => auth.user?.id));
+  final crew = ref.watch(staffCrewProvider).asData?.value;
+  return uid != null && crew?.id == teamId && crew?.leaderId == uid;
+});
+
+final staffTeamTaskChangesProvider = StreamProvider.autoDispose<int>((ref) {
+  final teamId = ref.watch(staffTeamIdProvider).asData?.value;
+  if (teamId == null) return const Stream.empty();
+  return ref.watch(staffOperationsRepositoryProvider).watchTeamTaskChanges(teamId);
+});
+
 final staffShiftProvider = StreamProvider.autoDispose
     .family<StaffShift?, String>(
       (ref, uid) =>

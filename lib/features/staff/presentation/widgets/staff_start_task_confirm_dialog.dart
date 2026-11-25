@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/staff_task_entity.dart';
+import '../viewmodels/staff_operations_providers.dart';
 
 /// Cuadro de diálogo de confirmación antes de iniciar la atención de una tarea pendiente.
 ///
@@ -10,7 +12,7 @@ import '../../domain/entities/staff_task_entity.dart';
 ///
 /// Ubicación: `lib/features/staff/presentation/widgets/staff_start_task_confirm_dialog.dart`
 /// Capa: Presentation (Widgets Staff)
-class StaffStartTaskConfirmDialog extends StatelessWidget {
+class StaffStartTaskConfirmDialog extends ConsumerWidget {
   final StaffTaskEntity task;
 
   const StaffStartTaskConfirmDialog({
@@ -49,7 +51,19 @@ class StaffStartTaskConfirmDialog extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(staffCanManageTaskProvider(task.teamId))) {
+      return AlertDialog(
+        content: const Text('Solo el líder actual puede iniciar la tarea.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      );
+    }
+
     return AlertDialog(
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.white,

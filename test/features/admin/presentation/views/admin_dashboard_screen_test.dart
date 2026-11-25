@@ -7,10 +7,12 @@ import 'package:ecoroute/core/router/route_names.dart';
 import 'package:ecoroute/core/utils/result.dart';
 import 'package:ecoroute/features/admin/domain/entities/admin_report_page.dart';
 import 'package:ecoroute/features/admin/domain/entities/municipal_crew_entity.dart';
+import 'package:ecoroute/features/admin/domain/repositories/admin_profile_repository.dart';
 import 'package:ecoroute/features/admin/domain/repositories/admin_repository.dart';
 import 'package:ecoroute/features/admin/presentation/viewmodels/admin_reports_state.dart';
 import 'package:ecoroute/features/admin/presentation/viewmodels/admin_reports_viewmodel.dart';
 import 'package:ecoroute/features/admin/presentation/views/admin_dashboard_screen.dart';
+import 'package:ecoroute/features/admin/presentation/views/admin_profile_screen.dart';
 import 'package:ecoroute/features/admin/presentation/widgets/admin_bottom_nav_bar.dart';
 import 'package:ecoroute/features/auth/domain/entities/user_entity.dart';
 import 'package:ecoroute/features/auth/presentation/viewmodels/auth_state.dart';
@@ -42,6 +44,32 @@ class MockAdminAuthViewModel extends AuthViewModel {
   }
 }
 
+class MockAdminProfileRepository implements AdminProfileRepository {
+  String? requestedEmail;
+  String? confirmedEmail;
+
+  @override
+  Future<Result<UserEntity>> saveContact(
+    UserEntity account, {
+    required String name,
+    required String? phone,
+  }) async => Success(account.copyWith(name: name, phoneNumber: phone));
+
+  @override
+  Future<Result<void>> requestEmailChange(
+    String uid, {
+    required String email,
+    required String password,
+  }) async {
+    requestedEmail = email;
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<String>> refreshEmail(String uid) async =>
+      Success(confirmedEmail ?? testAdminUser.email);
+}
+
 class MockAdminRepository implements AdminRepository {
   List<ReportEntity> reports = [];
   List<MunicipalCrewEntity> crews = [];
@@ -69,6 +97,10 @@ class MockAdminRepository implements AdminRepository {
   Future<Result<MunicipalCrewEntity>> updateCrew(
     MunicipalCrewEntity crew,
   ) async => Success(crew);
+
+  @override
+  Future<Result<void>> deleteVehicle(String vehicleId) async =>
+      const Success(null);
 
   @override
   Future<Result<void>> deleteCrew(String crewId) async => const Success(null);
@@ -171,6 +203,45 @@ final testReports = [
 ];
 
 void main() {
+  testWidgets('El perfil guarda los datos y muestra el correo después de confirmarlo', (tester) async {
+    final profile = MockAdminProfileRepository();
+    final auth = MockAdminAuthViewModel(testAdminUser);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authViewModelProvider.overrideWith(() => auth),
+          adminProfileRepositoryProvider.overrideWithValue(profile),
+        ],
+        child: const MaterialApp(home: AdminProfileScreen()),
+      ),
+    );
+    await tester.enterText(find.byType(TextFormField).first, 'Marco Actualizado');
+    await tester.enterText(find.byType(TextFormField).last, '987654321');
+    await tester.tap(find.text('Guardar datos'));
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(tester.element(find.byType(AdminProfileScreen)));
+    expect(container.read(authViewModelProvider).user?.name, 'Marco Actualizado');
+    expect(container.read(authViewModelProvider).user?.phoneNumber, '987654321');
+
+    await tester.ensureVisible(find.text('Cambiar correo'));
+    await tester.tap(find.text('Cambiar correo'));
+    await tester.pumpAndSettle();
+    final dialogFields = find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextFormField));
+    await tester.enterText(dialogFields.first, 'nuevo@example.com');
+    await tester.enterText(dialogFields.last, 'contraseña local');
+    await tester.tap(find.text('Enviar confirmación'));
+    await tester.pumpAndSettle();
+    expect(profile.requestedEmail, 'nuevo@example.com');
+    expect(container.read(authViewModelProvider).user?.email, testAdminUser.email);
+
+    profile.confirmedEmail = profile.requestedEmail;
+    final refresh = find.byTooltip('Comprobar correo confirmado');
+    await tester.ensureVisible(refresh);
+    await tester.tap(refresh);
+    await tester.pumpAndSettle();
+    expect(find.text('nuevo@example.com'), findsOneWidget);
+  });
+
   testWidgets('El menú principal abre la sección elegida directamente', (
     tester,
   ) async {
@@ -225,14 +296,14 @@ void main() {
     expect(find.byType(AdminDashboardScreen), findsOneWidget);
 
     await selectTab('Equipo');
-    await tester.tap(find.byTooltip('Flota Vehicular'));
+    await tester.tap(find.text('Flota'));
     await tester.pumpAndSettle();
-    expect(find.text('Flota y Maquinaria Municipal'), findsOneWidget);
+    expect(find.text('Flota Vehicular'), findsOneWidget);
     await selectTab('Equipo');
     expect(find.widgetWithText(AppBar, 'Equipos'), findsOneWidget);
     expect(router.canPop(), isFalse);
 
-    await tester.tap(find.byTooltip('Gestión de Personal'));
+    await tester.tap(find.text('Personal'));
     await tester.pumpAndSettle();
     expect(find.text('Gestión de Personal'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.arrow_back_rounded));
@@ -304,11 +375,12 @@ void main() {
       await openMenu();
       expect(find.text('Ing. Marco Municipal'), findsOneWidget);
       expect(find.text('marco@ecoroute.com'), findsOneWidget);
-      await tester.tap(find.text('Datos de la cuenta'));
+      await tester.tap(find.text('Mi perfil'));
       await tester.pumpAndSettle();
-      expect(find.text('Mis datos personales'), findsOneWidget);
+      expect(find.text('Mi perfil'), findsOneWidget);
+      expect(find.text('Guardar datos'), findsOneWidget);
       expect(find.byType(Drawer), findsNothing);
-      await tester.tap(find.text('Cerrar'));
+      await tester.pageBack();
       await tester.pumpAndSettle();
 
       await openMenu();

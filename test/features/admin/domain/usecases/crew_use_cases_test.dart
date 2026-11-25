@@ -45,6 +45,10 @@ class FakeAdminRepository implements AdminRepository {
   }
 
   @override
+  Future<Result<void>> deleteVehicle(String vehicleId) async =>
+      const Success(null);
+
+  @override
   Future<Result<void>> deleteCrew(String crewId) async {
     deleteCrewCalled = true;
     crews.removeWhere((c) => c.id == crewId);
@@ -117,6 +121,8 @@ void main() {
       name: 'Cuadrilla Test',
       zone: 'Sector Central',
       leadStaffName: 'Supervisor Test',
+      leaderId: 'staff-1',
+      memberIds: ['staff-1', 'staff-2', 'staff-3'],
       vehicleCode: 'Camión #01',
       vehiclePlate: 'ECR-111',
       crewMembersCount: 3,
@@ -154,13 +160,13 @@ void main() {
         expect(failure.message, contains('zona o sector'));
       });
 
-      test('rechaza cuadrilla con líder vacío', () async {
+      test('rechaza un líder que no integra el equipo', () async {
         final useCase = CreateCrewUseCase(repository);
-        final result = await useCase(testCrew.copyWith(leadStaffName: ''));
+        final result = await useCase(testCrew.copyWith(leaderId: 'otro-equipo'));
 
         expect(result, isA<FailureResult<MunicipalCrewEntity>>());
         final failure = (result as FailureResult).failure;
-        expect(failure.message, contains('responsable o líder'));
+        expect(failure.message, contains('líder del equipo'));
       });
 
       test('rechaza cuadrilla con placa inválida', () async {

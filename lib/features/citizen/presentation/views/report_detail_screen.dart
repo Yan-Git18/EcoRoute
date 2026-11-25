@@ -22,11 +22,13 @@ import '../widgets/report_timeline.dart';
 class ReportDetailScreen extends ConsumerStatefulWidget {
   final String reportId;
   final ReportEntity? initialReport;
+  final Widget? Function(ReportEntity, Future<void> Function())? bottomAction;
 
   const ReportDetailScreen({
     super.key,
     required this.reportId,
     this.initialReport,
+    this.bottomAction,
   });
 
   @override
@@ -45,6 +47,20 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
     _fetchReport();
   }
 
+  @override
+  void didUpdateWidget(covariant ReportDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.reportId != widget.reportId) {
+      _report = widget.initialReport;
+      _isLoading = false;
+      _errorMessage = null;
+      _fetchReport();
+    } else if (widget.initialReport != null &&
+        widget.initialReport != oldWidget.initialReport) {
+      _report = widget.initialReport;
+    }
+  }
+
   Future<void> _fetchReport() async {
     final hadInitialReport = _report != null;
     if (!hadInitialReport) {
@@ -55,9 +71,10 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
     }
 
     final getReportById = ref.read(getReportByIdUseCaseProvider);
-    final result = await getReportById(widget.reportId);
+    final reportId = widget.reportId;
+    final result = await getReportById(reportId);
 
-    if (mounted) {
+    if (mounted && widget.reportId == reportId) {
       result.fold(
         onSuccess: (data) {
           setState(() {
@@ -164,6 +181,7 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(authViewModelProvider.select((state) => state.user));
     final citizenId = user?.isCitizen == true ? user!.id : null;
+    final report = _report;
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -190,6 +208,9 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
           ),
         ),
       ),
+      bottomNavigationBar: report == null
+          ? null
+          : widget.bottomAction?.call(report, _fetchReport),
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(
@@ -222,7 +243,7 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
                   : _ReportDetailBody(
                       report: _report!,
                       citizenId: citizenId,
-                      showCommunitySummary: user?.isAdmin == true,
+                      showAdminDetails: user?.isAdmin == true,
                       onCancelReport: citizenId == _report!.citizenId
                           ? _handleCancelReport
                           : null,
@@ -236,13 +257,13 @@ class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
 class _ReportDetailBody extends StatelessWidget {
   final ReportEntity report;
   final String? citizenId;
-  final bool showCommunitySummary;
+  final bool showAdminDetails;
   final VoidCallback? onCancelReport;
 
   const _ReportDetailBody({
     required this.report,
     required this.citizenId,
-    required this.showCommunitySummary,
+    required this.showAdminDetails,
     required this.onCancelReport,
   });
 
@@ -273,8 +294,34 @@ class _ReportDetailBody extends StatelessWidget {
               report: report,
               userId: userId,
             )
-          else if (showCommunitySummary)
-            ReportCommunitySummaryLabel(reportId: report.id, showWhenEmpty: true),
+          else if (showAdminDetails) ...[
+            _ReportDetailSection(
+              title: 'Reportado por',
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.person_outline),
+                title: Text(report.citizenName),
+                subtitle: Text(report.citizenPhone ?? 'Teléfono sin registrar'),
+              ),
+            ),
+            _ReportDetailSection(
+              title: 'Apoyos de la comunidad',
+              child: ReportCommunitySummaryLabel(
+                reportId: report.id,
+                showWhenEmpty: true,
+              ),
+            ),
+            if ((report.assignedToTeamName ?? report.assignedStaffName) case final responsible?)
+              _ReportDetailSection(
+                title: 'Asignación',
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.assignment_ind_outlined),
+                  title: Text(responsible),
+                  subtitle: report.assignedVehicle == null ? null : Text(report.assignedVehicle!),
+                ),
+              ),
+          ],
 
           // 4. Tarjeta de detalles: Descripción, fecha de reporte y métricas de prioridad/estado
           _ReportDetailsCard(report: report),
@@ -337,6 +384,34 @@ class _ReportDetailBody extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _ReportDetailSection extends StatelessWidget {
+  const _ReportDetailSection({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Semantics(
+              header: true,
+              child: Text(title, style: Theme.of(context).textTheme.titleSmall),
+            ),
+            child,
+          ],
+        ),
       ),
     );
   }
@@ -1145,24 +1220,26 @@ class _ReportSummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                reportNum,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF0F172A),
-                  letterSpacing: -0.5,
+          SizedBox(
+            width: double.infinity,
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 6,
+              children: [
+                Text(
+                  reportNum,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                    letterSpacing: -0.5,
+                  ),
                 ),
-              ),
-              ReportStatusBadge(
-                status: report.status,
-                showIcon: true,
-              ),
-            ],
+                ReportStatusBadge(status: report.status, showIcon: true),
+              ],
+            ),
           ),
           const SizedBox(height: 12),
           Text(

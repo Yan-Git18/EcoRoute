@@ -70,6 +70,10 @@ class MockAdminCrewsRepository implements AdminRepository {
   }
 
   @override
+  Future<Result<void>> deleteVehicle(String vehicleId) async =>
+      const Success(null);
+
+  @override
   Future<Result<void>> deleteCrew(String crewId) async {
     crews.removeWhere((c) => c.id == crewId);
     return const Success(null);
@@ -192,13 +196,20 @@ final testCrews = [
 
 void main() {
   testWidgets(
-    'Muestra el reporte asignado y abre el mapa en el equipo correcto',
+    'Muestra el reporte activo y permite cambiar al líder con los recursos bloqueados',
     (tester) async {
       tester.view.physicalSize = const Size(800, 1400);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       final mockRepo = MockAdminCrewsRepository()
-        ..crews = List.from(testCrews)
+        ..crews = [
+          testCrews.first.copyWith(
+            leaderId: '1',
+            memberIds: const ['1', '2'],
+            crewMembersCount: 2,
+          ),
+          testCrews.last,
+        ]
         ..crewReports = [
           ReportEntity(
             id: 'old-report',
@@ -267,6 +278,28 @@ void main() {
       router.pop();
       await tester.pumpAndSettle();
       expect(find.text('Detalle del equipo'), findsOneWidget);
+      await tester.tap(find.text('Editar equipo'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<IconButton>(
+              find.widgetWithIcon(IconButton, Icons.delete_outline).first,
+            )
+            .onPressed,
+        isNull,
+      );
+      final group = find.byType(RadioGroup<String>);
+      expect(tester.widget<RadioGroup<String>>(group).groupValue, '1');
+      final leader = find.byTooltip('Elegir a Juan Ruiz como líder');
+      await tester.ensureVisible(leader);
+      await tester.tap(leader);
+      await tester.pumpAndSettle();
+      expect(tester.widget<RadioGroup<String>>(group).groupValue, '2');
+      expect(find.text('Líder del equipo'), findsOneWidget);
+      await tester.tap(find.text('Guardar cambios'));
+      await tester.pumpAndSettle();
+      expect(mockRepo.crews.first.leaderId, '2');
+      expect(mockRepo.crews.first.memberIds, ['1', '2']);
     },
   );
 
@@ -396,6 +429,8 @@ void main() {
             activeTasksCount: 0,
             status: MunicipalCrewStatus.available,
             crewMembersCount: 2,
+            leaderId: '1',
+            memberIds: const ['1', '2'],
           ),
           ...testCrews.skip(1),
         ];
@@ -447,12 +482,17 @@ void main() {
       await tester.tap(newcomer);
       await tester.pumpAndSettle();
       expect(find.text('Integrantes (3)'), findsOneWidget);
+      final leader = find.byTooltip('Elegir a Ana Luna como líder');
+      await tester.ensureVisible(leader);
+      await tester.tap(leader);
+      await tester.pumpAndSettle();
       await tester.tap(saveButton);
       await tester.pumpAndSettle();
 
       expect(find.byType(AdminCrewEditorScreen), findsNothing);
       expect(find.text('Cuadrilla Norte'), findsOneWidget);
       expect(mockRepo.crews.first.crewMembersCount, 3);
+      expect(mockRepo.crews.first.leaderId, '3');
     },
   );
 
@@ -535,6 +575,15 @@ void main() {
       await tester.ensureVisible(luis);
       await tester.tap(luis);
       await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(registerButton).onPressed, isNull);
+      final group = find.byType(RadioGroup<String>);
+      expect(tester.widget<RadioGroup<String>>(group).groupValue, isNull);
+      expect(find.byType(Radio<String>), findsNWidgets(2));
+      expect(find.byTooltip('Elegir a Rosa Silva como líder'), findsNothing);
+      final leader = find.byTooltip('Elegir a Luis Torres como líder');
+      await tester.ensureVisible(leader);
+      await tester.tap(leader);
+      await tester.pumpAndSettle();
       expect(tester.widget<FilledButton>(registerButton).onPressed, isNotNull);
 
       Future<void> addMember(String name) async {
@@ -552,11 +601,26 @@ void main() {
       }
       expect(find.text('Integrantes (5)'), findsOneWidget);
       expect(tester.widget<TextField>(members).enabled, isFalse);
+      final nextLeader = find.byTooltip('Elegir a Marta Díaz como líder');
+      await tester.ensureVisible(nextLeader);
+      await tester.tap(nextLeader);
+      await tester.pumpAndSettle();
+      expect(tester.widget<RadioGroup<String>>(group).groupValue, '7');
+      expect(find.text('Líder del equipo'), findsOneWidget);
+
       final remove = find.byTooltip('Quitar a Marta Díaz');
       await tester.ensureVisible(remove);
       await tester.tap(remove);
       await tester.pumpAndSettle();
       expect(tester.widget<TextField>(members).enabled, isTrue);
+      expect(tester.widget<FilledButton>(registerButton).onPressed, isNull);
+      expect(tester.widget<RadioGroup<String>>(group).groupValue, isNull);
+      expect(find.text('Líder del equipo'), findsNothing);
+
+      await tester.ensureVisible(leader);
+      await tester.tap(leader);
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(registerButton).onPressed, isNotNull);
       await addMember('Paula León');
       await tester.tap(registerButton);
       await tester.pumpAndSettle();
@@ -565,6 +629,7 @@ void main() {
       expect(find.byType(AdminCrewEditorScreen), findsNothing);
       expect(find.text('Equipo Surquillo'), findsOneWidget);
       expect(mockRepo.crews.first.memberIds, ['3', '4', '5', '6', '8']);
+      expect(mockRepo.crews.first.leaderId, '4');
     },
   );
 

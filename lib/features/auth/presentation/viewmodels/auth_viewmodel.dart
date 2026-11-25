@@ -212,6 +212,12 @@ class AuthViewModel extends Notifier<AuthState> {
     );
   }
 
+  void applyVerifiedAdminEmail(String uid, String email) {
+    final current = state.user;
+    if (current == null || !current.isAdmin || current.id != uid) return;
+    state = state.copyWith(user: current.copyWith(email: email));
+  }
+
   /// Limpia cualquier mensaje de error activo en la UI
   void clearError() {
     if (state.errorMessage != null) {

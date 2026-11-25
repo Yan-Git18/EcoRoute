@@ -12,6 +12,7 @@ class MunicipalCrewDto {
   final String name;
   final String zone;
   final String leadStaffName;
+  final String? leaderId;
   final String vehicleCode;
   final String vehiclePlate;
   final String vehicleType;
@@ -33,6 +34,7 @@ class MunicipalCrewDto {
     required this.name,
     required this.zone,
     required this.leadStaffName,
+    this.leaderId,
     required this.vehicleCode,
     required this.vehiclePlate,
     this.vehicleType = 'Camión Compactador',
@@ -72,6 +74,7 @@ class MunicipalCrewDto {
       name: map['name'] as String? ?? 'Cuadrilla Municipal',
       zone: map['zone'] as String? ?? 'Sector General',
       leadStaffName: map['leadStaffName'] as String? ?? 'Personal Encargado',
+      leaderId: map['leaderId'] as String?,
       vehicleCode: map['vehicleCode'] as String? ?? '',
       vehiclePlate: map['vehiclePlate'] as String? ?? '',
       vehicleType: map['vehicleType'] as String? ?? '',
@@ -108,6 +111,7 @@ class MunicipalCrewDto {
       'name': name,
       'zone': zone,
       'leadStaffName': leadStaffName,
+      if (leaderId != null) 'leaderId': leaderId,
       'vehicleCode': vehicleCode,
       'vehiclePlate': vehiclePlate,
       'vehicleType': vehicleType,
@@ -136,6 +140,7 @@ class MunicipalCrewDto {
       name: name,
       zone: zone,
       leadStaffName: leadStaffName,
+      leaderId: leaderId,
       vehicleCode: vehicleCode,
       vehiclePlate: vehiclePlate,
       vehicleType: vehicleType,
@@ -164,6 +169,7 @@ class MunicipalCrewDto {
       name: entity.name,
       zone: entity.zone,
       leadStaffName: entity.leadStaffName,
+      leaderId: entity.leaderId,
       vehicleCode: entity.vehicleCode,
       vehiclePlate: entity.vehiclePlate,
       vehicleType: entity.vehicleType,

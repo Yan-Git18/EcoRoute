@@ -24,7 +24,7 @@ class CreateCrewUseCase {
       );
     }
 
-    if (crew.zone.trim().isEmpty) {
+    if (!crew.vehicleOnly && crew.zone.trim().isEmpty) {
       return const FailureResult(
         ValidationFailure(
           message: 'Debe asignar una zona o sector de cobertura.',
@@ -32,11 +32,9 @@ class CreateCrewUseCase {
       );
     }
 
-    if (crew.leadStaffName.trim().isEmpty) {
+    if (!crew.vehicleOnly && !crew.hasValidLeader) {
       return const FailureResult(
-        ValidationFailure(
-          message: 'Debe especificar el nombre del responsable o líder.',
-        ),
+        ValidationFailure(message: 'Selecciona un líder del equipo.'),
       );
     }
 
@@ -61,6 +59,10 @@ class CreateCrewUseCase {
       );
     }
 
-    return _repository.createCrew(crew);
+    return _repository.createCrew(
+      crew.vehicleOnly
+          ? crew.copyWith(leadStaffName: MunicipalCrewEntity.unassignedDriver)
+          : crew,
+    );
   }
 }

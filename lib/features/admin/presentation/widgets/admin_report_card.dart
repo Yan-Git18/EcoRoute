@@ -3,142 +3,79 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
-import '../../../citizen/presentation/widgets/report_community_summary_label.dart';
 
 class AdminReportCard extends StatelessWidget {
   const AdminReportCard({
     super.key,
     required this.report,
-    required this.onAssign,
     required this.onViewDetail,
   });
 
   final ReportEntity report;
-  final VoidCallback? onAssign;
   final VoidCallback onViewDetail;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final metadataStyle = theme.textTheme.bodySmall?.copyWith(
-      color: AppColors.textSecondary,
-    );
-    final isPending = report.status == ReportStatus.pending;
-    final teamName = report.assignedToTeamName ?? report.assignedStaffName;
-    final vehicle = report.assignedVehicle;
-    final citizenPhone = report.citizenPhone;
-
+    final text = Theme.of(context).textTheme;
     return Card(
       margin: EdgeInsets.zero,
       color: AppColors.surface,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         side: const BorderSide(color: AppColors.border),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: 12,
-              runSpacing: 4,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text(
-                  report.reportNumber,
-                  style: metadataStyle?.copyWith(fontWeight: FontWeight.w700),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onViewDetail,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          report.reportNumber,
+                          style: text.bodySmall?.copyWith(
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          DateFormatter.formatTimeAgo(report.createdAt),
+                          style: text.bodySmall?.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        _ReportStatusLabel(status: report.status),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      report.categoryName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  DateFormatter.formatTimeAgo(report.createdAt),
-                  style: metadataStyle,
-                ),
-                _ReportStatusLabel(status: report.status),
-                Text(
-                  'Prioridad ${report.priority.label.toLowerCase()}',
-                  style: metadataStyle?.copyWith(
-                    color: report.priority == ReportPriority.high
-                        ? const Color(0xFFB91C1C)
-                        : AppColors.textSecondary,
-                    fontWeight: report.priority == ReportPriority.high
-                        ? FontWeight.w700
-                        : FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              report.categoryName,
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w700,
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              report.address,
-              style: theme.textTheme.bodyMedium?.copyWith(
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.chevron_right_rounded,
                 color: AppColors.textSecondary,
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Reportado por ${report.citizenName}'
-              '${citizenPhone == null || citizenPhone.isEmpty ? '' : ' · $citizenPhone'}',
-              style: metadataStyle,
-            ),
-            if (teamName != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  vehicle == null || vehicle.isEmpty
-                      ? teamName
-                      : '$teamName · $vehicle',
-                  style: metadataStyle?.copyWith(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ReportCommunitySummaryLabel(reportId: report.id),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                if (!isPending && report.status != ReportStatus.assigned)
-                  const Spacer()
-                else
-                  Flexible(
-                    child: isPending
-                        ? ElevatedButton(
-                            onPressed: onAssign,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primaryDark,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                            ),
-                            child: const Text('Asignar Personal'),
-                          )
-                        : TextButton(
-                            onPressed: onAssign,
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppColors.primaryDark,
-                            ),
-                            child: const Text('Reasignar Personal'),
-                          ),
-                  ),
-                IconButton(
-                  tooltip: 'Ver detalle completo',
-                  color: AppColors.textSecondary,
-                  icon: const Icon(Icons.chevron_right_rounded),
-                  onPressed: onViewDetail,
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

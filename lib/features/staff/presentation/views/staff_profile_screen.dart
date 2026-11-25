@@ -515,7 +515,7 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
                         Expanded(
                           child: _StatMiniCard(
                             title: 'Resueltas Hoy',
-                            value: tasksAvailable ? '${taskState.resolvedOn(now)}' : '—',
+                            value: tasksAvailable ? '${taskState.resolvedOn(now, staff?.id)}' : '—',
                             color: const Color(0xFF047857),
                             icon: Icons.check_circle_outline_rounded,
                           ),
@@ -583,7 +583,8 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
       builder: (ctx) => Consumer(
         builder: (context, ref, _) {
           final staffState = ref.watch(staffHomeViewModelProvider);
-          final resolvedTasks = staffState.tasks.where((task) => task.isResolved).toList()
+          final staffId = ref.watch(authViewModelProvider.select((auth) => auth.user?.id));
+          final resolvedTasks = staffState.resolvedBy(staffId).toList()
             ..sort((a, b) {
               final first = a.resolvedAt;
               final second = b.resolvedAt;

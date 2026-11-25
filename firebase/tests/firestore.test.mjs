@@ -62,6 +62,42 @@ async function register(role = "citizen") {
   return { id, token, profile, role };
 }
 
+test("el administrador edita su contacto y sincroniza solo el correo confirmado", emulator, async () => {
+  const [admin, other] = await Promise.all([register("admin"), register("admin")]);
+  const nextEmail = `${randomUUID()}@example.com`;
+  const contact = { name: string("Administradora"), phoneNumber: string("987654321") };
+  await commit(admin.token, 200, write(admin.profile, contact, { merge: true }));
+  await commit(admin.token, 403, write(other.profile, contact, { merge: true }));
+  await commit(admin.token, 403, write(admin.profile, { role: string("staff") }, { merge: true }));
+  const updateEmail = (email) => write(admin.profile, { email: string(email) }, { merge: true });
+  await commit(admin.token, 403, updateEmail(nextEmail));
+
+  const authOperation = (operation, data) => fetch(
+    `http://${auth}/identitytoolkit.googleapis.com/v1/accounts:${operation}?key=test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    },
+  );
+  const sent = await authOperation("sendOobCode", {
+    idToken: admin.token, requestType: "VERIFY_AND_CHANGE_EMAIL", newEmail: nextEmail,
+  });
+  assert.equal(sent.status, 200, sent.ok ? undefined : await sent.text());
+  const codes = await fetch(`http://${auth}/emulator/v1/projects/${project}/oobCodes`);
+  assert.equal(codes.status, 200);
+  const code = (await codes.json()).oobCodes.find((item) => item.newEmail === nextEmail);
+  assert.ok(code);
+  const confirmed = await authOperation("update", { oobCode: code.oobCode });
+  assert.equal(confirmed.status, 200, confirmed.ok ? undefined : await confirmed.text());
+  const signedIn = await authOperation("signInWithPassword", {
+    email: nextEmail, password: "test-password", returnSecureToken: true,
+  });
+  assert.equal(signedIn.status, 200);
+  const { idToken } = await signedIn.json();
+  await commit(idToken, 403, updateEmail("otro@example.com"));
+  await commit(idToken, 200, updateEmail(nextEmail));
+});
+
 function report(owner) {
   const id = randomUUID();
   const path = `reports/${id}`;
@@ -147,9 +183,20 @@ function statusChange(item, owner, actor, status, extra = {}, activeIds = [], re
       }, delta > 0 ? "onRoute" : releaseCrew ? "available" : null));
     }
   }
-  const active = ["in_progress", "resolved"].includes(status) ? write(`${actor.profile}/operations/activeTask`, {
-    reportIds: array((status === "in_progress" ? [item.id] : activeIds).map(string)),
+  const activeOwner = status === "resolved" && oldCrew
+    ? item.data.assignedStaffId?.stringValue ?? actor.id
+    : actor.id;
+  const resolvingCrewReport = status === "resolved" && !!oldCrew;
+  const active = ["in_progress", "resolved"].includes(status) ? write(`users/${activeOwner}/operations/activeTask`, {
+    ...(resolvingCrewReport ? {} : {
+      reportIds: array((status === "in_progress" ? [item.id] : activeIds).map(string)),
+    }),
     reportId: string(item.id), eventId: string(id),
+  }, {
+    merge: resolvingCrewReport,
+    transforms: resolvingCrewReport ? [{
+      fieldPath: "reportIds", removeAllFromArray: { values: [string(item.id)] },
+    }] : [],
   }) : null;
   if (active) related.push(active);
   return {
@@ -161,13 +208,13 @@ function statusChange(item, owner, actor, status, extra = {}, activeIds = [], re
   };
 }
 
-async function createCrew(admin) {
+async function seedLegacyCrew() {
   const id = randomUUID();
-  await commit(admin.token, 200, crewCreation(id));
+  await commit("owner", 200, legacyCrewCreation(id));
   return id;
 }
 
-function crewCreation(id) {
+function legacyCrewCreation(id) {
   return write(`crews/${id}`, {
     name: string("Cuadrilla de prueba"), openReportCount: integer(0), memberCount: integer(0),
   });
@@ -179,6 +226,10 @@ function crewMembership(worker, teamId, previousTeam = null) {
     ...[[previousTeam, -1], [teamId, 1]].filter(([crewId]) => crewId).map(([crewId, delta]) =>
       crewCounter(crewId, "memberCount", delta, { userId: string(worker.id) })),
   ];
+}
+
+function crewLeader(teamId, uid) {
+  return write(`crews/${teamId}`, { leaderId: string(uid) }, { merge: true });
 }
 
 async function dispatch(admin, item, owner, teamId) {
@@ -317,18 +368,21 @@ test("la bandeja pagina por cursor y el mapa devuelve solo los reportes reciente
   }
 });
 
-test("el acceso operativo sigue a la cuadrilla y la toma de la tarea tiene un solo ganador", emulator, async () => {
+test("solo el líder del equipo inicia y el nuevo líder cierra un reporte en curso", emulator, async () => {
   const [owner, admin, first, second, outsider, unassigned] = await Promise.all([
     register(), register("admin"), register("staff"), register("staff"),
     register("staff"), register("staff"),
   ]);
-  const [teamId, otherTeamId] = await Promise.all([createCrew(admin), createCrew(admin)]);
+  const [teamId, otherTeamId] = await Promise.all([seedLegacyCrew(), seedLegacyCrew()]);
   await commit(first.token, 403, ...crewMembership(first, teamId));
   await commit(admin.token, 403, crewMembership(first, randomUUID())[0]);
   await commit(admin.token, 403, crewMembership(first, teamId)[0]);
   await commit(admin.token, 200, ...crewMembership(first, teamId));
   await commit(admin.token, 200, ...crewMembership(second, teamId));
   await commit(admin.token, 200, ...crewMembership(outsider, otherTeamId));
+  await commit(admin.token, 403, crewLeader(teamId, outsider.id));
+  await commit(second.token, 403, crewLeader(teamId, second.id));
+  await commit(admin.token, 200, crewLeader(teamId, first.id));
   assert.equal((await request(`/crews/${teamId}`, first.token)).status, 200);
   assert.equal((await request(`/crews/${otherTeamId}`, first.token)).status, 403);
   assert.equal((await request("/crews", first.token)).status, 403);
@@ -360,7 +414,8 @@ test("el acceso operativo sigue a la cuadrilla y la toma de la tarea tiene un so
   const compound = (op, ...filters) => ({ compositeFilter: { op, filters } });
   const byWorker = (worker) => compound("AND", equal("assignedStaffId", worker.id),
     statuses("assigned", "asignado", "in_progress", "en proceso", "resolved", "resuelto"));
-  const byCrew = (id) => compound("AND", equal("assignedToTeamId", id), statuses("assigned", "asignado"));
+  const byCrew = (id) => compound("AND", equal("assignedToTeamId", id),
+    statuses("assigned", "asignado", "in_progress", "en proceso", "resolved", "resuelto"));
   async function query(actor, status, where) {
     const response = await request(":runQuery", actor.token, {
       structuredQuery: {
@@ -389,33 +444,41 @@ test("el acceso operativo sigue a la cuadrilla y la toma de la tarea tiene un so
   const evidence = write(`${item.path}/media/evidence`, media());
   await commit(first.token, 403, preemptiveResolution.change, ...preemptiveResolution.related, preemptiveResolution.notice, evidence);
 
-  const contenders = [first, second];
-  const responses = await Promise.all(contenders.map((worker) => {
-    const attempt = statusChange(item, owner, worker, "in_progress", { assignedStaffId: string(worker.id) });
-    return request(":commit", worker.token, { writes: [attempt.change, ...attempt.related, attempt.notice] });
-  }));
-  const results = await Promise.all(responses.map(async (response) => [response.status, await response.text()]));
-  assert.deepEqual(results.map(([status]) => status).sort(), [200, 403], JSON.stringify(results));
-  const winner = contenders[responses.findIndex((response) => response.ok)];
-  const teammate = contenders.find((worker) => worker !== winner);
-  Object.assign(item.data, { status: string("in_progress"), assignedStaffId: string(winner.id) });
-  assert.equal(await read(winner, item), 200);
-  assert.equal(await read(teammate, item), 403);
-  assert.deepEqual(await query(teammate, 200, compound("OR", byWorker(teammate), byCrew(teamId))), []);
+  const memberStart = statusChange(item, owner, second, "in_progress", { assignedStaffId: string(second.id) });
+  await commit(second.token, 403, memberStart.change, ...memberStart.related, memberStart.notice);
+  await start(first, item, owner);
+  assert.equal(await read(first, item), 200);
+  assert.equal(await read(second, item), 200);
+  assert.deepEqual(await query(second, 200, compound("OR", byWorker(second), byCrew(teamId))), [item.id]);
+  assert.equal(await read(outsider, item), 403);
 
-  const resolution = statusChange(item, owner, winner, "resolved", {
-    assignedStaffId: string(winner.id), evidenceImagePath: string(`${item.path}/media/evidence`),
+  const resolution = (actor) => statusChange(item, owner, actor, "resolved", {
+    assignedStaffId: string(actor.id), evidenceImagePath: string(`${item.path}/media/evidence`),
   });
-  await commit(teammate.token, 403, resolution.change, ...resolution.related, resolution.notice, evidence);
-  await commit(admin.token, 200, ...crewMembership(winner, otherTeamId, teamId));
-  await query(winner, 403, compound("OR", byWorker(winner), byCrew(teamId)));
-  assert.deepEqual(await query(winner, 200, compound("OR", byWorker(winner), byCrew(otherTeamId))), [item.id]);
-  await commit(winner.token, 200, resolution.change, ...resolution.related, resolution.notice, evidence);
-  const closed = await (await request(`/${item.path}`, winner.token)).json();
+  const close = (actor, expected) => {
+    const { change, related, notice } = resolution(actor);
+    return commit(actor.token, expected, change, ...related, notice, evidence);
+  };
+  await close(second, 403);
+  await commit(second.token, 403, evidence);
+  const previousActiveTask = `${first.profile}/operations/activeTask`;
+  const otherActiveId = randomUUID();
+  await commit("owner", 200, write(previousActiveTask, {
+    reportIds: array([item.id, otherActiveId].map(string)),
+  }, { merge: true }));
+  await commit(admin.token, 200, crewLeader(teamId, second.id));
+  await close(first, 403);
+  await commit(first.token, 403, evidence);
+  await close(second, 200);
+  const closed = await (await request(`/${item.path}`, second.token)).json();
+  assert.equal(closed.fields.assignedStaffId.stringValue, second.id);
   assert.equal(closed.fields.resolvedAt.timestampValue, closed.fields.updatedAt.timestampValue);
-  assert.equal(await read(winner, item), 200);
-  assert.equal(await read(teammate, item), 403);
-  assert.equal((await request(`/${item.path}/media/evidence`, teammate.token)).status, 403);
+  const event = await (await request(`/${item.path}/history/${closed.fields.statusEventId.stringValue}`, first.token)).json();
+  assert.equal(event.fields.changedByUserId.stringValue, second.id);
+  const oldLock = await (await request(`/${previousActiveTask}`, first.token)).json();
+  assert.deepEqual(oldLock.fields.reportIds.arrayValue.values, [string(otherActiveId)]);
+  assert.equal(await read(first, item), 200);
+  assert.equal((await request(`/${item.path}/media/evidence`, first.token)).status, 200);
   assert.equal((await request(`/${item.path}/media/evidence`, owner.token)).status, 200);
 });
 
@@ -455,8 +518,9 @@ test("los turnos guardan cambios atómicos por trabajador con fecha del servidor
 
 test("las fotos se guardan junto con el reporte y la evidencia con la resolución y el aviso", emulator, async () => {
   const [owner, staff, admin] = await Promise.all([register(), register("staff"), register("admin")]);
-  const teamId = await createCrew(admin);
+  const teamId = await seedLegacyCrew();
   await commit(admin.token, 200, ...crewMembership(staff, teamId));
+  await commit(admin.token, 200, crewLeader(teamId, staff.id));
   const item = report(owner);
   const paths = Array.from({ length: 4 }, (_, index) => `${item.path}/media/photo_${index}`);
   item.data.imagePaths = array(paths.map(string));
@@ -486,8 +550,9 @@ test("las fotos se guardan junto con el reporte y la evidencia con la resolució
 
 test("Solo el personal puede guardar todas las fotos de resolución junto con el aviso", emulator, async () => {
   const [owner, staff, admin] = await Promise.all([register(), register("staff"), register("admin")]);
-  const teamId = await createCrew(admin);
+  const teamId = await seedLegacyCrew();
   await commit(admin.token, 200, ...crewMembership(staff, teamId));
+  await commit(admin.token, 200, crewLeader(teamId, staff.id));
   const item = report(owner);
   await commit(owner.token, 200, ...creation(item, owner));
   await dispatch(admin, item, owner, teamId);
@@ -508,8 +573,9 @@ test("Solo el personal puede guardar todas las fotos de resolución junto con el
 
 test("la bandeja sigue al estado, respeta preferencias y solo permite leer al titular", emulator, async () => {
   const [owner, admin, staff] = await Promise.all([register(), register("admin"), register("staff")]);
-  const teamId = await createCrew(admin);
+  const teamId = await seedLegacyCrew();
   await commit(admin.token, 200, ...crewMembership(staff, teamId));
+  await commit(admin.token, 200, crewLeader(teamId, staff.id));
   const item = report(owner);
   await commit(owner.token, 200, ...creation(item, owner));
   const assignment = statusChange(item, owner, admin, "assigned", { assignedToTeamId: string(teamId) });
@@ -592,9 +658,9 @@ test("el avatar y los dispositivos tienen permisos acotados", emulator, async ()
 
 test("se conservan el despacho municipal, el catálogo y la cancelación del propio reporte", emulator, async () => {
   const [owner, other, admin] = await Promise.all([register(), register(), register("admin")]);
-  const crew = crewCreation(randomUUID());
+  const crew = legacyCrewCreation(randomUUID());
   await commit(owner.token, 403, crew);
-  await commit(admin.token, 200, crew);
+  await commit(admin.token, 403, crew);
 
   const categoryPath = `report_categories/${randomUUID()}`;
   await commit(admin.token, 200, write(categoryPath, { name: string("Residuos") }));
@@ -660,8 +726,9 @@ test("las altas requieren foto, campos válidos y coordenadas dentro de Cajamarc
 
 test("dos inicios simultáneos de la misma cuenta dejan una tarea activa hasta el cierre", emulator, async () => {
   const [owner, admin, staff] = await Promise.all([register(), register("admin"), register("staff")]);
-  const crewId = await createCrew(admin);
+  const crewId = await seedLegacyCrew();
   await commit(admin.token, 200, ...crewMembership(staff, crewId));
+  await commit(admin.token, 200, crewLeader(crewId, staff.id));
   const tasks = [report(owner), report(owner)];
   for (const item of tasks) {
     await commit(owner.token, 200, ...creation(item, owner));
@@ -688,22 +755,29 @@ test("dos inicios simultáneos de la misma cuenta dejan una tarea activa hasta e
 });
 
 test("la baja de una cuadrilla espera al despacho y a la reasignación del personal", emulator, async () => {
-  const [owner, admin, staff] = await Promise.all([register(), register("admin"), register("staff")]);
-  const [first, second] = await Promise.all([createCrew(admin), createCrew(admin)]);
+  const [owner, admin, staff, other] = await Promise.all([
+    register(), register("admin"), register("staff"), register("staff"),
+  ]);
+  const [first, second] = await Promise.all([seedLegacyCrew(), seedLegacyCrew()]);
   const crewPath = `/crews/${first}`;
   const drop = () => request(crewPath, admin.token, undefined, "DELETE");
-  await commit(admin.token, 200, ...crewMembership(staff, first));
+  await commit("owner", 200, write(`crews/${first}`, {
+    memberIds: array([string(staff.id)]), memberCount: integer(1),
+    crewMembersCount: integer(1), leaderId: string(staff.id),
+  }, { merge: true }), write(staff.profile, { teamId: string(first) }, { merge: true }));
+  await commit(admin.token, 200, ...crewMembership(other, second));
+  await commit(admin.token, 200, crewLeader(second, other.id));
   assert.equal((await drop()).status, 403);
   const item = report(owner);
   await commit(owner.token, 200, ...creation(item, owner));
   await dispatch(admin, item, owner, first);
   assert.equal((await (await request(crewPath, admin.token)).json()).fields.status.stringValue, "onRoute");
-  await commit(admin.token, 200, ...crewMembership(staff, second, first));
   assert.equal((await drop()).status, 403);
   await commit(admin.token, 403, write(`crews/${first}`, { openReportCount: integer(0) }, { merge: true }));
   await dispatch(admin, item, owner, second);
   assert.equal((await (await request(crewPath, admin.token)).json()).fields.status.stringValue, "available");
-  assert.equal((await drop()).status, 200);
+  await commit(admin.token, 200, { delete: `${db}/crews/${first}` },
+    write(staff.profile, { teamId: nullable(null) }, { merge: true }));
   assert.equal((await request(`/crews/${second}`, admin.token, undefined, "DELETE")).status, 403);
 });
 
@@ -818,17 +892,20 @@ test("un equipo reserva el camión y sus integrantes en la misma operación", em
   await commit(first.token, 403, write(truckPath, fields));
   await commit(admin.token, 200, write(truckPath, fields));
   const membership = (staff, id) => write(staff.profile, { teamId: nullable(id) }, { merge: true });
-  const create = (id, members) => [
+  const create = (id, members, leader = members[0].id) => [
     write(`crews/${id}`, {
       name: string("Equipo"), status: string("available"), vehicleId: string(truck),
       openReportCount: integer(0), memberCount: integer(2), crewMembersCount: integer(2),
       memberIds: array(members.map(({ id }) => string(id))),
+      ...(leader == null ? {} : { leaderId: string(leader) }),
     }),
     write(truckPath, { assignedCrewId: string(id) }, { merge: true, timestamp: null }),
     ...members.map((member) => membership(member, id)),
   ];
 
   await commit(admin.token, 403, ...create(crew, [first, first]));
+  await commit(admin.token, 403, ...create(crew, [first, second], null));
+  await commit(admin.token, 403, ...create(crew, [first, second], third.id));
   await commit(admin.token, 200, ...create(crew, [first, second]));
   await commit(admin.token, 403, { delete: `${db}/${truckPath}` });
   await commit(admin.token, 403, ...create(otherCrew, [first, third]));
@@ -863,6 +940,7 @@ test("la edición libera el camión anterior y admite reemplazar cinco integrant
   await commit(admin.token, 200,
     write(crew, {
       vehicleId: string(firstTruck), memberIds: memberIds(oldMembers),
+      leaderId: string(oldMembers[0].id),
       openReportCount: integer(0), memberCount: integer(5), crewMembersCount: integer(5),
     }),
     truckOwner(firstTruck, crewId), ...oldMembers.map((person) => membership(person, crewId)));
@@ -878,7 +956,10 @@ test("la edición libera el camión anterior y admite reemplazar cinco integrant
   await commit(admin.token, 200, write(crew, { memberIds: memberIds(oldMembers) }, { merge: true }),
     membership(newMembers[0], null), membership(oldMembers[4], crewId));
   await commit(admin.token, 200,
-    write(crew, { vehicleId: string(secondTruck), memberIds: memberIds(newMembers) }, { merge: true }),
+    write(crew, {
+      vehicleId: string(secondTruck), memberIds: memberIds(newMembers),
+      leaderId: string(newMembers[0].id),
+    }, { merge: true }),
     truckOwner(firstTruck, null), truckOwner(secondTruck, crewId),
     ...oldMembers.map((person) => membership(person, null)),
     ...newMembers.map((person) => membership(person, crewId)));
@@ -889,6 +970,32 @@ test("la edición libera el camión anterior y admite reemplazar cinco integrant
   await commit(admin.token, 200, deleteCrew, ...releaseMembers, truckOwner(secondTruck, null));
 });
 
+test("un vehículo en taller no recibe despachos y un vehículo en ruta no ingresa al taller", emulator, async () => {
+  const [owner, admin, leader] = await Promise.all([register(), register("admin"), register("staff")]);
+  const teamId = randomUUID();
+  const truckId = randomUUID();
+  const truck = `vehicles/${truckId}`;
+  const status = (value) => write(truck, {
+    status: string(value), isAvailable: bool(value === "available"),
+  }, { merge: true });
+  await commit("owner", 200,
+    write(truck, { status: string("available"), assignedCrewId: string(teamId) }),
+    write(`crews/${teamId}`, {
+      leaderId: string(leader.id), vehicleId: string(truckId), openReportCount: integer(0),
+      memberCount: integer(1), status: string("available"),
+    }),
+    write(leader.profile, { teamId: string(teamId) }, { merge: true }),
+  );
+  await commit(admin.token, 200, status("maintenance"));
+  const item = report(owner);
+  await commit(owner.token, 200, ...creation(item, owner));
+  const blocked = statusChange(item, owner, admin, "assigned", { assignedToTeamId: string(teamId) });
+  await commit(admin.token, 403, blocked.change, ...blocked.related, blocked.notice);
+  await commit(admin.token, 200, status("available"));
+  await dispatch(admin, item, owner, teamId);
+  await commit(admin.token, 403, status("maintenance"));
+});
+
 test("un administrador amplía el equipo de dos a cinco integrantes", emulator, async () => {
   const [owner, admin, ...people] = await Promise.all([
     register(), register("admin"), ...Array.from({ length: 6 }, () => register("staff")),
@@ -897,6 +1004,7 @@ test("un administrador amplía el equipo de dos a cinco integrantes", emulator, 
   const crew = `crews/${crewId}`;
   const roster = (size, declaredSize = size) => ({
     memberIds: array(people.slice(0, size).map(({ id }) => string(id))),
+    leaderId: string(people[0].id),
     memberCount: integer(size), crewMembersCount: integer(declaredSize),
   });
   const addMember = ({ profile }) => write(profile, { teamId: string(crewId) }, { merge: true });
@@ -918,7 +1026,7 @@ test("un administrador amplía el equipo de dos a cinco integrantes", emulator, 
     ...people.slice(1, 5).map(({ profile }) => write(profile, { teamId: nullable(null) }, { merge: true })));
 
   const item = report(owner);
-  const worker = people[2];
+  const worker = people[0];
   await commit(owner.token, 200, ...creation(item, owner));
   await dispatch(admin, item, owner, crewId);
   const getTeam = async () => (await (await request(`/${crew}`, worker.token)).json()).fields;
@@ -946,6 +1054,7 @@ test("un equipo anterior puede editar sus datos y completar su dotación despué
   const completeRoster = [
     write(crew, {
       memberIds: array([first, second, third].map(({ id }) => string(id))),
+      leaderId: string(first.id),
       memberCount: integer(3), crewMembersCount: integer(3),
     }, { merge: true }),
     ...[second, third].map(({ profile }) => write(profile, { teamId: string(crewId) }, { merge: true })),

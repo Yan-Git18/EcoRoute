@@ -19,6 +19,7 @@ abstract class AdminRemoteDataSource {
   Future<MunicipalCrewDto> createCrew(MunicipalCrewEntity crew);
   Future<void> updateCrew(MunicipalCrewEntity crew);
   Future<void> deleteCrew(String crewId);
+  Future<void> deleteVehicle(String vehicleId);
   Future<ReportDto> assignReportToStaff({
     required String reportId,
     required List<String> staffIds,
@@ -234,8 +235,13 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     }
     final collection = crew.vehicleOnly ? _vehicles : _crews;
     final ref = crew.id.isEmpty ? collection.doc() : collection.doc(crew.id);
-    final dto = MunicipalCrewDto.fromDomain(crew.copyWith(id: ref.id));
     if (crew.vehicleOnly) {
+      final dto = MunicipalCrewDto.fromDomain(
+        crew.copyWith(
+          id: ref.id,
+          leadStaffName: MunicipalCrewEntity.unassignedDriver,
+        ),
+      );
       await ref.set(_vehicleFields(dto));
       return dto;
     }
@@ -246,6 +252,7 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     ..remove('vehicleOnly')
     ..remove('vehicleId')
     ..remove('memberIds')
+    ..remove('leaderId')
     ..remove('crewMembersCount')
     ..remove('activeTasksCount')
     ..remove('assignedCrewId');
@@ -256,9 +263,35 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       throw const ServerException(message: 'Base de datos no inicializada.');
     }
     if (crew.vehicleOnly) {
-      final fields = _vehicleFields(MunicipalCrewDto.fromDomain(crew))
-        ..remove('createdAt');
-      await _vehicles.doc(crew.id).update(fields);
+      final ref = _vehicles.doc(crew.id);
+      await _firestore.runTransaction((transaction) async {
+        final previous = (await transaction.get(ref)).data();
+        if (previous == null) {
+          throw const ServerException(message: 'El vehículo ya no existe.');
+        }
+        if (crew.updatedAt != null &&
+            MunicipalCrewDto.fromMap(previous, crew.id).updatedAt != crew.updatedAt) {
+          throw const ServerException(message: 'El vehículo cambió. Actualiza la flota y vuelve a intentar.');
+        }
+        final assignee = previous['assignedCrewId'] as String?;
+        if (crew.status == MunicipalCrewStatus.maintenance &&
+            previous['status'] != 'maintenance' &&
+            assignee != null) {
+          final team = (await transaction.get(_crews.doc(assignee))).data();
+          if (team != null && team['openReportCount'] != 0) {
+            throw const ServerException(message: 'Finaliza el reporte activo del equipo antes de enviar el vehículo al taller.');
+          }
+        }
+        transaction.update(ref, {
+          'name': crew.name,
+          'vehicleCode': crew.vehicleCode,
+          'vehiclePlate': crew.vehiclePlate,
+          'vehicleType': crew.vehicleType,
+          'status': crew.status.toDbString(),
+          'isAvailable': crew.isAvailable,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      });
       return;
     }
     final ref = _crews.doc(crew.id);
@@ -271,6 +304,19 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       ..remove('activeTasksCount')
       ..remove('assignedCrewId');
     await ref.update(fields);
+  }
+
+  @override
+  Future<void> deleteVehicle(String vehicleId) async {
+    final ref = _vehicles.doc(vehicleId);
+    await _firestore.runTransaction((transaction) async {
+      final data = (await transaction.get(ref)).data();
+      if (data == null) return;
+      if (data['assignedCrewId'] != null) {
+        throw const ServerException(message: 'Retira el vehículo del equipo antes de eliminarlo.');
+      }
+      transaction.delete(ref);
+    });
   }
 
   Future<List<String>> _legacyMembers(String crewId) async {
@@ -287,10 +333,17 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     bool creating = false,
   }) async {
     final roster = crew.memberIds ?? const <String>[];
+    final leaderId = crew.leaderId;
     if (roster.length != crew.crewMembersCount ||
         roster.toSet().length != roster.length) {
       throw const ServerException(
         message: 'Selecciona entre 2 y 5 integrantes para el equipo.',
+      );
+    }
+    if ((creating || roster.isNotEmpty || leaderId != null) &&
+        (leaderId == null || !roster.contains(leaderId))) {
+      throw const ServerException(
+        message: 'Selecciona un líder entre los integrantes del equipo.',
       );
     }
     final legacy = creating ? const <String>[] : await _legacyMembers(ref.id);
@@ -341,9 +394,25 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
           rosterChanged ||
           (vehicleChanged && previous?['memberIds'] == null);
       if (!recordRoster && !vehicleChanged && previous != null) {
+        final leader = leaderId == null
+            ? null
+            : (await transaction.get(_users.doc(leaderId))).data();
+        if (leaderId != null &&
+            (leader == null ||
+                leader['teamId'] != ref.id ||
+                leader['isActive'] == false ||
+                !const ['staff', 'personal'].contains(leader['role']))) {
+          throw const ServerException(
+            message: 'El líder seleccionado ya no está disponible.',
+          );
+        }
         final fields = {
           'name': crew.name,
           'zone': crew.zone,
+          if (leader != null) ...{
+            'leaderId': leaderId,
+            'leadStaffName': leader['name'] as String? ?? crew.leadStaffName,
+          },
           'updatedAt': FieldValue.serverTimestamp(),
         };
         transaction.update(ref, fields);
@@ -383,7 +452,7 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
         if (before.contains(uid) && currentTeam != ref.id ||
             roster.contains(uid) &&
                 (!profile.isStaff ||
-                    (recordRoster && !profile.isActive) ||
+                    ((recordRoster || uid == leaderId) && !profile.isActive) ||
                     (!before.contains(uid) &&
                         currentTeam?.isNotEmpty == true))) {
           throw ServerException(
@@ -399,14 +468,9 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       final oldTruck = vehicleChanged
           ? await _vehicleToRelease(transaction, ref, previous)
           : null;
-      final leader = previous?['memberIds'] != null
-          ? before.where(roster.contains).firstOrNull ?? roster.first
-          : roster.first;
-      final orderedRoster = [leader, ...roster.where((uid) => uid != leader)];
       final dto = MunicipalCrewDto.fromDomain(
         crew.copyWith(
-          leadStaffName: profiles[leader]!.name,
-          memberIds: orderedRoster,
+          leadStaffName: profiles[leaderId]?.name,
           vehicleCode: truck?['vehicleCode'] as String?,
           vehiclePlate: truck?['vehiclePlate'] as String?,
           vehicleType: truck?['vehicleType'] as String?,
@@ -429,9 +493,12 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
           'name': crew.name,
           'zone': crew.zone,
           'updatedAt': FieldValue.serverTimestamp(),
-          if (recordRoster) ...{
+          if (leaderId != null) ...{
+            'leaderId': leaderId,
             'leadStaffName': dto.leadStaffName,
-            'memberIds': orderedRoster,
+          },
+          if (recordRoster) ...{
+            'memberIds': roster,
             'memberCount': roster.length,
             'crewMembersCount': roster.length,
           },
@@ -774,6 +841,14 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
           );
         }
         final members = (data['memberIds'] as List?)?.cast<String>() ?? legacy;
+        final leaderId =
+            (data['leaderId'] as String?) ??
+            (data['memberIds'] as List?)?.firstOrNull;
+        if (!members.contains(leaderId)) {
+          throw const ServerException(
+            message: 'Selecciona un líder antes de asignar reportes al equipo.',
+          );
+        }
         if (members.isEmpty || data['memberCount'] != members.length) {
           throw const ServerException(
             message:

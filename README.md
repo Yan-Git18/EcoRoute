@@ -94,7 +94,9 @@ Para actualizar una base con reportes existentes, prepara las nuevas versiones d
 
 ### Despacho a personal de limpieza
 
-En **Admin → Gestión de Personal**, selecciona una cuadrilla al promover una cuenta o usa el botón de cuadrilla para cambiar la asignación de un trabajador existente. En **Reportes**, despacha el reporte a una cuadrilla. Un miembro puede iniciar la tarea disponible y queda como responsable del cierre con evidencia, incluso si después cambia de cuadrilla. El personal sin cuadrilla puede consultar sus tareas personales.
+En **Admin → Equipos**, selecciona un líder entre los integrantes al crear el equipo. Puedes cambiarlo en **Editar equipo** durante la atención de un reporte. Solo el líder actual puede iniciar la tarea y cerrarla con evidencia. Los demás integrantes pueden consultar el detalle, el estado y la ruta activa. El historial conserva quién inició y quién cerró el reporte. Las asignaciones directas a personal mantienen su flujo.
+
+Los equipos con una lista de integrantes anterior a este cambio conservan la primera persona de la lista como responsable hasta que se guarde una elección explícita. Si el equipo anterior solo tiene integrantes vinculados desde sus perfiles, elige un líder en Admin antes de despachar reportes. Coordina la publicación de las reglas de Firestore con la actualización de los clientes para habilitar ambas vistas y los permisos.
 
 Firestore permite iniciar una sola tarea por trabajador. El cierre libera la tarea activa y guarda la evidencia, el historial y el aviso que corresponda en la misma operación. Para dar de baja una cuadrilla, primero reasigna sus reportes abiertos y su personal. Revisa desde Admin cualquier reporte antiguo que figure asignado sin cuadrilla ni responsable y vuelve a despacharlo a la cuadrilla correspondiente.
 

@@ -12,10 +12,13 @@ class AdminBackButton extends StatelessWidget {
       icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
       tooltip: MaterialLocalizations.of(context).backButtonTooltip,
       onPressed: () {
-        if (context.canPop()) {
-          context.pop();
+        final router = GoRouter.maybeOf(context);
+        if (router == null) {
+          Navigator.of(context).maybePop();
+        } else if (router.canPop()) {
+          router.pop();
         } else {
-          context.go(RouteNames.adminDashboard);
+          router.go(RouteNames.adminDashboard);
         }
       },
     );

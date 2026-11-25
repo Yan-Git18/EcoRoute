@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/widgets/eco_action_pill.dart';
 import '../../../../core/widgets/eco_priority_indicator.dart';
 import '../../domain/entities/staff_task_entity.dart';
+import '../viewmodels/staff_operations_providers.dart';
 
 /// Tarjeta reutilizable de tarea operativa para el personal de limpieza.
 /// Capa: Presentation (Widgets Staff)
-class StaffTaskItemCard extends StatelessWidget {
+class StaffTaskItemCard extends ConsumerWidget {
   final StaffTaskEntity task;
   final bool isNextTask;
   final String? pendingActionLabel;
@@ -26,7 +28,7 @@ class StaffTaskItemCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final infoColumn = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -78,7 +80,8 @@ class StaffTaskItemCard extends StatelessWidget {
       ],
     );
 
-    final actionWidget = _buildActionWidget();
+    final canManage = ref.watch(staffCanManageTaskProvider(task.teamId));
+    final actionWidget = _buildActionWidget(canManage);
 
     final rowContent = Row(
       children: [
@@ -125,7 +128,14 @@ class StaffTaskItemCard extends StatelessWidget {
     );
   }
 
-  Widget _buildActionWidget() {
+  Widget _buildActionWidget(bool canManage) {
+    if (!canManage && !task.isResolved) {
+      return EcoActionPill(
+        label: task.isInProgress ? 'En proceso' : 'Pendiente',
+        textColor: const Color(0xFF475569),
+        backgroundColor: const Color(0xFFF1F5F9),
+      );
+    }
     if (task.isPending) {
       if (isNextTask) {
         return EcoActionPill(

@@ -4,13 +4,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
-import '../../../citizen/domain/entities/report_entity.dart';
+import 'admin_report_detail_screen.dart';
 import '../viewmodels/admin_reports_state.dart';
 import '../viewmodels/admin_reports_viewmodel.dart';
-import '../widgets/admin_assign_crew_modal.dart';
 import '../widgets/admin_back_button.dart';
 import '../widgets/admin_bottom_nav_bar.dart';
+import '../widgets/admin_filter_carousel.dart';
 import '../widgets/admin_load_notice.dart';
 import '../widgets/admin_report_card.dart';
 
@@ -25,6 +24,14 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _searchController.text = ref
+        .read(adminReportsViewModelProvider)
+        .searchQuery;
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -32,7 +39,6 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final adminUser = ref.watch(authViewModelProvider).user;
     final state = ref.watch(adminReportsViewModelProvider);
     final viewModel = ref.read(adminReportsViewModelProvider.notifier);
     final reports = state.filteredReports;
@@ -159,15 +165,23 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
                             return AdminReportCard(
                               key: ValueKey(report.id),
                               report: report,
-                              onAssign: () => _openAssignCrewModal(
-                                report: report,
-                                adminId: adminUser?.id ?? 'admin-root',
-                                adminName: adminUser?.name ?? 'Administrador Municipal',
-                              ),
-                              onViewDetail: () => context.push(
-                                RouteNames.adminReportLocation(report.id),
-                                extra: report,
-                              ),
+                              onViewDetail: () {
+                                if (GoRouter.maybeOf(context) != null) {
+                                  context.push(
+                                    RouteNames.adminReportLocation(report.id),
+                                    extra: report,
+                                  );
+                                } else {
+                                  Navigator.of(context).push<void>(
+                                    MaterialPageRoute(
+                                      builder: (_) => AdminReportDetailScreen(
+                                        reportId: report.id,
+                                        initialReport: report,
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
                             );
                           },
                         ),
@@ -209,24 +223,6 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
       bottomNavigationBar: const AdminBottomNavBar(currentIndex: 1),
     );
   }
-
-  void _openAssignCrewModal({
-    required ReportEntity report,
-    required String adminId,
-    required String adminName,
-  }) {
-    AdminAssignCrewModal.show(
-      context: context,
-      report: report,
-      adminId: adminId,
-      adminName: adminName,
-    ).then((success) {
-      if (success != true || !mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${report.reportNumber} asignado correctamente.')),
-      );
-    });
-  }
 }
 
 class _ReportFilters extends StatelessWidget {
@@ -239,8 +235,7 @@ class _ReportFilters extends StatelessWidget {
   Widget build(BuildContext context) {
     final totals = state.totals;
     final labelStyle = Theme.of(context).textTheme.labelMedium;
-    return Wrap(
-      spacing: 8,
+    return AdminFilterCarousel(
       children: [
         for (final filter in AdminReportFilter.values)
           ChoiceChip(

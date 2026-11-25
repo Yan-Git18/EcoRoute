@@ -84,38 +84,51 @@ Future<Map<String, dynamic>> writeReportStatus({
 
       if (audit != null &&
           (nextStatus == 'in_progress' || nextStatus == 'resolved')) {
+        final resolvingCrewReport =
+            nextStatus == 'resolved' && previousCrew != null;
+        final assignee = current['assignedStaffId'];
+        final activeOwner =
+            resolvingCrewReport && assignee is String && assignee.isNotEmpty
+            ? assignee
+            : audit.userId;
         final active = firestore.doc(
-          'users/${audit.userId}/operations/activeTask',
+          'users/$activeOwner/operations/activeTask',
         );
-        final activeIds =
-            ((await transaction.get(active)).data()?['reportIds'] as List?)
-                ?.cast<String>() ??
-            const <String>[];
-        if (nextStatus == 'in_progress' && activeIds.isNotEmpty) {
-          if (previousStatus == 'in_progress' &&
-              activeIds.contains(report.id) &&
-              current['assignedStaffId'] == audit.userId) {
-            return current;
+        if (!resolvingCrewReport) {
+          final activeIds =
+              ((await transaction.get(active)).data()?['reportIds'] as List?)
+                  ?.cast<String>() ??
+              const <String>[];
+          if (nextStatus == 'in_progress' && activeIds.isNotEmpty) {
+            if (previousStatus == 'in_progress' &&
+                activeIds.contains(report.id) &&
+                current['assignedStaffId'] == audit.userId) {
+              return current;
+            }
+            throw const ServerException(
+              message:
+                  'Ya tienes una tarea en curso. Ciérrala antes de iniciar otra.',
+              code: 'active-task-exists',
+            );
           }
-          throw const ServerException(
-            message:
-                'Ya tienes una tarea en curso. Ciérrala antes de iniciar otra.',
-            code: 'active-task-exists',
-          );
+          if (nextStatus == 'resolved' && !activeIds.contains(report.id)) {
+            throw const ServerException(
+              message: 'La tarea no figura entre tus tareas en curso.',
+            );
+          }
         }
-        if (nextStatus == 'resolved' && !activeIds.contains(report.id)) {
-          throw const ServerException(
-            message: 'La tarea no figura entre tus tareas en curso.',
-          );
-        }
-        transaction.set(active, {
-          'reportIds': nextStatus == 'in_progress'
-              ? [report.id]
-              : activeIds.where((id) => id != report.id).toList(),
-          'reportId': report.id,
-          'eventId': eventId,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+        transaction.set(
+          active,
+          {
+            'reportIds': nextStatus == 'in_progress'
+                ? [report.id]
+                : FieldValue.arrayRemove([report.id]),
+            'reportId': report.id,
+            'eventId': eventId,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
       }
 
       if (evidencePhotos.isNotEmpty) {

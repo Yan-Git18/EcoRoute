@@ -26,9 +26,19 @@ class UpdateCrewUseCase {
       );
     }
 
-    if (crew.zone.trim().isEmpty) {
+    if (!crew.vehicleOnly && crew.zone.trim().isEmpty) {
       return const FailureResult(
         ValidationFailure(message: 'La cuadrilla debe tener un sector de cobertura asignado.'),
+      );
+    }
+
+    final members = crew.memberIds;
+    if (!crew.vehicleOnly &&
+        members != null &&
+        (members.isNotEmpty || crew.leaderId != null) &&
+        !crew.hasValidLeader) {
+      return const FailureResult(
+        ValidationFailure(message: 'Selecciona un líder del equipo.'),
       );
     }
 

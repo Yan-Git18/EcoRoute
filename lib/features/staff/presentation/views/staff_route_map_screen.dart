@@ -17,6 +17,7 @@ import '../../../citizen/domain/entities/report_entity.dart';
 import '../../domain/entities/staff_task_entity.dart';
 import '../../domain/usecases/order_staff_stops.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
+import '../viewmodels/staff_operations_providers.dart';
 import '../viewmodels/staff_navigation_link.dart';
 import '../widgets/staff_tasks_load_notice.dart';
 import '../widgets/staff_bottom_nav_bar.dart';
@@ -1233,7 +1234,7 @@ class _FloatingLocationButton extends StatelessWidget {
 }
 
 /// Tarjeta flotante emergente para visualizar la tarea atendida, distancia, ETA y acciones.
-class _StaffTaskMapPreviewCard extends StatelessWidget {
+class _StaffTaskMapPreviewCard extends ConsumerWidget {
   final StaffTaskEntity task;
   final String formattedDistance;
   final String formattedDuration;
@@ -1253,7 +1254,8 @@ class _StaffTaskMapPreviewCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final canManage = ref.watch(staffCanManageTaskProvider(task.teamId));
     return Card(
       elevation: 8,
       shadowColor: Colors.black26,
@@ -1394,37 +1396,32 @@ class _StaffTaskMapPreviewCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: SizedBox(
-                    height: 44,
-                    child: task.isInProgress
-                        ? ElevatedButton.icon(
-                            onPressed: onResolve,
-                            icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
-                            label: const Text('Completar con evidencia'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF047857),
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                          )
-                        : ElevatedButton.icon(
-                            onPressed: onStart,
-                            icon: const Icon(Icons.play_arrow_rounded, size: 20),
-                            label: const Text('Iniciar'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFD97706),
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
+                if (canManage) ...[
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: SizedBox(
+                      height: 44,
+                      child: ElevatedButton.icon(
+                        onPressed: task.isInProgress ? onResolve : onStart,
+                        icon: task.isInProgress
+                            ? const Icon(Icons.check_circle_outline_rounded, size: 18)
+                            : const Icon(Icons.play_arrow_rounded, size: 20),
+                        label: Text(
+                          task.isInProgress ? 'Completar con evidencia' : 'Iniciar',
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: task.isInProgress
+                              ? const Color(0xFF047857)
+                              : const Color(0xFFD97706),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ],

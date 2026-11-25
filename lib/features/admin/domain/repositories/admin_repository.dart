@@ -28,6 +28,8 @@ abstract class AdminRepository {
   /// Elimina una cuadrilla municipal del registro del sistema.
   Future<Result<void>> deleteCrew(String crewId);
 
+  Future<Result<void>> deleteVehicle(String vehicleId);
+
   /// Asigna un reporte ciudadano a una cuadrilla y unidad vehicular determinada.
   Future<Result<ReportEntity>> assignReportToStaff({
     required String reportId,

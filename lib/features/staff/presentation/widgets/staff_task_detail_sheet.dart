@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/widgets/eco_priority_indicator.dart';
 import '../../../../core/widgets/report_thumbnail.dart';
 import '../../domain/entities/staff_task_entity.dart';
+import '../viewmodels/staff_home_viewmodel.dart';
+import '../viewmodels/staff_operations_providers.dart';
 
 /// Modal bottom sheet para que el Personal de Limpieza consulte el detalle integral
 /// del reporte ciudadano antes de iniciar o resolver la tarea operativa.
@@ -11,7 +14,7 @@ import '../../domain/entities/staff_task_entity.dart';
 ///
 /// Ubicación: `lib/features/staff/presentation/widgets/staff_task_detail_sheet.dart`
 /// Capa: Presentation (Widgets Staff)
-class StaffTaskDetailSheet extends StatefulWidget {
+class StaffTaskDetailSheet extends ConsumerStatefulWidget {
   final StaffTaskEntity task;
   final VoidCallback onStart;
   final VoidCallback onResolve;
@@ -42,10 +45,11 @@ class StaffTaskDetailSheet extends StatefulWidget {
   }
 
   @override
-  State<StaffTaskDetailSheet> createState() => _StaffTaskDetailSheetState();
+  ConsumerState<StaffTaskDetailSheet> createState() =>
+      _StaffTaskDetailSheetState();
 }
 
-class _StaffTaskDetailSheetState extends State<StaffTaskDetailSheet> {
+class _StaffTaskDetailSheetState extends ConsumerState<StaffTaskDetailSheet> {
   int _activeCitizenPhotoIndex = 0;
   int _activeResolutionPhotoIndex = 0;
 
@@ -63,7 +67,21 @@ class _StaffTaskDetailSheetState extends State<StaffTaskDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final task = widget.task;
+    final task = ref.watch(
+          staffHomeViewModelProvider.select(
+            (state) => state.tasks
+                .where((task) => task.id == widget.task.id)
+                .firstOrNull,
+          ),
+        ) ??
+        widget.task;
+    final canManage = ref.watch(staffCanManageTaskProvider(task.teamId));
+    final crew = task.teamId == null
+        ? null
+        : ref.watch(staffCrewProvider).asData?.value;
+    final leaderName = crew?.id == task.teamId && crew?.leaderId != null
+        ? crew?.leaderName
+        : null;
     final citizenPhotos = task.reportImageUrls.where((url) => url.trim().isNotEmpty).toList();
     final resolutionPhotos = task.evidenceImageUrls.isNotEmpty
         ? task.evidenceImageUrls
@@ -207,6 +225,10 @@ class _StaffTaskDetailSheetState extends State<StaffTaskDetailSheet> {
                   ),
                   const SizedBox(height: 16),
 
+                  if (leaderName != null) ...[
+                    Text('Líder actual del equipo · $leaderName'),
+                    const SizedBox(height: 16),
+                  ],
                   // 4. Fotografías del reporte ciudadano (Carrusel)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -375,7 +397,7 @@ class _StaffTaskDetailSheetState extends State<StaffTaskDetailSheet> {
           ),
 
           // 7. Botones de acción al pie
-          _buildBottomActionButtons(context, task),
+          _buildBottomActionButtons(context, task, canManage),
         ],
       ),
     );
@@ -574,8 +596,12 @@ class _StaffTaskDetailSheetState extends State<StaffTaskDetailSheet> {
     );
   }
 
-  Widget _buildBottomActionButtons(BuildContext context, StaffTaskEntity task) {
-    if (task.isPending) {
+  Widget _buildBottomActionButtons(
+    BuildContext context,
+    StaffTaskEntity task,
+    bool canManage,
+  ) {
+    if (canManage && task.isPending) {
       return SizedBox(
         width: double.infinity,
         height: 50,
@@ -599,7 +625,7 @@ class _StaffTaskDetailSheetState extends State<StaffTaskDetailSheet> {
           ),
         ),
       );
-    } else if (task.isInProgress) {
+    } else if (canManage && task.isInProgress) {
       return SizedBox(
         width: double.infinity,
         height: 50,

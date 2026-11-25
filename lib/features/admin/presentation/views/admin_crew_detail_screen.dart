@@ -226,7 +226,11 @@ class _AdminCrewDetailScreenState extends ConsumerState<AdminCrewDetailScreen> {
                       member.name,
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
-                    subtitle: Text(member.role.displayName),
+                    subtitle: Text(
+                      member.id == crew.effectiveLeaderId
+                          ? 'Líder del equipo'
+                          : member.role.displayName,
+                    ),
                   ),
                 ],
               ],

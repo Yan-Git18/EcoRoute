@@ -14,6 +14,7 @@ import '../viewmodels/admin_reports_viewmodel.dart';
 import '../widgets/admin_account_drawer.dart';
 import '../widgets/admin_bottom_nav_bar.dart';
 import '../widgets/admin_load_notice.dart';
+import 'admin_profile_screen.dart';
 
 const _panelBackground = Color(0xFFF3F6F3);
 const _panelBorder = Color(0xFFDDE7DF);
@@ -54,15 +55,17 @@ class AdminDashboardScreen extends ConsumerWidget {
       drawer: AdminAccountDrawer(
         user: user,
         isSigningOut: auth.isLoading,
-        onViewAccount: user == null
+        onViewProfile: user == null
             ? null
-            : () => ProfileDataModal.show(
-                context,
-                name: user.name,
-                email: user.email,
-                phone: user.phoneNumber ?? 'Sin registrar',
-                roleLabel: user.role.displayName,
-              ),
+            : () {
+                if (GoRouter.maybeOf(context) != null) {
+                  context.push(RouteNames.adminProfile);
+                } else {
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute(builder: (_) => const AdminProfileScreen()),
+                  );
+                }
+              },
         onChangePassword: user == null || user.email.trim().isEmpty
             ? null
             : () => ProfileChangePasswordModal.show(

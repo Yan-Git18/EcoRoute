@@ -7,8 +7,18 @@ import '../../domain/entities/staff_task_entity.dart';
 /// DTO para la serialización de tareas del Personal en Cloud Firestore.
 /// Capa: Data (Models)
 class StaffTaskDto {
+  static const assignedStatuses = ['assigned', 'asignado'];
+  static const openStatuses = [
+    ...assignedStatuses,
+    'in_progress',
+    'en proceso',
+  ];
+  static const visibleStatuses = [...openStatuses, 'resolved', 'resuelto'];
+
   final String id;
   final String reportNumber;
+  final String? teamId;
+  final String? assignedStaffId;
   final String citizenId;
   final String citizenName;
   final String? citizenPhone;
@@ -33,6 +43,8 @@ class StaffTaskDto {
   const StaffTaskDto({
     required this.id,
     required this.reportNumber,
+    this.teamId,
+    this.assignedStaffId,
     required this.citizenId,
     required this.citizenName,
     this.citizenPhone,
@@ -82,10 +94,13 @@ class StaffTaskDto {
     final resolvedReference = (map['reference'] as String?) ?? (locationMap['reference'] as String?);
 
     final evidence = ReportMediaFields.evidence(map);
+    final teamId = map['assignedToTeamId'] as String?;
 
     return StaffTaskDto(
       id: id,
       reportNumber: map['reportNumber'] as String? ?? '#0000',
+      teamId: teamId?.isNotEmpty == true ? teamId : null,
+      assignedStaffId: map['assignedStaffId'] as String?,
       citizenId: map['citizenId'] as String? ?? '',
       citizenName: map['citizenName'] as String? ?? 'Ciudadano',
       citizenPhone: map['citizenPhone'] as String?,
@@ -117,6 +132,8 @@ class StaffTaskDto {
     return StaffTaskEntity(
       id: id,
       reportNumber: reportNumber,
+      teamId: teamId,
+      assignedStaffId: assignedStaffId,
       citizenId: citizenId,
       citizenName: citizenName,
       citizenPhone: citizenPhone,

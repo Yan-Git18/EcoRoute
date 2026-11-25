@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/services/citizen_push_service.dart';
+import '../../domain/entities/user_entity.dart';
 import '../models/user_dto.dart';
 
 /// Contrato abstracto para la fuente de datos remota de autenticación.
@@ -89,7 +90,7 @@ class FirebaseAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         return newDto;
       }
 
-      return UserDto.fromMap(doc.data()!, doc.id);
+      return _storedProfile(user, doc.data()!);
     } on FirebaseAuthException catch (e) {
       throw AuthException(
         message: _mapFirebaseAuthError(e.code),
@@ -218,7 +219,7 @@ class FirebaseAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         return fallbackDto;
       }
 
-      return UserDto.fromMap(doc.data()!, doc.id);
+      return _storedProfile(currentUser, doc.data()!);
     } catch (e) {
       return null;
     }
@@ -243,13 +244,22 @@ class FirebaseAuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       try {
         final doc = await _firestore.collection('users').doc(user.uid).get();
         if (doc.exists && doc.data() != null) {
-          return UserDto.fromMap(doc.data()!, doc.id);
+          return _storedProfile(user, doc.data()!);
         }
         return null;
       } catch (_) {
         return null;
       }
     });
+  }
+
+  UserDto _storedProfile(User user, Map<String, dynamic> data) {
+    final role = UserRole.fromString(data['role'] as String? ?? '');
+    final email = user.email;
+    return UserDto.fromMap(
+      role == UserRole.admin && email != null ? {...data, 'email': email} : data,
+      user.uid,
+    );
   }
 
   String _mapFirebaseAuthError(String code) {

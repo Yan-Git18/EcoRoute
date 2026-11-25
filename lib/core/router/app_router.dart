@@ -6,6 +6,8 @@ import '../../features/admin/presentation/views/admin_dashboard_screen.dart';
 import '../../features/admin/presentation/views/admin_fleet_screen.dart';
 import '../../features/admin/presentation/views/admin_live_map_screen.dart';
 import '../../features/admin/presentation/views/admin_reports_screen.dart';
+import '../../features/admin/presentation/views/admin_report_detail_screen.dart';
+import '../../features/admin/presentation/views/admin_profile_screen.dart';
 import '../../features/admin/presentation/views/admin_staff_screen.dart';
 import '../../features/auth/domain/entities/user_entity.dart';
 import '../../features/auth/presentation/viewmodels/auth_state.dart';
@@ -158,7 +160,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.adminReports,
         builder: (context, state) => const AdminReportsScreen(),
       ),
-      GoRoute(path: RouteNames.adminReportDetail, builder: _reportDetail),
+      GoRoute(
+        path: RouteNames.adminReportDetail,
+        builder: (context, state) => AdminReportDetailScreen(
+          reportId: state.pathParameters['id']!,
+          initialReport: state.extra is ReportEntity ? state.extra as ReportEntity : null,
+        ),
+      ),
       GoRoute(
         path: RouteNames.adminLiveMap,
         builder: (context, state) => AdminLiveMapScreen(
@@ -176,6 +184,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.adminFleet,
         builder: (context, state) => const AdminFleetScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.adminProfile,
+        builder: (context, state) => const AdminProfileScreen(),
       ),
     ],
   );

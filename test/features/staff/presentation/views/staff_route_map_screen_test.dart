@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,10 +9,12 @@ import 'package:ecoroute/features/auth/domain/entities/user_entity.dart';
 import 'package:ecoroute/features/auth/presentation/viewmodels/auth_state.dart';
 import 'package:ecoroute/features/auth/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ecoroute/features/citizen/domain/entities/report_entity.dart';
+import 'package:ecoroute/features/staff/domain/entities/staff_operations.dart';
 import 'package:ecoroute/features/staff/domain/entities/staff_task_entity.dart';
 import 'package:ecoroute/features/staff/domain/repositories/staff_repository.dart';
 import 'package:ecoroute/features/staff/presentation/viewmodels/staff_home_viewmodel.dart';
 import 'package:ecoroute/features/staff/presentation/viewmodels/staff_navigation_link.dart';
+import 'package:ecoroute/features/staff/presentation/viewmodels/staff_operations_providers.dart';
 import 'package:ecoroute/features/staff/presentation/views/staff_route_map_screen.dart';
 
 class MockStaffAuthViewModel extends AuthViewModel {
@@ -225,6 +229,7 @@ void main() {
           StaffTaskEntity(
             id: id,
             reportNumber: number,
+            teamId: 'norte',
             citizenId: 'citizen-1',
             citizenName: 'Vecino',
             categoryName: category,
@@ -240,6 +245,9 @@ void main() {
           ),
       ];
     final mockLoc = MockStaffLocationService();
+    final crew = StreamController<StaffCrew?>.broadcast();
+    addTearDown(crew.close);
+    final crewChanges = StreamProvider<StaffCrew?>((ref) => crew.stream);
     Uri? opened;
 
     await tester.pumpWidget(
@@ -248,6 +256,7 @@ void main() {
           authViewModelProvider.overrideWith(() => MockStaffAuthViewModel(testStaff)),
           staffRepositoryProvider.overrideWithValue(mockRepo),
           locationServiceProvider.overrideWithValue(mockLoc),
+          staffCrewProvider.overrideWith((ref) => ref.watch(crewChanges)),
           staffNavigationLauncherProvider.overrideWithValue((uri) async {
             opened = uri;
             return true;
@@ -269,6 +278,8 @@ void main() {
     // 2. Tocar una parada pendiente en el mapa abre su tarjeta inferior sin activar ruta aún
     await tester.tap(find.text('#0102 • Contenedor lleno'));
     await tester.pumpAndSettle();
+    crew.add(StaffCrew(id: 'norte', leaderId: testStaff.id));
+    await tester.pumpAndSettle();
 
     expect(find.text('Iniciar'), findsOneWidget);
     expect(find.text('Ruta aproximada'), findsNothing);
@@ -280,6 +291,11 @@ void main() {
 
     expect(find.text('Iniciar atención de tarea'), findsOneWidget);
     expect(find.text('¿Está seguro de que desea iniciar esta tarea?'), findsOneWidget);
+    crew.add(const StaffCrew(id: 'norte', leaderId: 'nuevo-lider'));
+    await tester.pumpAndSettle();
+    expect(find.text('Sí, iniciar'), findsNothing);
+    crew.add(StaffCrew(id: 'norte', leaderId: testStaff.id));
+    await tester.pumpAndSettle();
 
     // 4. Si cancela, no inicia la ruta y mantiene todas las paradas visibles
     await tester.tap(find.text('Cancelar'));
@@ -298,6 +314,18 @@ void main() {
     expect(find.text('Ruta aproximada'), findsOneWidget);
     expect(find.text('#0103 • Residuos en vía pública'), findsNothing);
     expect(find.text('Completar con evidencia'), findsOneWidget);
+    crew.add(const StaffCrew(id: 'norte', leaderId: 'nuevo-lider'));
+    await tester.pumpAndSettle();
+    expect(find.text('Completar con evidencia'), findsNothing);
+    expect(find.text('Ver detalle'), findsOneWidget);
+    expect(find.text('Ruta hacia #0102'), findsOneWidget);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(StaffRouteMapScreen)),
+    );
+    expect(
+      container.read(staffHomeViewModelProvider).activeRoute?.points.length,
+      greaterThan(1),
+    );
     await tester.tap(find.byTooltip('Abrir en Google Maps'));
     await tester.pumpAndSettle();
     expect(opened?.host, 'www.google.com');

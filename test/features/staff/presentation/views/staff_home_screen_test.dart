@@ -96,6 +96,9 @@ class _CrewAssignmentFake implements StaffOperationsRepository {
   );
 
   @override
+  Stream<int> watchTeamTaskChanges(String teamId) => const Stream.empty();
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 

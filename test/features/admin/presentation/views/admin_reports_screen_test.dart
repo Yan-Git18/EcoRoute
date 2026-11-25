@@ -79,6 +79,10 @@ class MockAdminRepository implements AdminRepository {
   Future<Result<MunicipalCrewEntity>> updateCrew(MunicipalCrewEntity crew) async => Success(crew);
 
   @override
+  Future<Result<void>> deleteVehicle(String vehicleId) async =>
+      const Success(null);
+
+  @override
   Future<Result<void>> deleteCrew(String crewId) async => const Success(null);
 
   @override
@@ -247,6 +251,7 @@ final testCrews = [
     name: 'Cuadrilla Zona Sur',
     zone: 'Sector 3 y 4',
     leadStaffName: 'Carlos Cuadrilla',
+    leaderId: 'member',
     vehicleCode: 'Camión #02',
     vehiclePlate: 'ECR-341',
     activeTasksCount: 0,
@@ -317,11 +322,7 @@ void main() {
     expect(find.text('#REP-1024'), findsOneWidget);
     expect(find.textContaining('No se pudieron cargar los reportes.'), findsNothing);
     expect(find.textContaining('No se pudieron cargar los equipos.'), findsOneWidget);
-    final dispatch = find.ancestor(
-      of: find.text('Asignar Personal'),
-      matching: find.bySubtype<ElevatedButton>(),
-    );
-    expect(tester.widget<ElevatedButton>(dispatch).onPressed, isNotNull);
+    expect(find.text('Asignar Personal'), findsNothing);
 
     source.failCrews = false;
     await tester.tap(retry);
@@ -384,13 +385,15 @@ void main() {
     // 4. Tarjetas de incidencias
     expect(find.text('#REP-1024'), findsOneWidget);
     expect(find.text('Acumulación de basura'), findsOneWidget);
-    expect(find.text('Av. Abancay 450'), findsOneWidget);
-    expect(find.text('Asignar Personal'), findsOneWidget);
+    expect(find.text('Av. Abancay 450'), findsNothing);
+    expect(find.text('Asignar Personal'), findsNothing);
 
     expect(find.text('#REP-2058'), findsOneWidget);
     expect(find.text('Contenedor lleno'), findsOneWidget);
-    expect(find.text('Jr. de la Unión 810'), findsOneWidget);
-    expect(find.text('Reasignar Personal'), findsOneWidget);
+    expect(find.text('Jr. de la Unión 810'), findsNothing);
+    expect(find.textContaining('Hace '), findsNWidgets(2));
+    expect(find.text('Reasignar Personal'), findsNothing);
+    expect(find.text('Reportado por María Mendoza'), findsNothing);
   });
 
   testWidgets('Configura y confirma el despacho en una pantalla estrecha', (tester) async {
@@ -426,49 +429,57 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    final dispatchButton = find.text('Asignar Personal');
-    expect(dispatchButton, findsOneWidget);
+    expect(find.text('Asignar Personal'), findsNothing);
     await tester.scrollUntilVisible(
-      dispatchButton,
+      find.text('#REP-1024'),
       120,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.tap(find.text('#REP-1024'));
     await tester.pumpAndSettle();
+    expect(find.text('Detalle del reporte'), findsOneWidget);
+    expect(find.text('Reportado por'), findsOneWidget);
+    expect(find.text('María Mendoza'), findsOneWidget);
+    expect(find.text('Apoyos de la comunidad'), findsOneWidget);
+    expect(find.text('0 apoyos'), findsOneWidget);
+    final dispatchButton = find.text('Asignar Personal');
     await tester.tap(dispatchButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('Asignar Personal'), findsOneWidget);
-    final confirm = find.text('Asignar');
+    expect(find.text('Asignar Personal').hitTestable(), findsOneWidget);
     await tester.tap(find.text('Equipos'));
     await tester.pumpAndSettle();
     await tester.tap(find.text(testCrews.last.name));
     await tester.pumpAndSettle();
-    final settings = find.text('Prioridad e instrucciones');
-    await tester.ensureVisible(settings);
+    expect(find.text('Instrucciones (opcional)'), findsNothing);
+    await tester.tap(find.text('Continuar'));
     await tester.pumpAndSettle();
-    await tester.tap(settings);
-    await tester.pumpAndSettle();
-    final priority = find.byType(DropdownButtonFormField<ReportPriority>);
-    await tester.ensureVisible(priority);
-    await tester.pumpAndSettle();
-    await tester.tap(priority);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Baja').last);
-    await tester.pumpAndSettle();
-    final instructions = find.widgetWithText(TextField, 'Instrucciones operativas');
+    expect(find.byType(SegmentedButton<bool>), findsNothing);
+    expect(find.byType(DropdownButtonFormField<ReportPriority>), findsNothing);
+    expect(find.text(testCrews.last.name), findsOneWidget);
+    expect(mockRepo.assignCalled, isFalse);
+    final instructions = find.widgetWithText(TextField, 'Instrucciones (opcional)');
     await tester.ensureVisible(instructions);
     await tester.pumpAndSettle();
     await tester.enterText(instructions, ' Llevar pala ');
     await tester.pumpAndSettle();
 
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byType(SegmentedButton<bool>), findsOneWidget);
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(instructions).controller?.text, ' Llevar pala ');
+    final confirm = find.text('Confirmar asignación');
     expect(confirm.hitTestable(), findsOneWidget);
     await tester.tap(confirm);
     await tester.pumpAndSettle();
 
     expect(mockRepo.assignCalled, isTrue);
     expect(mockRepo.reports.first.assignedToTeamId, testCrews.last.id);
-    expect(mockRepo.reports.first.priority, ReportPriority.low);
+    expect(mockRepo.reports.first.priority, testReports.first.priority);
     expect(mockRepo.lastInstructions, 'Llevar pala');
+    expect(find.text('Reasignar Personal'), findsOneWidget);
   });
 
   testWidgets('Asigna varias personas sin incluir integrantes de equipos ni personal ocupado', (tester) async {
@@ -493,14 +504,14 @@ void main() {
       child: const MaterialApp(home: AdminReportsScreen()),
     ));
     await tester.pumpAndSettle();
-    final dispatch = find.text('Asignar Personal');
-    await tester.scrollUntilVisible(dispatch, 120, scrollable: find.byType(Scrollable).first);
-    await tester.tap(dispatch);
+    await tester.tap(find.text('#REP-1024'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Asignar Personal'));
     await tester.pumpAndSettle();
     expect(find.text('Juan de Equipo'), findsNothing);
     expect(find.text('Con reporte activo'), findsOneWidget);
     await tester.tap(find.text('Ana Ocupada'));
-    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Asignar')).onPressed, isNull);
+    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Continuar')).onPressed, isNull);
 
     await tester.enterText(find.byType(TextField), 'rosa');
     await tester.pumpAndSettle();
@@ -510,7 +521,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Luis Ruiz'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Asignar'));
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Rosa Silva, Luis Ruiz'), findsOneWidget);
+    await tester.tap(find.text('Confirmar asignación'));
     await tester.pumpAndSettle();
     expect(repo.selectedStaffIds, ['rosa', 'luis']);
   });

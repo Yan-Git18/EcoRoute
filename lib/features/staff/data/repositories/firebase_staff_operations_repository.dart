@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../domain/entities/staff_operations.dart';
 import '../../domain/repositories/staff_operations_repository.dart';
+import '../models/staff_task_dto.dart';
 
 class FirebaseStaffOperationsRepository implements StaffOperationsRepository {
   const FirebaseStaffOperationsRepository(this._db);
@@ -29,13 +30,35 @@ class FirebaseStaffOperationsRepository implements StaffOperationsRepository {
         .map((snapshot) {
           final data = snapshot.data();
           if (data == null) return null;
+          final members = data['memberIds'] as List?;
           return StaffCrew(
+            id: teamId,
             name: _field(data, 'name'),
             zone: _field(data, 'zone'),
             vehicleCode: _field(data, 'vehicleCode'),
             vehiclePlate: _field(data, 'vehiclePlate'),
+            leaderId: _field(data, 'leaderId') ??
+                (members?.firstOrNull as String?),
+            leaderName: _field(data, 'leadStaffName'),
           );
         });
+  }
+
+  @override
+  Stream<int> watchTeamTaskChanges(String teamId) {
+    final reports = _db?.collection('reports');
+    if (reports == null) return const Stream.empty();
+    var revision = 0;
+    return reports
+        .where('assignedToTeamId', isEqualTo: teamId)
+        .where('status', whereIn: StaffTaskDto.openStatuses)
+        .snapshots(includeMetadataChanges: true)
+        .where(
+          (snapshot) =>
+              !snapshot.metadata.isFromCache &&
+              !snapshot.metadata.hasPendingWrites,
+        )
+        .map((_) => ++revision);
   }
 
   @override

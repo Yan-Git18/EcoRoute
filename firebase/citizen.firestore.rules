@@ -39,6 +39,25 @@ service cloud.firestore {
       return teamId is string && teamId.size() > 0 && teamId == profile.get('teamId', null);
     }
 
+    function crewLeaderId(team) {
+      let members = team.get('memberIds', []);
+      return team.get('leaderId', members.size() > 0 ? members[0] : null);
+    }
+
+    function isCrewLeader(teamId) {
+      return isCrewMember(teamId)
+        && crewLeaderId(stored(/databases/$(database)/documents/crews/$(teamId))) == request.auth.uid;
+    }
+
+    function canStartReport(report) {
+      let teamId = report.get('assignedToTeamId', null);
+      let assignee = report.get('assignedStaffId', null);
+      return teamId in [null, '']
+        ? (assignee == request.auth.uid
+          || (assignee == null && request.auth.uid in report.get('assignedStaffIds', [])))
+        : isCrewLeader(teamId);
+    }
+
     function crewExists(teamId) {
       return teamId is string && teamId.size() > 0
         && existsAfter(/databases/$(database)/documents/crews/$(teamId));
@@ -47,10 +66,10 @@ service cloud.firestore {
     function canReadReport(report) {
       return isAdmin() || (isCitizen() && report.citizenId == request.auth.uid) || (isStaff() && (
         (report.status in ['assigned', 'asignado', 'in_progress', 'en proceso', 'resolved', 'resuelto']
-          && report.get('assignedStaffId', null) == request.auth.uid)
+          && (report.get('assignedStaffId', null) == request.auth.uid
+            || isCrewMember(report.get('assignedToTeamId', null))))
         || (report.status in ['assigned', 'asignado']
-          && (isCrewMember(report.get('assignedToTeamId', null))
-            || request.auth.uid in report.get('assignedStaffIds', [])))
+          && request.auth.uid in report.get('assignedStaffIds', []))
       ));
     }
 
@@ -100,17 +119,34 @@ service cloud.firestore {
         || path == report.get('evidenceImagePath', null));
     }
 
+    function validProfileContact(profile) {
+      let phone = profile.get('phoneNumber', null);
+      return profile.name is string && profile.name.size() > 0 && profile.name.size() <= 100
+        && (phone == null || (phone is string && phone.size() <= 30))
+        && profile.updatedAt == request.time;
+    }
+
     function validCitizenProfileUpdate(uid) {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
       let profile = request.resource.data;
-      let phone = profile.get('phoneNumber', null);
       return changed.hasOnly(['name', 'phoneNumber', 'updatedAt', 'avatarPath'])
-        && profile.name is string && profile.name.size() > 0 && profile.name.size() <= 100
-        && (phone == null || (phone is string && phone.size() <= 30))
-        && profile.updatedAt == request.time
+        && validProfileContact(profile)
         && (!changed.hasAny(['avatarPath']) || (
           profile.avatarPath == 'users/' + uid + '/media/avatar'
           && getAfter(/databases/$(database)/documents/users/$(uid)/media/avatar).data.updatedAt == request.time
+        ));
+    }
+
+    function validAdminProfileUpdate(uid) {
+      let profile = request.resource.data;
+      let changed = profile.diff(resource.data).affectedKeys();
+      return isAdmin() && request.auth.uid == uid
+        && changed.hasOnly(['name', 'phoneNumber', 'email', 'updatedAt'])
+        && validProfileContact(profile)
+        && (!changed.hasAny(['email']) || (
+          request.auth.token.get('email_verified', false) == true
+          && profile.email is string
+          && profile.email == request.auth.token.email
         ));
     }
 
@@ -188,7 +224,10 @@ service cloud.firestore {
     function canResolveWithEvidence(reportId) {
       let before = get(/databases/$(database)/documents/reports/$(reportId)).data;
       let after = getAfter(/databases/$(database)/documents/reports/$(reportId)).data;
-      return isStaff() && before.get('assignedStaffId', null) == request.auth.uid
+      let teamId = before.get('assignedToTeamId', null);
+      return isStaff() && (teamId in [null, '']
+          ? before.get('assignedStaffId', null) == request.auth.uid
+          : isCrewLeader(teamId))
         && status(before.status) == 'in_progress'
         && after.status == 'resolved' && after.assignedStaffId == request.auth.uid
         && after.resolvedAt == request.time
@@ -308,8 +347,17 @@ service cloud.firestore {
       return /databases/$(database)/documents/users/$(uid)/operations/activeTask;
     }
 
-    function activeTaskRecorded(reportId, after) {
-      let active = getAfter(activeTaskPath(request.auth.uid)).data;
+    function activeTaskOwner(before, after) {
+      let teamId = before.get('assignedToTeamId', null);
+      let previousAssignee = before.get('assignedStaffId', null);
+      return after.status == 'resolved' && !(teamId in [null, '']) && previousAssignee is string
+        && previousAssignee.size() > 0
+        ? previousAssignee
+        : request.auth.uid;
+    }
+
+    function activeTaskRecorded(reportId, before, after) {
+      let active = getAfter(activeTaskPath(activeTaskOwner(before, after))).data;
       return active.reportId == reportId && active.eventId == after.statusEventId
         && active.updatedAt == request.time;
     }
@@ -320,15 +368,17 @@ service cloud.firestore {
       let path = reportPath(active.reportId);
       let before = get(path).data;
       let after = getAfter(path).data;
-      return ownsStaffProfile(uid)
+      let teamId = before.get('assignedToTeamId', null);
+      return isStaff() && uid == activeTaskOwner(before, after)
         && active.keys().hasOnly(['reportIds', 'reportId', 'eventId', 'updatedAt'])
         && active.updatedAt == request.time && after.updatedAt == request.time
         && active.eventId == after.statusEventId && active.eventId != before.get('statusEventId', '')
-        && after.assignedStaffId == uid && (
+        && after.assignedStaffId == request.auth.uid && (
           (status(before.status) == 'assigned' && after.status == 'in_progress'
             && previousIds.size() == 0 && active.reportIds == [active.reportId])
           || (status(before.status) == 'in_progress' && after.status == 'resolved'
-            && active.reportId in previousIds && active.reportIds == previousIds.removeAll([active.reportId]))
+            && (teamId in [null, ''] ? active.reportId in previousIds : isCrewLeader(teamId))
+            && active.reportIds == previousIds.removeAll([active.reportId]))
         );
     }
 
@@ -353,7 +403,7 @@ service cloud.firestore {
           || (nextStatus == 'assigned' && history.changedByUserRole == 'admin'
             && crewReportsRecorded(reportId, before, after))
           || (nextStatus in ['in_progress', 'resolved'] && history.changedByUserRole == 'staff'
-            && activeTaskRecorded(reportId, after) && crewReportsRecorded(reportId, before, after))
+            && activeTaskRecorded(reportId, before, after) && crewReportsRecorded(reportId, before, after))
         )
         && (before.size() == 0 || validNoticeForChange(reportId, before, after));
     }
@@ -369,10 +419,21 @@ service cloud.firestore {
 
     function dispatchableCrew(teamId) {
       let team = get(/databases/$(database)/documents/crews/$(teamId)).data;
+      let leader = crewLeaderId(team);
+      let truckId = team.get('vehicleId', null);
       return team.get('vehicleOnly', false) == false
+        && leader is string && leader in team.get('memberIds', [leader])
+        && managedMember(teamId, leader)
+        && (truckId == null || dispatchableTruck(truckId, teamId))
         && (!team.keys().hasAny(['memberIds'])
           || (team.openReportCount == 0 && team.get('status', 'available') == 'available'
             && team.get('isAvailable', true)));
+    }
+
+    function dispatchableTruck(truckId, teamId) {
+      let truck = afterWrite(/databases/$(database)/documents/vehicles/$(truckId));
+      return truck.get('assignedCrewId', null) == teamId
+        && truck.get('status', null) == 'available' && truck.get('isAvailable', true);
     }
 
     function validDispatchReservation(uid) {
@@ -408,10 +469,7 @@ service cloud.firestore {
               'assignedStaffId', 'assignedStaffIds', 'assignedVehicle', 'priority', 'updatedAt', 'statusEventId'
             ]))
           || (isStaff() && after.status == 'in_progress' && status(before.status) == 'assigned'
-            && (before.get('assignedStaffId', null) == request.auth.uid
-              || (before.get('assignedStaffId', null) == null
-                && (isCrewMember(before.get('assignedToTeamId', null))
-                  || request.auth.uid in before.get('assignedStaffIds', []))))
+            && canStartReport(before)
             && after.assignedStaffId == request.auth.uid
             && changed.hasOnly(['status', 'assignedStaffId', 'assignedStaffName', 'updatedAt', 'statusEventId']))
           || (after.status == 'resolved' && canResolveWithEvidence(reportId)
@@ -493,7 +551,7 @@ service cloud.firestore {
       let after = afterWrite(path);
       return before.keys().hasAny(['memberIds']) || after.keys().hasAny(['memberIds'])
         ? before.openReportCount == 0 && !(uid in after.get('memberIds', []))
-        : crewMemberRecorded(teamId, uid);
+        : after.get('leaderId', null) != uid && crewMemberRecorded(teamId, uid);
     }
 
     function crewMembersRecorded(uid, before, after) {
@@ -546,6 +604,22 @@ service cloud.firestore {
         && profile.role in ['staff', 'personal'] && profile.get('isActive', true);
     }
 
+    function validCrewLeadership(teamId, team) {
+      let leader = team.get('leaderId', null);
+      return leader is string && leader.size() > 0
+        && leader in team.get('memberIds', [leader])
+        && managedMember(teamId, leader);
+    }
+
+    function validCrewLeadershipUpdate(teamId, before, after) {
+      let changes = after.diff(before).affectedKeys();
+      return !changes.hasAny(['leaderId', 'memberIds'])
+        || (after.get('leaderId', null) == null
+          ? !before.keys().hasAny(['leaderId'])
+            && recordsLegacyRoster(teamId, before, after)
+          : validCrewLeadership(teamId, after));
+    }
+
     function validCrewMemberCounter(crewId) {
       let next = request.resource.data;
       let activity = next.memberActivity;
@@ -581,6 +655,14 @@ service cloud.firestore {
         && (newTeam == null || (oldTeam == null && before.status == 'available'
           && before.get('isAvailable', true)
           && getAfter(/databases/$(database)/documents/crews/$(newTeam)).data.vehicleId == truckId)));
+    }
+
+    function validTruckMaintenance(before, after) {
+      let teamId = before.get('assignedCrewId', null);
+      return after.get('status', null) != 'maintenance'
+        || before.get('status', null) == 'maintenance'
+        || teamId == null
+        || afterWrite(/databases/$(database)/documents/crews/$(teamId)).get('openReportCount', 0) == 0;
     }
 
     function removedMemberWasReleased(teamId, ids, uid) {
@@ -622,6 +704,7 @@ service cloud.firestore {
           'isActive', 'createdAt', 'updatedAt'
         ]);
       allow update: if citizenOwnsDocument(uid) && validCitizenProfileUpdate(uid);
+      allow update: if validAdminProfileUpdate(uid);
       allow update: if isAdmin() && resource.data.role in ['citizen', 'ciudadano', 'staff', 'personal']
         && request.resource.data.role in ['citizen', 'staff', 'personal']
         && request.resource.data.updatedAt == request.time
@@ -727,12 +810,10 @@ service cloud.firestore {
       allow create: if isAdmin() && request.resource.data.openReportCount == 0
         && request.resource.data.get('vehicleOnly', false) == false
         && !request.resource.data.keys().hasAny(['reportActivity', 'memberActivity', 'assignedCrewId'])
-        && (request.resource.data.keys().hasAny(['memberIds'])
-          ? validRoster(request.resource.data) && managedMembers(crewId, request.resource.data.memberIds)
-            && request.resource.data.get('vehicleId', null) != null
-            && validTruckLink(crewId, request.resource.data)
-          : request.resource.data.memberCount == 0
-            && request.resource.data.get('vehicleId', null) == null);
+        && validRoster(request.resource.data) && managedMembers(crewId, request.resource.data.memberIds)
+        && validCrewLeadership(crewId, request.resource.data)
+        && request.resource.data.get('vehicleId', null) != null
+        && validTruckLink(crewId, request.resource.data);
       allow update: if (isAdmin() && (
         resource.data.get('vehicleOnly', false) == false &&
         (request.resource.data.keys().hasAny(['memberIds'])
@@ -746,6 +827,7 @@ service cloud.firestore {
           : !resource.data.keys().hasAny(['memberIds'])
             && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['memberCount', 'memberActivity'])
               || validCrewMemberCounter(crewId)))
+        && validCrewLeadershipUpdate(crewId, resource.data, request.resource.data)
         && (resource.data.get('vehicleId', null) == request.resource.data.get('vehicleId', null)
           || (resource.data.openReportCount == 0
             && validTruckLink(crewId, request.resource.data)
@@ -767,7 +849,9 @@ service cloud.firestore {
     match /vehicles/{vehicleId} {
       allow read: if isAdmin();
       allow create: if isAdmin() && request.resource.data.get('assignedCrewId', null) == null;
-      allow update: if isAdmin() && validTruckOwner(vehicleId, resource.data, request.resource.data);
+      allow update: if isAdmin()
+        && validTruckOwner(vehicleId, resource.data, request.resource.data)
+        && validTruckMaintenance(resource.data, request.resource.data);
       allow delete: if isAdmin() && resource.data.get('assignedCrewId', null) == null;
     }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../domain/entities/municipal_crew_entity.dart';
 import '../viewmodels/admin_reports_viewmodel.dart';
@@ -79,6 +80,7 @@ class _AdminCrewEditorScreenState extends ConsumerState<AdminCrewEditorScreen> {
   late final _people = {for (final person in widget.staff) person.id: person};
   late final _originalMembers = _initialMembers();
   late final _members = {..._originalMembers};
+  late String? _leaderId = _initialLeader();
   late final String? _originalVehicle = _initialVehicle();
   late String? _vehicle = _originalVehicle;
   final _search = TextEditingController();
@@ -91,16 +93,21 @@ class _AdminCrewEditorScreenState extends ConsumerState<AdminCrewEditorScreen> {
     final crew = widget.crew;
     if (crew == null) return [];
     if (crew.memberIds case final ids?) return ids;
-    final staff = widget.staff.where((person) => person.teamId == crew.id);
-    final leader = staff
-        .where((person) => person.name == crew.leadStaffName)
-        .firstOrNull;
     return [
-      if (leader != null) leader.id,
-      for (final person in staff)
-        if (person.id != leader?.id) person.id,
+      for (final person in widget.staff)
+        if (person.teamId == crew.id) person.id,
     ];
   }
+
+  String? _initialLeader() {
+    final id = widget.crew?.effectiveLeaderId;
+    return _members.contains(id) && _canLead(id) ? id : null;
+  }
+
+  bool _canLead(String? id) =>
+      _people[id]?.isStaff == true && _people[id]?.isActive == true;
+
+  bool get _validLeader => _members.contains(_leaderId) && _canLead(_leaderId);
 
   String? _initialVehicle() {
     final crew = widget.crew;
@@ -143,7 +150,7 @@ class _AdminCrewEditorScreenState extends ConsumerState<AdminCrewEditorScreen> {
   }
 
   Future<void> _save() async {
-    if (_saving || !_validRoster) return;
+    if (_saving || !_validRoster || !_validLeader) return;
     final invalid = _form.currentState!.validateGranularly();
     if (invalid.isNotEmpty) {
       await Scrollable.ensureVisible(
@@ -169,7 +176,8 @@ class _AdminCrewEditorScreenState extends ConsumerState<AdminCrewEditorScreen> {
     final updated = base.copyWith(
       name: _name.text.trim(),
       zone: _zone.text.trim(),
-      leadStaffName: _people[_members.firstOrNull]?.name,
+      leaderId: _leaderId,
+      leadStaffName: _people[_leaderId]?.name,
       vehicleId: truck?.id,
       vehicleCode: truck?.vehicleCode,
       vehiclePlate: truck?.vehiclePlate,
@@ -356,7 +364,6 @@ class _AdminCrewEditorScreenState extends ConsumerState<AdminCrewEditorScreen> {
                                 decoration: const InputDecoration(
                                   hintText: 'Buscar integrantes',
                                   prefixIcon: Icon(Icons.search),
-                                  suffixIcon: Icon(Icons.expand_more),
                                 ),
                                 onTap: () => setState(() => _showStaff = true),
                                 onChanged: (value) => setState(() {
@@ -414,24 +421,67 @@ class _AdminCrewEditorScreenState extends ConsumerState<AdminCrewEditorScreen> {
                             ],
                           ),
                         ),
-                        for (final id in _members)
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(
-                              _people[id]?.name ?? 'Integrante sin perfil',
-                            ),
-                            subtitle: _people[id] == null
-                                ? null
-                                : Text(_people[id]!.email),
-                            trailing: IconButton(
-                              tooltip:
-                                  'Quitar a ${_people[id]?.name ?? 'integrante'}',
-                              icon: const Icon(Icons.delete_outline),
-                              onPressed: canChangeResources
-                                  ? () => setState(() => _members.remove(id))
-                                  : null,
-                            ),
+                        const SizedBox(height: 8),
+                        RadioGroup<String>(
+                          groupValue: _leaderId,
+                          onChanged: (id) {
+                            if (_saving ||
+                                !_members.contains(id) ||
+                                !_canLead(id)) {
+                              return;
+                            }
+                            setState(() => _leaderId = id);
+                          },
+                          child: Column(
+                            children: [
+                              for (final id in _members) ...[
+                                _CrewMemberRow(
+                                  key: ValueKey(id),
+                                  id: id,
+                                  person: _people[id],
+                                  isLeader: id == _leaderId,
+                                  canLead: !_saving && _canLead(id),
+                                  onRemove: canChangeResources
+                                      ? () => setState(() {
+                                          _members.remove(id);
+                                          if (_leaderId == id) _leaderId = null;
+                                        })
+                                      : null,
+                                ),
+                                const Divider(
+                                  height: 1,
+                                  color: AppColors.border,
+                                ),
+                              ],
+                            ],
                           ),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.divider,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline,
+                                size: 20,
+                                color: AppColors.textSecondary,
+                              ),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Selecciona un integrante como líder del equipo.',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -461,7 +511,9 @@ class _AdminCrewEditorScreenState extends ConsumerState<AdminCrewEditorScreen> {
                   Expanded(
                     flex: 2,
                     child: FilledButton(
-                      onPressed: _saving || !_validRoster ? null : _save,
+                      onPressed: _saving || !_validRoster || !_validLeader
+                          ? null
+                          : _save,
                       style: FilledButton.styleFrom(
                         minimumSize: const Size(0, 48),
                       ),
@@ -479,6 +531,90 @@ class _AdminCrewEditorScreenState extends ConsumerState<AdminCrewEditorScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _CrewMemberRow extends StatelessWidget {
+  const _CrewMemberRow({
+    super.key,
+    required this.id,
+    required this.person,
+    required this.isLeader,
+    required this.canLead,
+    required this.onRemove,
+  });
+
+  final String id;
+  final UserEntity? person;
+  final bool isLeader;
+  final bool canLead;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = person?.name ?? 'Integrante sin perfil';
+    final textTheme = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: textTheme.titleSmall?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (person case final member?)
+                  Text(
+                    member.email,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                if (isLeader) ...[
+                  const SizedBox(height: 6),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      child: Text(
+                        'Líder del equipo',
+                        style: TextStyle(
+                          color: AppColors.primaryDark,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Tooltip(
+            message: 'Elegir a $name como líder',
+            child: Radio<String>(
+              value: id,
+              enabled: canLead,
+              activeColor: AppColors.primary,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Quitar a ${person?.name ?? 'integrante'}',
+            icon: const Icon(Icons.delete_outline),
+            onPressed: onRemove,
+          ),
+        ],
       ),
     );
   }

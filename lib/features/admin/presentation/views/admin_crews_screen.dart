@@ -53,14 +53,14 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
         leading: const AdminBackButton(),
         title: const Text('Equipos'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.local_shipping_outlined),
-            tooltip: 'Flota Vehicular',
+          _ResourceShortcut(
+            icon: Icons.local_shipping_outlined,
+            label: 'Flota',
             onPressed: () => context.push(RouteNames.adminFleet),
           ),
-          IconButton(
-            icon: const Icon(Icons.badge_outlined),
-            tooltip: 'Gestión de Personal',
+          _ResourceShortcut(
+            icon: Icons.badge_outlined,
+            label: 'Personal',
             onPressed: () => context.push(RouteNames.adminStaff),
           ),
           IconButton(
@@ -179,6 +179,36 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
             )
           : null,
       bottomNavigationBar: const AdminBottomNavBar(currentIndex: 3),
+    );
+  }
+}
+
+class _ResourceShortcut extends StatelessWidget {
+  const _ResourceShortcut({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18),
+          Text(label, style: const TextStyle(fontSize: 11)),
+        ],
+      ),
     );
   }
 }

@@ -11,6 +11,8 @@ class StaffTaskEntity {
 
   final String id;
   final String reportNumber;
+  final String? teamId;
+  final String? assignedStaffId;
   final String citizenId;
   final String citizenName;
   final String? citizenPhone;
@@ -35,6 +37,8 @@ class StaffTaskEntity {
   const StaffTaskEntity({
     required this.id,
     required this.reportNumber,
+    this.teamId,
+    this.assignedStaffId,
     required this.citizenId,
     required this.citizenName,
     this.citizenPhone,
@@ -68,6 +72,7 @@ class StaffTaskEntity {
   StaffTaskEntity copyWith({
     String? id,
     String? reportNumber,
+    String? teamId,
     String? citizenId,
     String? citizenName,
     String? citizenPhone,
@@ -96,6 +101,8 @@ class StaffTaskEntity {
     return StaffTaskEntity(
       id: id ?? this.id,
       reportNumber: reportNumber ?? this.reportNumber,
+      teamId: teamId ?? this.teamId,
+      assignedStaffId: assignedStaffId,
       citizenId: citizenId ?? this.citizenId,
       citizenName: citizenName ?? this.citizenName,
       citizenPhone: citizenPhone ?? this.citizenPhone,

@@ -51,6 +51,10 @@ class MockAdminMapRepository implements AdminRepository {
   Future<Result<MunicipalCrewEntity>> updateCrew(MunicipalCrewEntity crew) async => Success(crew);
 
   @override
+  Future<Result<void>> deleteVehicle(String vehicleId) async =>
+      const Success(null);
+
+  @override
   Future<Result<void>> deleteCrew(String crewId) async => const Success(null);
 
   @override

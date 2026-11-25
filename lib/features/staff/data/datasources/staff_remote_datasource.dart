@@ -27,14 +27,6 @@ abstract class StaffRemoteDataSource {
 
 /// Implementación concreta de StaffRemoteDataSource con Cloud Firestore.
 class FirebaseStaffRemoteDataSourceImpl implements StaffRemoteDataSource {
-  static const _assignedStatuses = ['assigned', 'asignado'];
-  static const _personalStatuses = [
-    ..._assignedStatuses,
-    'in_progress',
-    'en proceso',
-    'resolved',
-    'resuelto',
-  ];
   static const _server = GetOptions(source: Source.server);
 
   final FirebaseFirestore? _customFirestore;
@@ -63,11 +55,11 @@ class FirebaseStaffRemoteDataSourceImpl implements StaffRemoteDataSource {
       final teamId = user['teamId'];
       final personal = Filter.and(
         Filter('assignedStaffId', isEqualTo: staffId),
-        Filter('status', whereIn: _personalStatuses),
+        Filter('status', whereIn: StaffTaskDto.visibleStatuses),
       );
       final individualRoster = Filter.and(
         Filter('assignedStaffIds', arrayContains: staffId),
-        Filter('status', whereIn: _assignedStatuses),
+        Filter('status', whereIn: StaffTaskDto.assignedStatuses),
       );
       final visible = teamId is String && teamId.isNotEmpty
           ? Filter.or(
@@ -75,7 +67,7 @@ class FirebaseStaffRemoteDataSourceImpl implements StaffRemoteDataSource {
               individualRoster,
               Filter.and(
                 Filter('assignedToTeamId', isEqualTo: teamId),
-                Filter('status', whereIn: _assignedStatuses),
+                Filter('status', whereIn: StaffTaskDto.visibleStatuses),
               ),
             )
           : Filter.or(personal, individualRoster);
@@ -85,8 +77,12 @@ class FirebaseStaffRemoteDataSourceImpl implements StaffRemoteDataSource {
           .get(_server);
 
       return snapshot.docs.where((doc) {
-        final assignee = doc.data()['assignedStaffId'];
-        return assignee == null || assignee == staffId;
+        final data = doc.data();
+        final assignee = data['assignedStaffId'];
+        return (teamId is String && teamId.isNotEmpty &&
+                data['assignedToTeamId'] == teamId) ||
+            assignee == null ||
+            assignee == staffId;
       }).map((doc) => StaffTaskDto.fromFirestore(doc.id, doc.data())).toList();
     } on ServerException {
       rethrow;

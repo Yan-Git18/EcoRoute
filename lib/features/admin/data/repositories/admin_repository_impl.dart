@@ -94,6 +94,20 @@ class AdminRepositoryImpl implements AdminRepository {
   }
 
   @override
+  Future<Result<void>> deleteVehicle(String vehicleId) async {
+    try {
+      await _remoteDataSource.deleteVehicle(vehicleId);
+      return const Success(null);
+    } on ServerException catch (error) {
+      return FailureResult(ServerFailure(message: error.message, code: error.code));
+    } on FirebaseException catch (error) {
+      return _crewWriteFailure(error);
+    } catch (_) {
+      return const FailureResult(ServerFailure(message: 'No se pudo eliminar el vehículo.'));
+    }
+  }
+
+  @override
   Future<Result<void>> deleteCrew(String crewId) async {
     try {
       await _remoteDataSource.deleteCrew(crewId);

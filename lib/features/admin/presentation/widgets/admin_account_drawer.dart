@@ -8,14 +8,14 @@ class AdminAccountDrawer extends StatelessWidget {
     super.key,
     required this.user,
     required this.isSigningOut,
-    required this.onViewAccount,
+    required this.onViewProfile,
     required this.onChangePassword,
     required this.onLogout,
   });
 
   final UserEntity? user;
   final bool isSigningOut;
-  final VoidCallback? onViewAccount;
+  final VoidCallback? onViewProfile;
   final VoidCallback? onChangePassword;
   final VoidCallback onLogout;
 
@@ -27,7 +27,7 @@ class AdminAccountDrawer extends StatelessWidget {
     }
 
     final account = user;
-    final viewAccount = onViewAccount;
+    final viewProfile = onViewProfile;
     final changePassword = onChangePassword;
 
     return Drawer(
@@ -88,10 +88,10 @@ class AdminAccountDrawer extends StatelessWidget {
                       ),
                       ListTile(
                         leading: const Icon(Icons.person_outline_rounded),
-                        title: const Text('Datos de la cuenta'),
-                        onTap: viewAccount == null
+                        title: const Text('Mi perfil'),
+                        onTap: viewProfile == null
                             ? null
-                            : () => choose(viewAccount),
+                            : () => choose(viewProfile),
                       ),
                       ListTile(
                         leading: const Icon(Icons.lock_outline_rounded),

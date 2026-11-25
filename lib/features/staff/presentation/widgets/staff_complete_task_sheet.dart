@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/entities/staff_task_entity.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
+import '../viewmodels/staff_operations_providers.dart';
 
 /// Modal interactivo para resolver tareas de limpieza y adjuntar evidencia fotográfica.
 ///
@@ -123,6 +124,16 @@ class _StaffCompleteTaskSheetState extends ConsumerState<StaffCompleteTaskSheet>
 
   @override
   Widget build(BuildContext context) {
+    if (!ref.watch(staffCanManageTaskProvider(widget.task.teamId))) {
+      return const SafeArea(
+        child: Material(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text('Solo el líder actual puede registrar la resolución.'),
+          ),
+        ),
+      );
+    }
     return Container(
       padding: EdgeInsets.only(
         top: 12,

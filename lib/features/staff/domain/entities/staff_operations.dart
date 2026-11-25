@@ -1,10 +1,21 @@
 class StaffCrew {
-  const StaffCrew({this.name, this.zone, this.vehicleCode, this.vehiclePlate});
+  const StaffCrew({
+    this.id,
+    this.name,
+    this.zone,
+    this.vehicleCode,
+    this.vehiclePlate,
+    this.leaderId,
+    this.leaderName,
+  });
 
+  final String? id;
   final String? name;
   final String? zone;
   final String? vehicleCode;
   final String? vehiclePlate;
+  final String? leaderId;
+  final String? leaderName;
 
   String? get vehicleLabel {
     final details = [

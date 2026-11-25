@@ -43,6 +43,7 @@ class RouteNames {
   static const String adminTeams = '/admin/teams';
   static const String adminStaff = '/admin/staff';
   static const String adminFleet = '/admin/fleet';
+  static const String adminProfile = '/admin/profile';
 
   static String adminReportLocation(String id) =>
       adminReportDetail.replaceFirst(':id', Uri.encodeComponent(id));

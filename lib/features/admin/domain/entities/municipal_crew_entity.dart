@@ -32,6 +32,7 @@ enum MunicipalCrewStatus {
 /// Ubicación: `lib/features/admin/domain/entities/municipal_crew_entity.dart`
 /// Capa: Domain (Admin)
 class MunicipalCrewEntity {
+  static const unassignedDriver = 'No asignado';
   static const minMembers = 2;
   static const maxMembers = 5;
 
@@ -42,6 +43,7 @@ class MunicipalCrewEntity {
   final String name;
   final String zone;
   final String leadStaffName;
+  final String? leaderId;
   final String vehicleCode;
   final String vehiclePlate;
   final String vehicleType;
@@ -62,6 +64,7 @@ class MunicipalCrewEntity {
     required this.name,
     required this.zone,
     required this.leadStaffName,
+    this.leaderId,
     required this.vehicleCode,
     required this.vehiclePlate,
     this.vehicleType = 'Camión Compactador',
@@ -81,6 +84,11 @@ class MunicipalCrewEntity {
   bool get canDispatchVehicle =>
       isAvailable && status == MunicipalCrewStatus.available;
 
+  String? get effectiveLeaderId => leaderId ?? memberIds?.firstOrNull;
+
+  bool get hasValidLeader =>
+      leaderId != null && memberIds?.contains(leaderId) == true;
+
   bool get hasLocation =>
       latitude.isFinite &&
       longitude.isFinite &&
@@ -91,13 +99,17 @@ class MunicipalCrewEntity {
           longitude != AppGeoConstants.cajamarcaCenterLng);
 
   bool get canDispatch =>
-      !vehicleOnly && canDispatchVehicle && activeTasksCount == 0;
+      !vehicleOnly &&
+      canDispatchVehicle &&
+      activeTasksCount == 0 &&
+      effectiveLeaderId != null;
 
   MunicipalCrewEntity copyWith({
     String? id,
     String? name,
     String? zone,
     String? leadStaffName,
+    String? leaderId,
     String? vehicleCode,
     String? vehiclePlate,
     String? vehicleType,
@@ -115,6 +127,7 @@ class MunicipalCrewEntity {
       name: name ?? this.name,
       zone: zone ?? this.zone,
       leadStaffName: leadStaffName ?? this.leadStaffName,
+      leaderId: leaderId ?? this.leaderId,
       vehicleCode: vehicleCode ?? this.vehicleCode,
       vehiclePlate: vehiclePlate ?? this.vehiclePlate,
       vehicleType: vehicleType ?? this.vehicleType,
@@ -141,6 +154,7 @@ class MunicipalCrewEntity {
           name == other.name &&
           zone == other.zone &&
           leadStaffName == other.leadStaffName &&
+          leaderId == other.leaderId &&
           vehicleCode == other.vehicleCode &&
           vehiclePlate == other.vehiclePlate &&
           vehicleType == other.vehicleType &&
@@ -162,6 +176,7 @@ class MunicipalCrewEntity {
       name.hashCode ^
       zone.hashCode ^
       leadStaffName.hashCode ^
+      leaderId.hashCode ^
       vehicleCode.hashCode ^
       vehiclePlate.hashCode ^
       vehicleType.hashCode ^

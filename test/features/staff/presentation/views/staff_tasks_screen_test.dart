@@ -10,9 +10,11 @@ import 'package:ecoroute/features/auth/domain/entities/user_entity.dart';
 import 'package:ecoroute/features/auth/presentation/viewmodels/auth_state.dart';
 import 'package:ecoroute/features/auth/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ecoroute/features/citizen/domain/entities/report_entity.dart';
+import 'package:ecoroute/features/staff/domain/entities/staff_operations.dart';
 import 'package:ecoroute/features/staff/domain/entities/staff_task_entity.dart';
 import 'package:ecoroute/features/staff/domain/repositories/staff_repository.dart';
 import 'package:ecoroute/features/staff/presentation/viewmodels/staff_home_viewmodel.dart';
+import 'package:ecoroute/features/staff/presentation/viewmodels/staff_operations_providers.dart';
 import 'package:ecoroute/features/staff/presentation/views/staff_tasks_screen.dart';
 
 class MockTasksLocationService implements LocationService {
@@ -156,6 +158,72 @@ final sampleTasks = [
 ];
 
 void main() {
+  testWidgets('El detalle actualiza las acciones al cambiar el liderazgo', (
+    tester,
+  ) async {
+    final crew = StreamController<StaffCrew?>.broadcast();
+    addTearDown(crew.close);
+    final revisions = StreamController<int>.broadcast();
+    addTearDown(revisions.close);
+    final crewChanges = StreamProvider<StaffCrew?>((ref) => crew.stream);
+    final task = sampleTasks.first.copyWith(teamId: 'norte');
+    final repository = MockStaffRepository()..tasks = [task];
+    const otherLeader = StaffCrew(
+      id: 'norte',
+      leaderId: 'otro-usuario',
+      leaderName: 'Rosa Silva',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authViewModelProvider.overrideWith(
+            () => MockStaffAuthViewModel(testStaff),
+          ),
+          staffRepositoryProvider.overrideWithValue(repository),
+          staffCrewProvider.overrideWith((ref) => ref.watch(crewChanges)),
+          staffTeamTaskChangesProvider.overrideWith((ref) => revisions.stream),
+          locationServiceProvider.overrideWithValue(MockTasksLocationService()),
+        ],
+        child: const MaterialApp(home: StaffTasksScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    crew.add(otherLeader);
+    await tester.pumpAndSettle();
+    expect(find.text('Iniciar'), findsNothing);
+
+    await tester.tap(find.text(task.reportNumber));
+    await tester.pumpAndSettle();
+    expect(find.text('Líder actual del equipo · Rosa Silva'), findsOneWidget);
+    expect(find.text('Iniciar tarea de limpieza'), findsNothing);
+
+    crew.add(
+      StaffCrew(id: 'norte', leaderId: testStaff.id, leaderName: testStaff.name),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Iniciar tarea de limpieza'), findsOneWidget);
+
+    crew.add(otherLeader);
+    await tester.pumpAndSettle();
+    expect(find.text('Iniciar tarea de limpieza'), findsNothing);
+    expect(find.text('Cerrar detalle'), findsOneWidget);
+
+    revisions.add(1);
+    await tester.pumpAndSettle();
+    repository.tasks = [task.copyWith(status: ReportStatus.inProgress)];
+    revisions.add(2);
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(StaffTasksScreen)),
+    );
+    expect(
+      container.read(staffHomeViewModelProvider).tasks.single.isInProgress,
+      isTrue,
+    );
+    expect(find.text('Completar y resolver incidencia'), findsNothing);
+  });
+
   testWidgets('Ignora una carga de otra sesión y permite reintentar un fallo', (
     tester,
   ) async {

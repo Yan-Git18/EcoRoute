@@ -75,6 +75,9 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
           if (oldTeam != newTeam) loadTasks();
         }
       });
+      ref.listen(staffTeamTaskChangesProvider, (_, next) {
+        if (next is AsyncData<int>) loadTasks(showLoading: false);
+      });
       Future.microtask(() async {
         if (_isCurrentSession(version)) await loadTasks();
       });
@@ -96,10 +99,12 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
       _sessionOf(ref.read(authViewModelProvider).user) == _session;
 
   /// Carga la lista de tareas de recolección asignadas al personal
-  Future<void> loadTasks() async {
+  Future<void> loadTasks({bool showLoading = true}) async {
     final user = _staffUser;
     if (user == null) return;
-    state = state.copyWith(isLoading: true, clearLoadError: true);
+    if (showLoading) {
+      state = state.copyWith(isLoading: true, clearLoadError: true);
+    }
 
     final session = _sessionVersion;
     final load = ++_loadVersion;
@@ -118,6 +123,7 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
         state = state.copyWith(
           tasks: tasks,
           isLoading: false,
+          clearLoadError: true,
           clearActiveNavigation: !keepRoute,
           activeNavigationTask: activeTask,
         );
@@ -140,7 +146,7 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
   /// Respeta la regla de negocio de solo 1 tarea en curso a la vez.
   Future<bool> startTask(String taskId) async {
     final user = _staffUser;
-    if (user == null) return false;
+    if (user == null || !_canManageTask(taskId)) return false;
     final existingActive = state.currentInProgressTask;
     if (existingActive != null && existingActive.id != taskId) {
       state = state.copyWith(
@@ -181,6 +187,15 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
         return false;
       },
     );
+  }
+
+  bool _canManageTask(String taskId) {
+    final task = state.tasks.where((task) => task.id == taskId).firstOrNull;
+    if (ref.read(staffCanManageTaskProvider(task?.teamId))) return true;
+    state = state.copyWith(
+      errorMessage: 'Solo el líder del equipo puede actualizar esta tarea.',
+    );
+    return false;
   }
 
   /// Flujo completo al confirmar «Sí, iniciar» sobre una tarea pendiente:
@@ -272,7 +287,7 @@ class StaffHomeViewModel extends Notifier<StaffHomeState> {
     required String notes,
   }) async {
     final user = _staffUser;
-    if (user == null) return false;
+    if (user == null || !_canManageTask(taskId)) return false;
 
     final session = _sessionVersion;
     final result = await ref.read(completeTaskWithEvidenceUseCaseProvider)(

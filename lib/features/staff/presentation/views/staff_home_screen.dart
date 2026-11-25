@@ -178,7 +178,7 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
                 pendingCount: pendingCount,
                 resolvedToday: staffState.isLoading || staffState.loadErrorMessage != null
                     ? null
-                    : staffState.resolvedOn(DateTime.now()),
+                    : staffState.resolvedOn(DateTime.now(), user?.id),
               ),
               const SizedBox(height: 18),
 
@@ -186,7 +186,15 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
               if (urgentTask != null) ...[
                 _buildUrgentTaskAlert(
                   task: urgentTask,
-                  onTap: () => _handleStartTask(urgentTask),
+                  onTap: ref.watch(staffCanManageTaskProvider(urgentTask.teamId))
+                      ? () => _handleStartTask(urgentTask)
+                      : () => StaffTaskDetailSheet.show(
+                          context: context,
+                          task: urgentTask,
+                          onStart: () => _handleStartTask(urgentTask),
+                          onResolve: () =>
+                              StaffCompleteTaskSheet.show(context, urgentTask),
+                        ),
                 ),
                 const SizedBox(height: 18),
               ],
