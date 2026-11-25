@@ -63,6 +63,23 @@ class MockAdminFleetRepository implements AdminRepository {
   }
 
   @override
+  Future<Result<List<ReportEntity>>> getCrewActiveReports(String crewId) async =>
+      const Success([]);
+
+  @override
+  Future<Result<Set<String>>> getBusyStaffIds() async => const Success({});
+
+  @override
+  Future<Result<ReportEntity>> assignReportToStaff({
+    required String reportId,
+    required List<String> staffIds,
+    required String adminId,
+    required String adminName,
+    ReportPriority? priority,
+    String? instructions,
+  }) async => throw UnimplementedError();
+
+  @override
   Future<Result<ReportEntity>> assignReportToCrew({
     required String reportId,
     required MunicipalCrewEntity crew,
@@ -183,7 +200,7 @@ void main() {
 
     // 4. Barra de navegación
     expect(find.byType(AdminBottomNavBar), findsOneWidget);
-    expect(find.text('Cuadrillas'), findsOneWidget);
+    expect(find.text('Equipo'), findsOneWidget);
   });
 
   testWidgets('Filtra vehículos al escribir en el buscador de placa o conductor', (tester) async {

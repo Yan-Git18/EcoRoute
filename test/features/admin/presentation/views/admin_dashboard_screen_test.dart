@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:ecoroute/core/router/app_router.dart';
 import 'package:ecoroute/core/router/route_names.dart';
 import 'package:ecoroute/core/utils/result.dart';
 import 'package:ecoroute/features/admin/domain/entities/admin_report_page.dart';
@@ -10,6 +11,7 @@ import 'package:ecoroute/features/admin/domain/repositories/admin_repository.dar
 import 'package:ecoroute/features/admin/presentation/viewmodels/admin_reports_state.dart';
 import 'package:ecoroute/features/admin/presentation/viewmodels/admin_reports_viewmodel.dart';
 import 'package:ecoroute/features/admin/presentation/views/admin_dashboard_screen.dart';
+import 'package:ecoroute/features/admin/presentation/widgets/admin_bottom_nav_bar.dart';
 import 'package:ecoroute/features/auth/domain/entities/user_entity.dart';
 import 'package:ecoroute/features/auth/presentation/viewmodels/auth_state.dart';
 import 'package:ecoroute/features/auth/presentation/viewmodels/auth_viewmodel.dart';
@@ -70,6 +72,23 @@ class MockAdminRepository implements AdminRepository {
 
   @override
   Future<Result<void>> deleteCrew(String crewId) async => const Success(null);
+
+  @override
+  Future<Result<List<ReportEntity>>> getCrewActiveReports(String crewId) async =>
+      const Success([]);
+
+  @override
+  Future<Result<Set<String>>> getBusyStaffIds() async => const Success({});
+
+  @override
+  Future<Result<ReportEntity>> assignReportToStaff({
+    required String reportId,
+    required List<String> staffIds,
+    required String adminId,
+    required String adminName,
+    ReportPriority? priority,
+    String? instructions,
+  }) async => throw UnimplementedError();
 
   @override
   Future<Result<ReportEntity>> assignReportToCrew({
@@ -152,6 +171,75 @@ final testReports = [
 ];
 
 void main() {
+  testWidgets('El menú principal abre la sección elegida directamente', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        authViewModelProvider.overrideWith(
+          () => MockAdminAuthViewModel(testAdminUser),
+        ),
+        adminRepositoryProvider.overrideWithValue(MockAdminRepository()),
+      ],
+    );
+    addTearDown(container.dispose);
+    final router = container.read(routerProvider);
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    Future<void> selectTab(String label) async {
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AdminBottomNavBar),
+          matching: find.text(label),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    expect(find.byType(AdminDashboardScreen), findsOneWidget);
+    await selectTab('Reportes');
+    await selectTab('Equipo');
+    await selectTab('Inicio');
+    expect(find.byType(AdminDashboardScreen), findsOneWidget);
+    expect(router.canPop(), isFalse);
+
+    for (final (label, path) in [
+      ('Mapa', RouteNames.adminLiveMap),
+      ('Equipo', RouteNames.adminTeams),
+      ('Reportes', RouteNames.adminReports),
+    ]) {
+      await selectTab(label);
+      expect(router.routeInformationProvider.value.uri.path, path);
+      expect(router.canPop(), isFalse);
+    }
+
+    await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+    await tester.pumpAndSettle();
+    expect(find.byType(AdminDashboardScreen), findsOneWidget);
+
+    await selectTab('Equipo');
+    await tester.tap(find.byTooltip('Flota Vehicular'));
+    await tester.pumpAndSettle();
+    expect(find.text('Flota y Maquinaria Municipal'), findsOneWidget);
+    await selectTab('Equipo');
+    expect(find.widgetWithText(AppBar, 'Equipos'), findsOneWidget);
+    expect(router.canPop(), isFalse);
+
+    await tester.tap(find.byTooltip('Gestión de Personal'));
+    await tester.pumpAndSettle();
+    expect(find.text('Gestión de Personal'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(AppBar, 'Equipos'), findsOneWidget);
+  });
+
   testWidgets(
     'Renderiza AdminDashboardScreen con métricas vivas y módulos de gestión',
     (tester) async {
@@ -189,7 +277,7 @@ void main() {
       expect(find.text('Inicio'), findsOneWidget);
       expect(find.text('Reportes'), findsOneWidget);
       expect(find.text('Mapa'), findsOneWidget);
-      expect(find.text('Cuadrillas'), findsOneWidget);
+      expect(find.text('Equipo'), findsOneWidget);
     },
   );
 

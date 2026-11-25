@@ -59,6 +59,23 @@ class FakeAdminRepository implements AdminRepository {
   Future<Result<AdminReportTotals>> getReportTotals() async => Success(totalsForReports(const []));
 
   @override
+  Future<Result<List<ReportEntity>>> getCrewActiveReports(String crewId) async =>
+      const Success([]);
+
+  @override
+  Future<Result<Set<String>>> getBusyStaffIds() async => const Success({});
+
+  @override
+  Future<Result<ReportEntity>> assignReportToStaff({
+    required String reportId,
+    required List<String> staffIds,
+    required String adminId,
+    required String adminName,
+    ReportPriority? priority,
+    String? instructions,
+  }) async => throw UnimplementedError();
+
+  @override
   Future<Result<ReportEntity>> assignReportToCrew({
     required String reportId,
     required MunicipalCrewEntity crew,
@@ -155,13 +172,14 @@ void main() {
         expect(failure.message, contains('placa vehicular'));
       });
 
-      test('rechaza cuadrilla con menos de 1 integrante', () async {
+      test('rechaza equipos fuera del rango de 2 a 5 integrantes', () async {
         final useCase = CreateCrewUseCase(repository);
-        final result = await useCase(testCrew.copyWith(crewMembersCount: 0));
-
-        expect(result, isA<FailureResult<MunicipalCrewEntity>>());
-        final failure = (result as FailureResult).failure;
-        expect(failure.message, contains('al menos 1 integrante'));
+        for (final count in [0, 1, 6]) {
+          final result = await useCase(testCrew.copyWith(crewMembersCount: count));
+          expect(result, isA<FailureResult<MunicipalCrewEntity>>());
+          final failure = (result as FailureResult).failure;
+          expect(failure.message, contains('entre 2 y 5 integrantes'));
+        }
       });
 
       test('crea cuadrilla válida exitosamente en el repositorio', () async {

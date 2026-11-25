@@ -54,6 +54,23 @@ class MockAdminMapRepository implements AdminRepository {
   Future<Result<void>> deleteCrew(String crewId) async => const Success(null);
 
   @override
+  Future<Result<List<ReportEntity>>> getCrewActiveReports(String crewId) async =>
+      const Success([]);
+
+  @override
+  Future<Result<Set<String>>> getBusyStaffIds() async => const Success({});
+
+  @override
+  Future<Result<ReportEntity>> assignReportToStaff({
+    required String reportId,
+    required List<String> staffIds,
+    required String adminId,
+    required String adminName,
+    ReportPriority? priority,
+    String? instructions,
+  }) async => throw UnimplementedError();
+
+  @override
   Future<Result<ReportEntity>> assignReportToCrew({
     required String reportId,
     required MunicipalCrewEntity crew,
@@ -192,7 +209,7 @@ void main() {
     expect(find.text('Mapa'), findsOneWidget);
     expect(find.text('Inicio'), findsOneWidget);
     expect(find.text('Reportes'), findsOneWidget);
-    expect(find.text('Cuadrillas'), findsOneWidget);
+    expect(find.text('Equipo'), findsOneWidget);
   });
 
   testWidgets('Permite alternar filtros y seleccionar reporte para ver tarjeta emergente',
@@ -226,7 +243,7 @@ void main() {
     expect(find.text('#REP-0101'), findsOneWidget);
     expect(find.text('Acumulación de basura'), findsOneWidget);
     expect(find.text('Jr. Carabaya 450'), findsOneWidget);
-    expect(find.text('Despachar'), findsOneWidget);
+    expect(find.text('Asignar'), findsOneWidget);
 
     // Cerrar la tarjeta de vista previa
     await tester.tap(find.byIcon(Icons.close_rounded));

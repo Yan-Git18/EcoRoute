@@ -161,7 +161,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: RouteNames.adminReportDetail, builder: _reportDetail),
       GoRoute(
         path: RouteNames.adminLiveMap,
-        builder: (context, state) => const AdminLiveMapScreen(),
+        builder: (context, state) => AdminLiveMapScreen(
+          initialCrewId: state.uri.queryParameters['teamId'],
+        ),
       ),
       GoRoute(
         path: RouteNames.adminTeams,

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/utils/result.dart';
+import '../../../auth/domain/entities/user_entity.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/repositories/admin_repository_impl.dart';
@@ -23,6 +24,16 @@ final adminRemoteDataSourceProvider = Provider<AdminRemoteDataSource>((ref) {
 final adminRepositoryProvider = Provider<AdminRepository>((ref) {
   final dataSource = ref.watch(adminRemoteDataSourceProvider);
   return AdminRepositoryImpl(remoteDataSource: dataSource);
+});
+
+final adminTeamStaffProvider = FutureProvider.autoDispose<List<UserEntity>>((ref) async {
+  final result = await ref.watch(adminRepositoryProvider).getStaffMembers();
+  return result.fold(onSuccess: (staff) => staff, onFailure: (failure) => throw failure.message);
+});
+
+final adminBusyStaffProvider = FutureProvider.autoDispose<Set<String>>((ref) async {
+  final result = await ref.watch(adminRepositoryProvider).getBusyStaffIds();
+  return result.fold(onSuccess: (staff) => staff, onFailure: (failure) => throw failure.message);
 });
 
 final getCrewsUseCaseProvider = Provider<GetCrewsUseCase>((ref) {
@@ -61,7 +72,6 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
   Future<void>? _activeLoad;
   int _dataRevision = 0;
   int _pageGeneration = 0;
-  int _totalsRequest = 0;
 
   @override
   AdminReportsState build() {
@@ -147,22 +157,33 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
 
   Future<bool> assignReport({
     required String reportId,
-    required MunicipalCrewEntity crew,
+    MunicipalCrewEntity? crew,
+    List<String> staffIds = const [],
     required String adminId,
     required String adminName,
     ReportPriority? priority,
     String? instructions,
   }) async {
+    if (state.isAssigning || (crew == null) == staffIds.isEmpty) return false;
     state = state.copyWith(isAssigning: true, clearError: true);
 
-    final result = await _repository.assignReportToCrew(
-      reportId: reportId,
-      crew: crew,
-      adminId: adminId,
-      adminName: adminName,
-      priority: priority,
-      instructions: instructions,
-    );
+    final result = crew == null
+        ? await _repository.assignReportToStaff(
+            reportId: reportId,
+            staffIds: staffIds,
+            adminId: adminId,
+            adminName: adminName,
+            priority: priority,
+            instructions: instructions,
+          )
+        : await _repository.assignReportToCrew(
+            reportId: reportId,
+            crew: crew,
+            adminId: adminId,
+            adminName: adminName,
+            priority: priority,
+            instructions: instructions,
+          );
     if (!ref.mounted) return false;
 
     switch (result) {
@@ -172,8 +193,23 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
           return r.id == updatedReport.id ? updatedReport : r;
         }).toList();
 
-        state = state.copyWith(isAssigning: false, reports: updatedReports);
-        if (_activeLoad == null) unawaited(_refreshTotals());
+        state = state.copyWith(
+          isAssigning: false,
+          reports: updatedReports,
+          crews: crew == null
+              ? null
+              : [
+                  for (final team in state.crews)
+                    if (team.id == crew.id)
+                      team.copyWith(
+                        status: MunicipalCrewStatus.onRoute,
+                        activeTasksCount: 1,
+                      )
+                    else
+                      team,
+                ],
+        );
+        if (_activeLoad == null) unawaited(_refreshResources(includeTotals: true));
         return true;
 
       case FailureResult(failure: final f):
@@ -182,12 +218,20 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
     }
   }
 
-  Future<void> _refreshTotals() async {
-    final request = ++_totalsRequest;
+  Future<void> _refreshResources({bool includeTotals = false}) async {
+    final revision = _dataRevision;
     final generation = _pageGeneration;
-    final result = await _repository.getReportTotals();
-    if (!ref.mounted || request != _totalsRequest || generation != _pageGeneration) return;
-    state = state.copyWith(totals: result.dataOrNull, totalsLoadFailed: result.isFailure);
+    final totalsRequest = includeTotals ? _repository.getReportTotals() : null;
+    final crews = await _getCrewsUseCase();
+    final totals = await totalsRequest;
+    if (!ref.mounted || revision != _dataRevision || generation != _pageGeneration) return;
+    state = state.copyWith(
+      crews: crews.dataOrNull,
+      hasLoadedCrews: state.hasLoadedCrews || crews.isSuccess,
+      crewsLoadFailed: crews.isFailure,
+      totals: totals?.dataOrNull,
+      totalsLoadFailed: totals?.isFailure,
+    );
   }
 
   Future<void> updatePriority(String reportId, ReportPriority priority) async {
@@ -213,6 +257,7 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
     String? leadStaffName,
     String? vehicleCode,
     String? vehiclePlate,
+    String? vehicleType,
   }) async {
     final existingIndex = state.crews.indexWhere((c) => c.id == crewId);
     if (existingIndex < 0) return false;
@@ -225,17 +270,23 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
       leadStaffName: leadStaffName ?? existing.leadStaffName,
       vehicleCode: vehicleCode ?? existing.vehicleCode,
       vehiclePlate: vehiclePlate ?? existing.vehiclePlate,
+      vehicleType: vehicleType,
     );
 
+    return saveCrew(updated);
+  }
+
+  Future<bool> saveCrew(MunicipalCrewEntity updated) async {
     final result = await _updateCrewUseCase.call(updated);
     if (!ref.mounted) return false;
     switch (result) {
       case Success(data: final savedCrew):
         _dataRevision++;
         final newCrews = state.crews.map((crew) {
-          return crew.id == crewId ? savedCrew : crew;
+          return crew.id == updated.id ? savedCrew : crew;
         }).toList();
-        state = state.copyWith(crews: newCrews);
+        state = state.copyWith(crews: newCrews, clearError: true);
+        await _refreshResources();
         return true;
       case FailureResult(failure: final f):
         state = state.copyWith(errorMessage: f.message);
@@ -250,7 +301,8 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
       case Success(data: final created):
         _dataRevision++;
         final filtered = state.crews.where((c) => c.id != created.id).toList();
-        state = state.copyWith(crews: [created, ...filtered]);
+        state = state.copyWith(crews: [created, ...filtered], clearError: true);
+        await _refreshResources();
         return true;
       case FailureResult(failure: final f):
         state = state.copyWith(errorMessage: f.message);
@@ -264,7 +316,8 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
     switch (result) {
       case Success():
         _dataRevision++;
-        state = state.copyWith(crews: state.crews.where((c) => c.id != crewId).toList());
+        state = state.copyWith(crews: state.crews.where((c) => c.id != crewId).toList(), clearError: true);
+        await _refreshResources();
         return true;
       case FailureResult(failure: final f):
         state = state.copyWith(errorMessage: f.message);

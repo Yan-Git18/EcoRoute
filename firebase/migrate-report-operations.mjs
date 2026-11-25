@@ -53,7 +53,84 @@ function normalizedReport(report) {
   return fields;
 }
 
-export async function migrateReportOperations({ project, emulator, token, apply = false }) {
+async function moveVehicles({ database, list, request, apply }) {
+  const [crews, vehicles] = await Promise.all([list("crews"), list("vehicles")]);
+  const existing = new Map(vehicles.map((vehicle) => [id(vehicle), vehicle]));
+  const legacy = new Map(crews.filter((crew) => crew.fields?.vehicleOnly?.booleanValue === true)
+    .map((truck) => [id(truck), truck]));
+  const owners = new Map();
+  const embedded = [];
+
+  for (const crew of crews) {
+    if (legacy.has(id(crew))) continue;
+    const vehicleId = crew.fields?.vehicleId?.stringValue;
+    if (vehicleId) {
+      if (owners.has(vehicleId) || (!legacy.has(vehicleId) && !existing.has(vehicleId))) {
+        throw new Error(`Revisa el camión ${vehicleId} vinculado al equipo ${id(crew)}.`);
+      }
+      if (existing.has(vehicleId) && existing.get(vehicleId).fields?.assignedCrewId?.stringValue !== id(crew)) {
+        throw new Error(`Revisa la asignación en vehicles/${vehicleId} para el equipo ${id(crew)}.`);
+      }
+      owners.set(vehicleId, crew);
+    } else if (crew.fields?.vehiclePlate?.stringValue?.trim()) {
+      embedded.push(crew);
+    }
+  }
+
+  const create = (vehicleId, fields) => {
+    if (existing.has(vehicleId)) throw new Error(`Ya existe vehicles/${vehicleId}.`);
+    return { update: { name: `${database}/vehicles/${vehicleId}`, fields }, currentDocument: { exists: false } };
+  };
+  const groups = [];
+  const plates = new Set();
+  const plate = (doc) => doc.fields?.vehiclePlate?.stringValue?.trim().toUpperCase();
+  for (const truck of [...legacy.values(), ...vehicles]) {
+    if (plate(truck)) plates.add(plate(truck));
+  }
+  for (const [vehicleId, truck] of legacy) {
+    const owner = owners.get(vehicleId);
+    const previousOwner = truck.fields.assignedCrewId?.stringValue;
+    if (previousOwner && previousOwner !== (owner && id(owner))) {
+      throw new Error(`Revisa la asignación del camión ${vehicleId} al equipo ${previousOwner}.`);
+    }
+    const fields = { ...truck.fields };
+    for (const key of ["vehicleOnly", "vehicleId", "memberIds", "memberCount", "crewMembersCount",
+      "openReportCount", "activeTasksCount", "memberActivity", "reportActivity", "assignedCrewId"]) {
+      delete fields[key];
+    }
+    if (owner) fields.assignedCrewId = string(id(owner));
+    groups.push([
+      create(vehicleId, fields),
+      { delete: truck.name, currentDocument: { updateTime: truck.updateTime } },
+      ...(owner ? [{ verify: owner.name, currentDocument: { updateTime: owner.updateTime } }] : []),
+    ]);
+  }
+  for (const crew of embedded) {
+    const vehicleId = `vehicle-${id(crew)}`;
+    if (legacy.has(vehicleId) || plates.has(plate(crew))) {
+      throw new Error(`Revisa el registro de camión integrado en el equipo ${id(crew)}. Hay un camión coincidente.`);
+    }
+    plates.add(plate(crew));
+    const fields = Object.fromEntries([
+      "vehicleCode", "vehiclePlate", "vehicleType", "zone", "leadStaffName",
+      "location", "latitude", "longitude", "createdAt", "updatedAt",
+    ].filter((key) => key in crew.fields).map((key) => [key, crew.fields[key]]));
+    const status = crew.fields.status?.stringValue === "maintenance" ? "maintenance" : "available";
+    groups.push([
+      create(vehicleId, {
+        ...fields, id: string(vehicleId), name: fields.vehicleCode ?? fields.vehiclePlate,
+        assignedCrewId: string(id(crew)), status: string(status),
+      }),
+      patch(crew, { vehicleId: string(vehicleId) }),
+    ]);
+  }
+  if (apply) {
+    for (const writes of groups) await request(":commit", { writes });
+  }
+  return { applied: apply, movedVehicles: legacy.size, extractedVehicles: embedded.length };
+}
+
+export async function migrateReportOperations({ project, emulator, token, apply = false, vehiclesOnly = false }) {
   const database = `projects/${project}/databases/(default)/documents`;
   const origin = emulator ? `http://${emulator}` : "https://firestore.googleapis.com";
 
@@ -70,6 +147,8 @@ export async function migrateReportOperations({ project, emulator, token, apply 
     return response.json();
   }
 
+  if (vehiclesOnly) return moveVehicles({ database, request, list, apply });
+
   async function list(collection) {
     const documents = [];
     let pageToken;
@@ -85,7 +164,7 @@ export async function migrateReportOperations({ project, emulator, token, apply 
 
   const [reports, users, crews] = await Promise.all([list("reports"), list("users"), list("crews")]);
   const usersById = new Map(users.map((user) => [id(user), user]));
-  const counts = new Map(crews.map((crew) => [id(crew), { reports: 0, members: 0 }]));
+  const crewOperations = new Map(crews.map((crew) => [id(crew), { reports: 0, members: [] }]));
   const slots = new Map();
   const writes = [];
   let removedTeamLinks = 0;
@@ -93,8 +172,8 @@ export async function migrateReportOperations({ project, emulator, token, apply 
 
   for (const user of users) {
     const crewId = user.fields?.teamId?.stringValue;
-    if (counts.has(crewId)) {
-      counts.get(crewId).members += 1;
+    if (crewOperations.has(crewId)) {
+      crewOperations.get(crewId).members.push(user);
     } else if (crewId !== undefined) {
       writes.push(patch(user, {}, ["teamId"]));
       removedTeamLinks += 1;
@@ -107,8 +186,8 @@ export async function migrateReportOperations({ project, emulator, token, apply 
     const status = fields.status?.stringValue;
     const crewId = fields.assignedToTeamId?.stringValue;
     if (["assigned", "asignado", "in_progress", "en proceso"].includes(status)) {
-      if (counts.has(crewId)) {
-        counts.get(crewId).reports += 1;
+      if (crewOperations.has(crewId)) {
+        crewOperations.get(crewId).reports += 1;
       } else if (crewId !== undefined) {
         delete fields.assignedToTeamId;
         removedTeamLinks += 1;
@@ -141,8 +220,18 @@ export async function migrateReportOperations({ project, emulator, token, apply 
     });
   }
   for (const crew of crews) {
-    const count = counts.get(id(crew));
-    writes.push(patch(crew, { openReportCount: integer(count.reports), memberCount: integer(count.members) }));
+    const { reports, members } = crewOperations.get(id(crew));
+    const fields = { openReportCount: integer(reports), memberCount: integer(members.length) };
+    if (crew.fields?.vehicleOnly?.booleanValue !== true && !crew.fields?.memberIds &&
+        members.length > 0 && members.length <= 5) {
+      const name = crew.fields?.leadStaffName?.stringValue;
+      const leader = name && members.find((user) => user.fields?.name?.stringValue === name);
+      const roster = members.filter((user) => user !== leader).map(id).sort();
+      if (leader) roster.unshift(id(leader));
+      fields.memberIds = array(roster.map(string));
+      fields.crewMembersCount = integer(roster.length);
+    }
+    writes.push(patch(crew, fields));
   }
   for (const [uid, reportIds] of slots) {
     writes.push({
@@ -181,13 +270,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const emulator = process.env.FIRESTORE_EMULATOR_HOST;
   const token = emulator ? "owner" : process.env.ECOROUTE_MIGRATION_ACCESS_TOKEN;
   if (projectArg !== "--project" || !/^[a-z][a-z0-9-]+$/.test(project ?? "") ||
-      options.some((option) => option !== "--apply") || !token) {
-    console.error("Uso: node firebase/migrate-report-operations.mjs --project <id> [--apply]");
+      options.some((option) => !["--apply", "--vehicles-only"].includes(option)) || !token) {
+    console.error("Uso: node firebase/migrate-report-operations.mjs --project <id> [--vehicles-only] [--apply]");
     console.error("Configura FIRESTORE_EMULATOR_HOST o ECOROUTE_MIGRATION_ACCESS_TOKEN.");
     process.exitCode = 1;
   } else {
     try {
-      const result = await migrateReportOperations({ project, emulator, token, apply: options.includes("--apply") });
+      const result = await migrateReportOperations({
+        project, emulator, token, apply: options.includes("--apply"),
+        vehiclesOnly: options.includes("--vehicles-only"),
+      });
       console.log(JSON.stringify(result, null, 2));
     } catch (error) {
       console.error(error.message);

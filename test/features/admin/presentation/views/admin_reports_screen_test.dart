@@ -40,6 +40,10 @@ class MockAdminRepository implements AdminRepository {
   List<ReportEntity> reports = [];
   List<MunicipalCrewEntity> crews = [];
   bool assignCalled = false;
+  List<UserEntity> staff = [];
+  List<String>? selectedStaffIds;
+  Set<String> busyStaffIds = {};
+  String? lastInstructions;
   Completer<Result<AdminReportPage<ReportEntity>>>? nextReportLoad;
   AdminReportCursor? firstCursor;
   List<ReportEntity> nextReports = [];
@@ -78,6 +82,26 @@ class MockAdminRepository implements AdminRepository {
   Future<Result<void>> deleteCrew(String crewId) async => const Success(null);
 
   @override
+  Future<Result<List<ReportEntity>>> getCrewActiveReports(String crewId) async =>
+      const Success([]);
+
+  @override
+  Future<Result<Set<String>>> getBusyStaffIds() async => Success(busyStaffIds);
+
+  @override
+  Future<Result<ReportEntity>> assignReportToStaff({
+    required String reportId,
+    required List<String> staffIds,
+    required String adminId,
+    required String adminName,
+    ReportPriority? priority,
+    String? instructions,
+  }) async {
+    selectedStaffIds = staffIds;
+    return Success(reports.first.copyWith(status: ReportStatus.assigned));
+  }
+
+  @override
   Future<Result<ReportEntity>> assignReportToCrew({
     required String reportId,
     required MunicipalCrewEntity crew,
@@ -87,10 +111,12 @@ class MockAdminRepository implements AdminRepository {
     String? instructions,
   }) async {
     assignCalled = true;
+    lastInstructions = instructions;
     final index = reports.indexWhere((r) => r.id == reportId);
     if (index >= 0) {
       final updated = reports[index].copyWith(
         status: ReportStatus.assigned,
+        priority: priority,
         assignedToTeamId: crew.id,
         assignedToTeamName: crew.name,
         assignedStaffName: crew.leadStaffName,
@@ -111,7 +137,7 @@ class MockAdminRepository implements AdminRepository {
   }
 
   @override
-  Future<Result<List<UserEntity>>> getStaffMembers() async => const Success([]);
+  Future<Result<List<UserEntity>>> getStaffMembers() async => Success(staff);
 
   @override
   Future<Result<UserEntity?>> searchUserByExactEmail(String email) async => const Success(null);
@@ -279,7 +305,7 @@ void main() {
 
     final retry = find.widgetWithText(TextButton, 'Reintentar');
     expect(find.textContaining('No se pudieron cargar los reportes.'), findsOneWidget);
-    expect(find.textContaining('No se pudieron cargar las cuadrillas.'), findsOneWidget);
+    expect(find.textContaining('No se pudieron cargar los equipos.'), findsOneWidget);
     expect(find.textContaining('No hay reportes'), findsNothing);
     expect(find.text('0 incidencias cargadas'), findsNothing);
 
@@ -290,12 +316,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('#REP-1024'), findsOneWidget);
     expect(find.textContaining('No se pudieron cargar los reportes.'), findsNothing);
-    expect(find.textContaining('No se pudieron cargar las cuadrillas.'), findsOneWidget);
+    expect(find.textContaining('No se pudieron cargar los equipos.'), findsOneWidget);
     final dispatch = find.ancestor(
-      of: find.text('Despachar Personal'),
+      of: find.text('Asignar Personal'),
       matching: find.bySubtype<ElevatedButton>(),
     );
-    expect(tester.widget<ElevatedButton>(dispatch).onPressed, isNull);
+    expect(tester.widget<ElevatedButton>(dispatch).onPressed, isNotNull);
 
     source.failCrews = false;
     await tester.tap(retry);
@@ -309,7 +335,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('#REP-1024'), findsOneWidget);
     expect(find.textContaining('No se pudieron actualizar los reportes. Se muestran los datos de la última carga exitosa.'), findsOneWidget);
-    expect(find.textContaining('No se pudieron actualizar las cuadrillas.'), findsOneWidget);
+    expect(find.textContaining('No se pudieron actualizar los equipos.'), findsOneWidget);
 
     source
       ..failReports = false
@@ -359,7 +385,7 @@ void main() {
     expect(find.text('#REP-1024'), findsOneWidget);
     expect(find.text('Acumulación de basura'), findsOneWidget);
     expect(find.text('Av. Abancay 450'), findsOneWidget);
-    expect(find.text('Despachar Personal'), findsOneWidget);
+    expect(find.text('Asignar Personal'), findsOneWidget);
 
     expect(find.text('#REP-2058'), findsOneWidget);
     expect(find.text('Contenedor lleno'), findsOneWidget);
@@ -367,10 +393,24 @@ void main() {
     expect(find.text('Reasignar Personal'), findsOneWidget);
   });
 
-  testWidgets('Abre modal de despacho y asigna cuadrilla a un reporte pendiente', (tester) async {
+  testWidgets('Configura y confirma el despacho en una pantalla estrecha', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 600);
+    addTearDown(tester.view.reset);
     final mockRepo = MockAdminRepository()
       ..reports = List.from(testReports)
       ..crews = List.from(testCrews);
+
+    mockRepo.staff = [
+      UserEntity(
+        id: 'member',
+        name: 'Integrante del equipo',
+        email: 'miembro@example.com',
+        teamId: testCrews.last.id,
+        role: UserRole.staff,
+        createdAt: DateTime(2025),
+      ),
+    ];
 
     await tester.pumpWidget(
       ProviderScope(
@@ -386,21 +426,93 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    // Tap en Despachar Personal
-    final dispatchButton = find.text('Despachar Personal');
+    final dispatchButton = find.text('Asignar Personal');
     expect(dispatchButton, findsOneWidget);
+    await tester.scrollUntilVisible(
+      dispatchButton,
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(dispatchButton);
     await tester.pumpAndSettle();
 
-    // Debe abrir el modal
-    expect(find.text('Despacho de Personal'), findsOneWidget);
-    expect(find.text('Confirmar Despacho a Personal'), findsOneWidget);
+    expect(find.text('Asignar Personal'), findsOneWidget);
+    final confirm = find.text('Asignar');
+    await tester.tap(find.text('Equipos'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(testCrews.last.name));
+    await tester.pumpAndSettle();
+    final settings = find.text('Prioridad e instrucciones');
+    await tester.ensureVisible(settings);
+    await tester.pumpAndSettle();
+    await tester.tap(settings);
+    await tester.pumpAndSettle();
+    final priority = find.byType(DropdownButtonFormField<ReportPriority>);
+    await tester.ensureVisible(priority);
+    await tester.pumpAndSettle();
+    await tester.tap(priority);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Baja').last);
+    await tester.pumpAndSettle();
+    final instructions = find.widgetWithText(TextField, 'Instrucciones operativas');
+    await tester.ensureVisible(instructions);
+    await tester.pumpAndSettle();
+    await tester.enterText(instructions, ' Llevar pala ');
+    await tester.pumpAndSettle();
 
-    // Confirmar despacho
-    await tester.tap(find.text('Confirmar Despacho a Personal'));
+    expect(confirm.hitTestable(), findsOneWidget);
+    await tester.tap(confirm);
     await tester.pumpAndSettle();
 
     expect(mockRepo.assignCalled, isTrue);
+    expect(mockRepo.reports.first.assignedToTeamId, testCrews.last.id);
+    expect(mockRepo.reports.first.priority, ReportPriority.low);
+    expect(mockRepo.lastInstructions, 'Llevar pala');
+  });
+
+  testWidgets('Asigna varias personas sin incluir integrantes de equipos ni personal ocupado', (tester) async {
+    final repo = MockAdminRepository()
+      ..reports = [testReports.first]
+      ..busyStaffIds = {'busy'}
+      ..staff = [
+        for (final (id, name, team) in [
+          ('rosa', 'Rosa Silva', null),
+          ('luis', 'Luis Ruiz', null),
+          ('busy', 'Ana Ocupada', null),
+          ('member', 'Juan de Equipo', 'crew-01'),
+        ])
+          UserEntity(id: id, name: name, email: '$id@example.com', teamId: team,
+            role: UserRole.staff, createdAt: DateTime(2025)),
+      ];
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        authViewModelProvider.overrideWith(() => MockAdminAuthViewModel(testAdminUser)),
+        adminRepositoryProvider.overrideWithValue(repo),
+      ],
+      child: const MaterialApp(home: AdminReportsScreen()),
+    ));
+    await tester.pumpAndSettle();
+    final dispatch = find.text('Asignar Personal');
+    await tester.scrollUntilVisible(dispatch, 120, scrollable: find.byType(Scrollable).first);
+    await tester.tap(dispatch);
+    await tester.pumpAndSettle();
+    expect(find.text('Juan de Equipo'), findsNothing);
+    expect(find.text('Con reporte activo'), findsOneWidget);
+    await tester.tap(find.text('Ana Ocupada'));
+    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Asignar')).onPressed, isNull);
+
+    await tester.enterText(find.byType(TextField), 'rosa');
+    await tester.pumpAndSettle();
+    expect(find.text('Luis Ruiz'), findsNothing);
+    await tester.tap(find.text('Rosa Silva'));
+    await tester.enterText(find.byType(TextField), '');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Luis Ruiz'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Asignar'));
+    await tester.pumpAndSettle();
+    expect(repo.selectedStaffIds, ['rosa', 'luis']);
   });
 
   testWidgets('Carga otra página bajo demanda y permite reintentar sin perder el filtro', (tester) async {

@@ -52,6 +52,17 @@ class AdminReportsState {
     this.isAssigning = false,
   });
 
+  List<MunicipalCrewEntity> get teams =>
+      crews.where((crew) => !crew.vehicleOnly).toList();
+
+  List<MunicipalCrewEntity> get fleet => crews
+      .where(
+        (crew) =>
+            crew.vehicleOnly ||
+            (crew.vehicleId == null && crew.vehiclePlate.trim().isNotEmpty),
+      )
+      .toList();
+
   List<ReportEntity> get filteredReports {
     // 1. Filtro por estado
     var list = switch (selectedFilter) {
@@ -71,7 +82,8 @@ class AdminReportsState {
             r.address.toLowerCase().contains(q) ||
             r.citizenName.toLowerCase().contains(q) ||
             r.description.toLowerCase().contains(q) ||
-            (r.assignedToTeamName?.toLowerCase().contains(q) ?? false);
+            (r.assignedToTeamName?.toLowerCase().contains(q) ?? false) ||
+            (r.assignedStaffName?.toLowerCase().contains(q) ?? false);
       }).toList();
     }
 

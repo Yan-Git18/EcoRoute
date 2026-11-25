@@ -26,35 +26,17 @@ class AdminStaffViewModel extends Notifier<AdminStaffState> {
     return const AdminStaffState(isLoading: true);
   }
 
-  /// Carga el personal municipal y las cuadrillas para el selector.
+  /// Carga el personal municipal.
   Future<void> loadInitialData() async {
     if (state.isUpdating) return;
     state = state.copyWith(isLoading: true, clearError: true);
 
-    final staffRequest = _repository.getStaffMembers();
-    final crewsRequest = _repository.getAvailableCrews();
-    final staffResult = await staffRequest;
-    final crewsResult = await crewsRequest;
-
-    final staffList = switch (staffResult) {
-      Success(data: final list) => list,
-      FailureResult() => state.staffMembers,
-    };
-
-    final crewList = switch (crewsResult) {
-      Success(data: final list) => list,
-      FailureResult() => state.crews,
-    };
-
+    final result = await _repository.getStaffMembers();
+    if (!ref.mounted) return;
     state = state.copyWith(
       isLoading: false,
-      staffMembers: staffList,
-      crews: crewList,
-      errorMessage: switch ((staffResult, crewsResult)) {
-        (FailureResult(failure: final failure), _) => failure.message,
-        (_, FailureResult(failure: final failure)) => failure.message,
-        _ => null,
-      },
+      staffMembers: result.dataOrNull?.where((staff) => staff.isActive).toList(),
+      errorMessage: result.failureOrNull?.message,
     );
   }
 
@@ -113,44 +95,26 @@ class AdminStaffViewModel extends Notifier<AdminStaffState> {
     );
   }
 
-  /// Asigna una cuadrilla y concede el rol Staff si el usuario aún es ciudadano.
-  Future<bool> assignToCrew(UserEntity user, String teamId) async {
-    if (state.isUpdating) return false;
-    if (!state.crews.any((crew) => crew.id == teamId)) {
-      state = state.copyWith(errorMessage: 'Selecciona una cuadrilla válida.');
-      return false;
-    }
+  Future<bool> promoteToStaff(UserEntity user) async {
+    if (state.isUpdating || !user.isCitizen) return false;
     state = state.copyWith(isUpdating: true, clearError: true, clearSuccess: true);
-
     final result = await _repository.updateUserRole(
       userId: user.id,
       newRole: UserRole.staff,
-      teamId: teamId,
     );
-
+    if (!ref.mounted) return false;
     switch (result) {
       case Success():
-        final updatedUser = user.copyWith(role: UserRole.staff, teamId: teamId);
-        final currentList = List<UserEntity>.from(state.staffMembers);
-        final index = currentList.indexWhere((u) => u.id == user.id);
-        if (index >= 0) {
-          currentList[index] = updatedUser;
-        } else {
-          currentList.insert(0, updatedUser);
-        }
-
+        final updated = user.copyWith(role: UserRole.staff);
         state = state.copyWith(
           isUpdating: false,
-          staffMembers: currentList,
-          searchedUser: state.searchedUser?.id == user.id ? updatedUser : null,
-          successMessage: 'Cuadrilla actualizada para ${user.name}.',
+          staffMembers: [if (updated.isActive) updated, ...state.staffMembers.where((staff) => staff.id != user.id)],
+          searchedUser: state.searchedUser?.id == user.id ? updated : null,
+          successMessage: '${user.name} ahora es personal de limpieza.',
         );
         return true;
-      case FailureResult(failure: final f):
-        state = state.copyWith(
-          isUpdating: false,
-          errorMessage: 'No se pudo asignar la cuadrilla: ${f.message}',
-        );
+      case FailureResult(failure: final failure):
+        state = state.copyWith(isUpdating: false, errorMessage: failure.message);
         return false;
     }
   }

@@ -261,6 +261,7 @@ class ReportEntity {
   final String? assignedToTeamId;
   final String? assignedToTeamName;
   final String? assignedStaffName;
+  final List<String> assignedStaffIds;
   final String? assignedVehicle;
   final String? evidenceImageUrl;
   final List<String> evidenceImageUrls;
@@ -289,6 +290,7 @@ class ReportEntity {
     this.assignedToTeamId,
     this.assignedToTeamName,
     this.assignedStaffName,
+    this.assignedStaffIds = const [],
     this.assignedVehicle,
     this.evidenceImageUrl,
     this.evidenceImageUrls = const [],
@@ -326,6 +328,7 @@ class ReportEntity {
     String? assignedToTeamId,
     String? assignedToTeamName,
     String? assignedStaffName,
+    List<String>? assignedStaffIds,
     String? assignedVehicle,
     String? evidenceImageUrl,
     List<String>? evidenceImageUrls,
@@ -358,6 +361,7 @@ class ReportEntity {
       assignedToTeamId: assignedToTeamId ?? this.assignedToTeamId,
       assignedToTeamName: assignedToTeamName ?? this.assignedToTeamName,
       assignedStaffName: assignedStaffName ?? this.assignedStaffName,
+      assignedStaffIds: assignedStaffIds ?? this.assignedStaffIds,
       assignedVehicle: assignedVehicle ?? this.assignedVehicle,
       evidenceImageUrl: firstEvidenceUrl,
       evidenceImageUrls: nextEvidenceUrls,

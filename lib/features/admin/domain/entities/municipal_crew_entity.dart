@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../../../core/constants/geo_constants.dart';
 
 /// Estado operativo de una cuadrilla municipal.
@@ -30,6 +32,12 @@ enum MunicipalCrewStatus {
 /// Ubicación: `lib/features/admin/domain/entities/municipal_crew_entity.dart`
 /// Capa: Domain (Admin)
 class MunicipalCrewEntity {
+  static const minMembers = 2;
+  static const maxMembers = 5;
+
+  static bool isValidMemberCount(int count) =>
+      count >= minMembers && count <= maxMembers;
+
   final String id;
   final String name;
   final String zone;
@@ -37,12 +45,17 @@ class MunicipalCrewEntity {
   final String vehicleCode;
   final String vehiclePlate;
   final String vehicleType;
+  final String? vehicleId;
+  final bool vehicleOnly;
+  final String? assignedCrewId;
+  final List<String>? memberIds;
   final int crewMembersCount;
   final int activeTasksCount;
   final bool isAvailable;
   final MunicipalCrewStatus status;
   final double latitude;
   final double longitude;
+  final DateTime? updatedAt;
 
   const MunicipalCrewEntity({
     required this.id,
@@ -52,13 +65,33 @@ class MunicipalCrewEntity {
     required this.vehicleCode,
     required this.vehiclePlate,
     this.vehicleType = 'Camión Compactador',
+    this.vehicleId,
+    this.vehicleOnly = false,
+    this.assignedCrewId,
+    this.memberIds,
     this.crewMembersCount = 3,
     this.activeTasksCount = 0,
     this.isAvailable = true,
     this.status = MunicipalCrewStatus.available,
     this.latitude = AppGeoConstants.cajamarcaCenterLat,
     this.longitude = AppGeoConstants.cajamarcaCenterLng,
+    this.updatedAt,
   });
+
+  bool get canDispatchVehicle =>
+      isAvailable && status == MunicipalCrewStatus.available;
+
+  bool get hasLocation =>
+      latitude.isFinite &&
+      longitude.isFinite &&
+      latitude.abs() <= 90 &&
+      longitude.abs() <= 180 &&
+      (latitude != 0 || longitude != 0) &&
+      (latitude != AppGeoConstants.cajamarcaCenterLat ||
+          longitude != AppGeoConstants.cajamarcaCenterLng);
+
+  bool get canDispatch =>
+      !vehicleOnly && canDispatchVehicle && activeTasksCount == 0;
 
   MunicipalCrewEntity copyWith({
     String? id,
@@ -68,6 +101,8 @@ class MunicipalCrewEntity {
     String? vehicleCode,
     String? vehiclePlate,
     String? vehicleType,
+    String? vehicleId,
+    List<String>? memberIds,
     int? crewMembersCount,
     int? activeTasksCount,
     bool? isAvailable,
@@ -83,12 +118,17 @@ class MunicipalCrewEntity {
       vehicleCode: vehicleCode ?? this.vehicleCode,
       vehiclePlate: vehiclePlate ?? this.vehiclePlate,
       vehicleType: vehicleType ?? this.vehicleType,
+      vehicleId: vehicleId ?? this.vehicleId,
+      vehicleOnly: vehicleOnly,
+      assignedCrewId: assignedCrewId,
+      memberIds: memberIds ?? this.memberIds,
       crewMembersCount: crewMembersCount ?? this.crewMembersCount,
       activeTasksCount: activeTasksCount ?? this.activeTasksCount,
       isAvailable: isAvailable ?? this.isAvailable,
       status: status ?? this.status,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
+      updatedAt: updatedAt,
     );
   }
 
@@ -104,12 +144,17 @@ class MunicipalCrewEntity {
           vehicleCode == other.vehicleCode &&
           vehiclePlate == other.vehiclePlate &&
           vehicleType == other.vehicleType &&
+          vehicleId == other.vehicleId &&
+          vehicleOnly == other.vehicleOnly &&
+          assignedCrewId == other.assignedCrewId &&
+          listEquals(memberIds, other.memberIds) &&
           crewMembersCount == other.crewMembersCount &&
           activeTasksCount == other.activeTasksCount &&
           isAvailable == other.isAvailable &&
           status == other.status &&
           latitude == other.latitude &&
-          longitude == other.longitude;
+          longitude == other.longitude &&
+          updatedAt == other.updatedAt;
 
   @override
   int get hashCode =>
@@ -120,10 +165,15 @@ class MunicipalCrewEntity {
       vehicleCode.hashCode ^
       vehiclePlate.hashCode ^
       vehicleType.hashCode ^
+      vehicleId.hashCode ^
+      vehicleOnly.hashCode ^
+      assignedCrewId.hashCode ^
+      Object.hashAll(memberIds ?? const <String>[]) ^
       crewMembersCount.hashCode ^
       activeTasksCount.hashCode ^
       isAvailable.hashCode ^
       status.hashCode ^
       latitude.hashCode ^
-      longitude.hashCode;
+      longitude.hashCode ^
+      updatedAt.hashCode;
 }

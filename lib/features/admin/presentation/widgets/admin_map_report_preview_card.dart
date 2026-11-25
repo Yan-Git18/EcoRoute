@@ -152,7 +152,7 @@ class AdminMapReportPreviewCard extends StatelessWidget {
               ),
 
               // 3. Estado de Asignación si ya tiene cuadrilla
-              if (report.assignedToTeamName != null) ...[
+              if (report.assignedToTeamName != null || report.assignedStaffName != null) ...[
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -220,7 +220,7 @@ class AdminMapReportPreviewCard extends StatelessWidget {
                         color: Colors.white,
                       ),
                       label: Text(
-                        isPending ? 'Despachar' : 'Reasignar',
+                        isPending ? 'Asignar' : 'Reasignar',
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,

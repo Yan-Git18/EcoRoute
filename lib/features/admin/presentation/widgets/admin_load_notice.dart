@@ -23,8 +23,8 @@ class AdminLoadNotice extends StatelessWidget {
             : 'No se pudieron cargar los reportes.',
       if (state.crewsLoadFailed)
         state.hasLoadedCrews
-            ? 'No se pudieron actualizar las cuadrillas. Se muestran los datos de la última carga exitosa.'
-            : 'No se pudieron cargar las cuadrillas.',
+            ? 'No se pudieron actualizar los equipos. Se muestran los datos de la última carga exitosa.'
+            : 'No se pudieron cargar los equipos.',
       if (showReports && state.totalsLoadFailed)
         state.totals == null
             ? 'No se pudieron cargar los totales municipales.'

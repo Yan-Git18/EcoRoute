@@ -11,16 +11,19 @@ import '../viewmodels/admin_reports_viewmodel.dart';
 /// Ubicación: `lib/features/admin/presentation/widgets/admin_bottom_nav_bar.dart`
 /// Capa: Presentation (Widgets Admin)
 class AdminBottomNavBar extends ConsumerWidget {
+  static const _routes = [
+    RouteNames.adminDashboard,
+    RouteNames.adminReports,
+    RouteNames.adminLiveMap,
+    RouteNames.adminTeams,
+  ];
+
   /// Índice del tab activo actual:
-  /// 0: Inicio / Dashboard, 1: Reportes, 2: Mapa, 3: Cuadrillas
-  final int currentIndex;
+  /// 0: Inicio, 1: Reportes, 2: Mapa, 3: Equipo, null: fuera del menú.
+  final int? currentIndex;
   final ValueChanged<int>? onTabSelected;
 
-  const AdminBottomNavBar({
-    super.key,
-    required this.currentIndex,
-    this.onTabSelected,
-  });
+  const AdminBottomNavBar({super.key, this.currentIndex, this.onTabSelected});
 
   void _handleTap(BuildContext context, int index) {
     if (onTabSelected != null) {
@@ -28,34 +31,18 @@ class AdminBottomNavBar extends ConsumerWidget {
       return;
     }
 
-    if (index == currentIndex) return;
-
-    switch (index) {
-      case 0:
-        if (context.canPop()) {
-          context.pop();
-        } else {
-          context.go(RouteNames.adminDashboard);
-        }
-        break;
-      case 1:
-        context.push(RouteNames.adminReports);
-        break;
-      case 2:
-        context.push(RouteNames.adminLiveMap);
-        break;
-      case 3:
-        context.push(RouteNames.adminTeams);
-        break;
+    if (index != currentIndex) {
+      context.go(_routes[index]);
     }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final pendingCount = ref.watch(adminReportsViewModelProvider).totals?.pending ?? 0;
+    final pendingCount =
+        ref.watch(adminReportsViewModelProvider).totals?.pending ?? 0;
 
     return EcoBottomNavBar(
-      currentIndex: currentIndex,
+      currentIndex: currentIndex ?? -1,
       items: [
         EcoBottomNavItem(
           label: 'Inicio',
@@ -77,7 +64,7 @@ class AdminBottomNavBar extends ConsumerWidget {
           onTap: () => _handleTap(context, 2),
         ),
         EcoBottomNavItem(
-          label: 'Cuadrillas',
+          label: 'Equipo',
           activeIcon: Icons.groups_rounded,
           inactiveIcon: Icons.groups_outlined,
           onTap: () => _handleTap(context, 3),

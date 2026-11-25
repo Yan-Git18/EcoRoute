@@ -79,7 +79,9 @@ void main() {
       expect(dto.id, 'fallback-id');
       expect(dto.name, 'Cuadrilla Municipal');
       expect(dto.zone, 'Sector General');
-      expect(dto.crewMembersCount, 3);
+      expect(dto.crewMembersCount, 0);
+      expect(dto.vehiclePlate, isEmpty);
+      expect(dto.toDomain().hasLocation, isFalse);
       expect(dto.activeTasksCount, 0);
       expect(dto.isAvailable, true);
       expect(dto.status, 'available');

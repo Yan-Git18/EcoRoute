@@ -15,6 +15,10 @@ class MunicipalCrewDto {
   final String vehicleCode;
   final String vehiclePlate;
   final String vehicleType;
+  final String? vehicleId;
+  final bool vehicleOnly;
+  final String? assignedCrewId;
+  final List<String>? memberIds;
   final int crewMembersCount;
   final int activeTasksCount;
   final bool isAvailable;
@@ -32,6 +36,10 @@ class MunicipalCrewDto {
     required this.vehicleCode,
     required this.vehiclePlate,
     this.vehicleType = 'Camión Compactador',
+    this.vehicleId,
+    this.vehicleOnly = false,
+    this.assignedCrewId,
+    this.memberIds,
     this.crewMembersCount = 3,
     this.activeTasksCount = 0,
     this.isAvailable = true,
@@ -50,24 +58,44 @@ class MunicipalCrewDto {
       return null;
     }
 
-    final locationMap = map['location'] as Map<String, dynamic>?;
+    final location = map['location'];
+    final (latitude, longitude) = switch (location) {
+      GeoPoint() => (location.latitude, location.longitude),
+      Map() => (location['latitude'], location['longitude']),
+      _ => (map['latitude'], map['longitude']),
+    };
+    final hasPair = latitude is num && longitude is num;
+    final members = (map['memberIds'] as List?)?.whereType<String>().toList();
 
     return MunicipalCrewDto(
       id: docId,
       name: map['name'] as String? ?? 'Cuadrilla Municipal',
       zone: map['zone'] as String? ?? 'Sector General',
       leadStaffName: map['leadStaffName'] as String? ?? 'Personal Encargado',
-      vehicleCode: map['vehicleCode'] as String? ?? 'Unidad #01',
-      vehiclePlate: map['vehiclePlate'] as String? ?? 'ECR-000',
-      vehicleType: map['vehicleType'] as String? ?? 'Camión Compactador',
-      crewMembersCount: (map['crewMembersCount'] as num?)?.toInt() ?? 3,
-      activeTasksCount: (map['activeTasksCount'] as num?)?.toInt() ?? 0,
+      vehicleCode: map['vehicleCode'] as String? ?? '',
+      vehiclePlate: map['vehiclePlate'] as String? ?? '',
+      vehicleType: map['vehicleType'] as String? ?? '',
+      vehicleId: map['vehicleId'] as String?,
+      vehicleOnly: map['vehicleOnly'] == true,
+      assignedCrewId: map['assignedCrewId'] as String?,
+      memberIds: members,
+      crewMembersCount:
+          members?.length ??
+          (map['memberCount'] as num? ?? map['crewMembersCount'] as num?)
+              ?.toInt() ??
+          0,
+      activeTasksCount:
+          (map['openReportCount'] as num? ?? map['activeTasksCount'] as num?)
+              ?.toInt() ??
+          0,
       isAvailable: map['isAvailable'] as bool? ?? true,
       status: map['status'] as String? ?? 'available',
-      latitude: (locationMap != null ? locationMap['latitude'] as num? : map['latitude'] as num?)?.toDouble() ??
-          AppGeoConstants.cajamarcaCenterLat,
-      longitude: (locationMap != null ? locationMap['longitude'] as num? : map['longitude'] as num?)?.toDouble() ??
-          AppGeoConstants.cajamarcaCenterLng,
+      latitude: hasPair
+          ? latitude.toDouble()
+          : AppGeoConstants.cajamarcaCenterLat,
+      longitude: hasPair
+          ? longitude.toDouble()
+          : AppGeoConstants.cajamarcaCenterLng,
       createdAt: parseDate(map['createdAt']),
       updatedAt: parseDate(map['updatedAt']),
     );
@@ -83,17 +111,20 @@ class MunicipalCrewDto {
       'vehicleCode': vehicleCode,
       'vehiclePlate': vehiclePlate,
       'vehicleType': vehicleType,
+      if (vehicleId != null) 'vehicleId': vehicleId,
+      if (vehicleOnly) 'vehicleOnly': true,
+      if (assignedCrewId != null) 'assignedCrewId': assignedCrewId,
+      if (memberIds != null) 'memberIds': memberIds,
       'crewMembersCount': crewMembersCount,
       'activeTasksCount': activeTasksCount,
       'isAvailable': isAvailable,
       'status': status,
       'latitude': latitude,
       'longitude': longitude,
-      'location': {
-        'latitude': latitude,
-        'longitude': longitude,
-      },
-      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+      'location': {'latitude': latitude, 'longitude': longitude},
+      'createdAt': createdAt != null
+          ? Timestamp.fromDate(createdAt!)
+          : FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
   }
@@ -108,17 +139,26 @@ class MunicipalCrewDto {
       vehicleCode: vehicleCode,
       vehiclePlate: vehiclePlate,
       vehicleType: vehicleType,
+      vehicleId: vehicleId,
+      vehicleOnly: vehicleOnly,
+      assignedCrewId: assignedCrewId,
+      memberIds: memberIds,
       crewMembersCount: crewMembersCount,
       activeTasksCount: activeTasksCount,
       isAvailable: isAvailable,
       status: MunicipalCrewStatus.fromString(status),
       latitude: latitude,
       longitude: longitude,
+      updatedAt: updatedAt,
     );
   }
 
   /// Construye un DTO a partir de la entidad del dominio.
-  factory MunicipalCrewDto.fromDomain(MunicipalCrewEntity entity, {DateTime? createdAt, DateTime? updatedAt}) {
+  factory MunicipalCrewDto.fromDomain(
+    MunicipalCrewEntity entity, {
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
     return MunicipalCrewDto(
       id: entity.id,
       name: entity.name,
@@ -127,6 +167,10 @@ class MunicipalCrewDto {
       vehicleCode: entity.vehicleCode,
       vehiclePlate: entity.vehiclePlate,
       vehicleType: entity.vehicleType,
+      vehicleId: entity.vehicleId,
+      vehicleOnly: entity.vehicleOnly,
+      assignedCrewId: entity.assignedCrewId,
+      memberIds: entity.memberIds,
       crewMembersCount: entity.crewMembersCount,
       activeTasksCount: entity.activeTasksCount,
       isAvailable: entity.isAvailable,
@@ -138,4 +182,3 @@ class MunicipalCrewDto {
     );
   }
 }
-

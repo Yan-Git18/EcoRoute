@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/utils/result.dart';
@@ -54,14 +56,26 @@ class AdminRepositoryImpl implements AdminRepository {
   }
 
   @override
+  Future<Result<List<ReportEntity>>> getCrewActiveReports(String crewId) async {
+    try {
+      final reports = await _remoteDataSource.getCrewActiveReports(crewId);
+      return Success(reports.map((report) => report.toDomain()).toList());
+    } catch (_) {
+      return const FailureResult(ServerFailure(message: 'No se pudieron consultar los reportes del equipo.'));
+    }
+  }
+
+  @override
   Future<Result<MunicipalCrewEntity>> createCrew(MunicipalCrewEntity crew) async {
     try {
       final dto = await _remoteDataSource.createCrew(crew);
       return Success(dto.toDomain());
     } on ServerException catch (e) {
       return FailureResult(ServerFailure(message: e.message, code: e.code));
-    } catch (e) {
-      return FailureResult(ServerFailure(message: 'Error al registrar cuadrilla: $e'));
+    } on FirebaseException catch (e) {
+      return _crewWriteFailure(e);
+    } catch (_) {
+      return const FailureResult(ServerFailure(message: 'No se pudo crear el equipo.'));
     }
   }
 
@@ -72,8 +86,10 @@ class AdminRepositoryImpl implements AdminRepository {
       return Success(crew);
     } on ServerException catch (e) {
       return FailureResult(ServerFailure(message: e.message, code: e.code));
-    } catch (e) {
-      return FailureResult(ServerFailure(message: 'Error al actualizar cuadrilla: $e'));
+    } on FirebaseException catch (e) {
+      return _crewWriteFailure(e);
+    } catch (_) {
+      return const FailureResult(ServerFailure(message: 'No se pudieron guardar los cambios del equipo.'));
     }
   }
 
@@ -84,8 +100,55 @@ class AdminRepositoryImpl implements AdminRepository {
       return const Success(null);
     } on ServerException catch (e) {
       return FailureResult(ServerFailure(message: e.message, code: e.code));
-    } catch (e) {
-      return FailureResult(ServerFailure(message: 'Error al eliminar cuadrilla: $e'));
+    } on FirebaseException catch (e) {
+      return _crewWriteFailure(e);
+    } catch (_) {
+      return const FailureResult(ServerFailure(message: 'No se pudo eliminar el equipo.'));
+    }
+  }
+
+  FailureResult<T> _crewWriteFailure<T>(FirebaseException error) {
+    final message = switch (error.code) {
+      'permission-denied' => 'Firestore rechazó el cambio. Verifica los permisos de administración del equipo.',
+      'unavailable' || 'deadline-exceeded' => 'El servicio no está disponible. Intenta guardar de nuevo.',
+      'aborted' => 'Los datos del equipo cambiaron. Actualiza la lista e inténtalo de nuevo.',
+      _ => 'No se pudo completar el cambio del equipo.',
+    };
+    return FailureResult(ServerFailure(message: message, code: error.code));
+  }
+
+  @override
+  Future<Result<Set<String>>> getBusyStaffIds() async {
+    try {
+      return Success(await _remoteDataSource.getBusyStaffIds());
+    } catch (_) {
+      return const FailureResult(ServerFailure(message: 'No se pudo consultar la disponibilidad del personal.'));
+    }
+  }
+
+  @override
+  Future<Result<ReportEntity>> assignReportToStaff({
+    required String reportId,
+    required List<String> staffIds,
+    required String adminId,
+    required String adminName,
+    ReportPriority? priority,
+    String? instructions,
+  }) async {
+    try {
+      final saved = await _remoteDataSource.assignReportToStaff(
+        reportId: reportId,
+        staffIds: staffIds,
+        adminId: adminId,
+        adminName: adminName,
+        priority: priority,
+        instructions: instructions,
+      );
+      return Success(saved.toDomain());
+    } on ServerException catch (error) {
+      return FailureResult(ServerFailure(message: error.message, code: error.code));
+    } catch (_) {
+      return const FailureResult(ServerFailure(message: 'No se pudo asignar el personal al reporte.'));
     }
   }
 
@@ -154,15 +217,15 @@ class AdminRepositoryImpl implements AdminRepository {
   Future<Result<void>> updateUserRole({
     required String userId,
     required UserRole newRole,
-    String? teamId,
   }) async {
     try {
       await _remoteDataSource.updateUserRole(
         userId: userId,
         newRole: newRole,
-        teamId: teamId,
       );
       return const Success(null);
+    } on ServerException catch (e) {
+      return FailureResult(ServerFailure(message: e.message, code: e.code));
     } catch (e) {
       return FailureResult(ServerFailure(message: 'Error al actualizar rol: $e'));
     }

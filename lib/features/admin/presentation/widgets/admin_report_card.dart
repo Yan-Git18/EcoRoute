@@ -1,17 +1,11 @@
 import 'package:flutter/material.dart';
+
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../../citizen/presentation/widgets/report_community_summary_label.dart';
 
-/// Tarjeta de gestión administrativa de reporte.
-///
-/// Ubicación: `lib/features/admin/presentation/widgets/admin_report_card.dart`
-/// Capa: Presentation (Widgets Admin)
 class AdminReportCard extends StatelessWidget {
-  final ReportEntity report;
-  final VoidCallback? onAssign;
-  final VoidCallback onViewDetail;
-
   const AdminReportCard({
     super.key,
     required this.report,
@@ -19,300 +13,175 @@ class AdminReportCard extends StatelessWidget {
     required this.onViewDetail,
   });
 
+  final ReportEntity report;
+  final VoidCallback? onAssign;
+  final VoidCallback onViewDetail;
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final metadataStyle = theme.textTheme.bodySmall?.copyWith(
+      color: AppColors.textSecondary,
+    );
     final isPending = report.status == ReportStatus.pending;
-    final isResolved = report.status == ReportStatus.resolved;
+    final teamName = report.assignedToTeamName ?? report.assignedStaffName;
+    final vehicle = report.assignedVehicle;
+    final citizenPhone = report.citizenPhone;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isPending && report.priority == ReportPriority.high
-              ? const Color(0xFFFCA5A5)
-              : const Color(0xFFE2E8F0),
-          width: isPending && report.priority == ReportPriority.high ? 1.5 : 1,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x06000000),
-            blurRadius: 8,
-            offset: Offset(0, 3),
-          ),
-        ],
+    return Card(
+      margin: EdgeInsets.zero,
+      color: AppColors.surface,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 1. Cabecera con Folio, Prioridad, Estado y Tiempo
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        report.reportNumber,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF0F172A),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _PriorityBadge(priority: report.priority),
-                  ],
-                ),
-                Row(
-                  children: [
-                    _StatusBadge(status: report.status),
-                    const SizedBox(width: 8),
-                    Text(
-                      DateFormatter.formatTimeAgo(report.createdAt),
-                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: Color(0xFFF1F5F9)),
-
-          // 2. Información del residuo, dirección y ciudadano
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
-                  report.categoryName,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F172A),
+                  report.reportNumber,
+                  style: metadataStyle?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                Text(
+                  DateFormatter.formatTimeAgo(report.createdAt),
+                  style: metadataStyle,
+                ),
+                _ReportStatusLabel(status: report.status),
+                Text(
+                  'Prioridad ${report.priority.label.toLowerCase()}',
+                  style: metadataStyle?.copyWith(
+                    color: report.priority == ReportPriority.high
+                        ? const Color(0xFFB91C1C)
+                        : AppColors.textSecondary,
+                    fontWeight: report.priority == ReportPriority.high
+                        ? FontWeight.w700
+                        : FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(Icons.location_on_rounded, size: 15, color: Color(0xFF64748B)),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        report.address,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(Icons.person_outline_rounded, size: 15, color: Color(0xFF94A3B8)),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        'Reportado por: ${report.citizenName}${report.citizenPhone != null ? ' (${report.citizenPhone})' : ''}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 11.5, color: Color(0xFF475569)),
-                      ),
-                    ),
-                  ],
-                ),
-
-                ReportCommunitySummaryLabel(reportId: report.id),
-
-                // Asignación de cuadrilla (si ya está asignada)
-                if (report.assignedToTeamName != null) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFECFDF5),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFA7F3D0)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.local_shipping_rounded, size: 16, color: Color(0xFF047857)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            '${report.assignedToTeamName} • ${report.assignedVehicle ?? ''}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF065F46),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
               ],
             ),
-          ),
-
-          // 3. Botones de acción administrativa
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: isPending
-                      ? ElevatedButton.icon(
-                          onPressed: onAssign,
-                          icon: const Icon(Icons.assignment_ind_rounded, size: 17),
-                          label: const Text('Despachar Personal'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0A5835),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        )
-                      : OutlinedButton.icon(
-                          onPressed: isResolved ? null : onAssign,
-                          icon: const Icon(Icons.swap_horiz_rounded, size: 17),
-                          label: Text(isResolved ? 'Incidencia Resuelta' : 'Reasignar Personal'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: isResolved ? const Color(0xFF10B981) : const Color(0xFF0A5835),
-                            side: BorderSide(
-                              color: isResolved ? const Color(0xFF10B981) : const Color(0xFF0A5835),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
+            const SizedBox(height: 8),
+            Text(
+              report.categoryName,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              report.address,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Reportado por ${report.citizenName}'
+              '${citizenPhone == null || citizenPhone.isEmpty ? '' : ' · $citizenPhone'}',
+              style: metadataStyle,
+            ),
+            if (teamName != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  vehicle == null || vehicle.isEmpty
+                      ? teamName
+                      : '$teamName · $vehicle',
+                  style: metadataStyle?.copyWith(fontWeight: FontWeight.w600),
                 ),
-                const SizedBox(width: 10),
+              ),
+            ReportCommunitySummaryLabel(reportId: report.id),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                if (!isPending && report.status != ReportStatus.assigned)
+                  const Spacer()
+                else
+                  Flexible(
+                    child: isPending
+                        ? ElevatedButton(
+                            onPressed: onAssign,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primaryDark,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                            ),
+                            child: const Text('Asignar Personal'),
+                          )
+                        : TextButton(
+                            onPressed: onAssign,
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppColors.primaryDark,
+                            ),
+                            child: const Text('Reasignar Personal'),
+                          ),
+                  ),
                 IconButton(
                   tooltip: 'Ver detalle completo',
-                  icon: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFF64748B)),
+                  color: AppColors.textSecondary,
+                  icon: const Icon(Icons.chevron_right_rounded),
                   onPressed: onViewDetail,
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PriorityBadge extends StatelessWidget {
-  final ReportPriority priority;
-  const _PriorityBadge({required this.priority});
-
-  @override
-  Widget build(BuildContext context) {
-    Color bg;
-    Color fg;
-    String label;
-
-    switch (priority) {
-      case ReportPriority.high:
-        bg = const Color(0xFFFEE2E2);
-        fg = const Color(0xFFDC2626);
-        label = 'Alta';
-        break;
-      case ReportPriority.medium:
-        bg = const Color(0xFFFEF3C7);
-        fg = const Color(0xFFD97706);
-        label = 'Media';
-        break;
-      case ReportPriority.low:
-        bg = const Color(0xFFDCFCE7);
-        fg = const Color(0xFF16A34A);
-        label = 'Baja';
-        break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 10.5,
-          fontWeight: FontWeight.w800,
-          color: fg,
+          ],
         ),
       ),
     );
   }
 }
 
-class _StatusBadge extends StatelessWidget {
+class _ReportStatusLabel extends StatelessWidget {
+  const _ReportStatusLabel({required this.status});
+
   final ReportStatus status;
-  const _StatusBadge({required this.status});
 
   @override
   Widget build(BuildContext context) {
-    Color bg;
-    Color fg;
-    String label;
-
-    switch (status) {
-      case ReportStatus.pending:
-        bg = const Color(0xFFFEF3C7);
-        fg = const Color(0xFFD97706);
-        label = 'Pendiente';
-        break;
-      case ReportStatus.assigned:
-        bg = const Color(0xFFEDE9FE);
-        fg = const Color(0xFF6D28D9);
-        label = 'Asignado';
-        break;
-      case ReportStatus.inProgress:
-        bg = const Color(0xFFDBEAFE);
-        fg = const Color(0xFF2563EB);
-        label = 'En proceso';
-        break;
-      case ReportStatus.resolved:
-        bg = const Color(0xFFDCFCE7);
-        fg = const Color(0xFF047857);
-        label = 'Resuelto';
-        break;
-      case ReportStatus.cancelled:
-        bg = const Color(0xFFF1F5F9);
-        fg = const Color(0xFF64748B);
-        label = 'Cancelado';
-        break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(8),
+    final (background, foreground) = switch (status) {
+      ReportStatus.pending => (
+        const Color(0xFFFEF3C7),
+        const Color(0xFF92400E),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: fg,
+      ReportStatus.assigned => (
+        status.backgroundColor,
+        const Color(0xFF5B21B6),
+      ),
+      ReportStatus.inProgress => (
+        status.backgroundColor,
+        const Color(0xFF1E40AF),
+      ),
+      ReportStatus.resolved => (status.backgroundColor, AppColors.primaryDark),
+      ReportStatus.cancelled => (AppColors.divider, AppColors.textSecondary),
+    };
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        child: Text(
+          status == ReportStatus.pending ? status.label : status.displayLabel,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: foreground,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     );

@@ -12,6 +12,7 @@ import '../../../citizen/domain/entities/report_entity.dart';
 import '../../domain/entities/municipal_crew_entity.dart';
 import '../viewmodels/admin_reports_viewmodel.dart';
 import '../widgets/admin_assign_crew_modal.dart';
+import '../widgets/admin_back_button.dart';
 import '../widgets/admin_bottom_nav_bar.dart';
 import '../widgets/admin_load_notice.dart';
 import '../widgets/admin_map_crew_preview_card.dart';
@@ -37,7 +38,9 @@ enum AdminMapFilter {
 /// Ubicación: `lib/features/admin/presentation/views/admin_live_map_screen.dart`
 /// Capa: Presentation (Administrador)
 class AdminLiveMapScreen extends ConsumerStatefulWidget {
-  const AdminLiveMapScreen({super.key});
+  const AdminLiveMapScreen({super.key, this.initialCrewId});
+
+  final String? initialCrewId;
 
   @override
   ConsumerState<AdminLiveMapScreen> createState() => _AdminLiveMapScreenState();
@@ -50,6 +53,13 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
   String? _selectedReportId;
   String? _selectedCrewId;
   bool _showLegend = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCrewId = widget.initialCrewId;
+    if (_selectedCrewId != null) _activeFilter = AdminMapFilter.crews;
+  }
 
   // Centro urbano de referencia (Cajamarca / Municipalidad)
   static const double _cityCenterLat = AppGeoConstants.cajamarcaCenterLat;
@@ -88,7 +98,7 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
     if (_activeFilter == AdminMapFilter.urgent || _activeFilter == AdminMapFilter.pending) {
       return [];
     }
-    return allCrews;
+    return allCrews.where((crew) => crew.hasLocation).toList();
   }
 
   @override
@@ -102,11 +112,12 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
     final viewModel = ref.read(adminReportsViewModelProvider.notifier);
 
     final reports = adminReportsState.reports;
-    final crews = adminReportsState.crews;
+    final crews = adminReportsState.teams;
     final hasReports = adminReportsState.hasLoadedReports;
     final hasCrews = adminReportsState.hasLoadedCrews;
     final selectedReport = reports.where((report) => report.id == _selectedReportId).firstOrNull;
-    final selectedCrew = crews.where((crew) => crew.id == _selectedCrewId).firstOrNull;
+    final selectedCrew = crews.where((crew) => crew.id == _selectedCrewId && crew.hasLocation).firstOrNull;
+    final initialCrew = crews.where((crew) => crew.id == widget.initialCrewId && crew.hasLocation).firstOrNull;
 
     final visibleReports = _getFilteredReports(reports);
     final visibleCrews = _getFilteredCrews(crews);
@@ -120,16 +131,7 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go(RouteNames.adminDashboard);
-            }
-          },
-        ),
+        leading: const AdminBackButton(),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -197,7 +199,7 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
                   Positioned.fill(
                     child: _isFlutterTest
                         ? _buildTestVectorMap(visibleReports, visibleCrews)
-                        : _buildOpenStreetMap(visibleReports, visibleCrews),
+                        : _buildOpenStreetMap(visibleReports, visibleCrews, initialCrew),
                   ),
 
                   // 2. Barra Flotante de Filtros Rápidos (Chips)
@@ -300,15 +302,11 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
                       child: AdminMapReportPreviewCard(
                         report: selectedReport,
                         onClose: () => setState(() => _selectedReportId = null),
-                        onAssignCrew: hasCrews
-                            ? () {
-                                _openAssignModal(
-                                  report: selectedReport,
-                                  adminId: adminId,
-                                  adminName: adminName,
-                                );
-                              }
-                            : null,
+                        onAssignCrew: () => _openAssignModal(
+                          report: selectedReport,
+                          adminId: adminId,
+                          adminName: adminName,
+                        ),
                       ),
                     ),
 
@@ -336,12 +334,14 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
   }
 
   // --- Construcción de Mapa Real OpenStreetMap ---
-  Widget _buildOpenStreetMap(List<ReportEntity> reports, List<MunicipalCrewEntity> crews) {
+  Widget _buildOpenStreetMap(List<ReportEntity> reports, List<MunicipalCrewEntity> crews, MunicipalCrewEntity? initialCrew) {
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
-        initialCenter: const LatLng(_cityCenterLat, _cityCenterLng),
-        initialZoom: 14.2,
+        initialCenter: initialCrew == null
+            ? const LatLng(_cityCenterLat, _cityCenterLng)
+            : LatLng(initialCrew.latitude, initialCrew.longitude),
+        initialZoom: initialCrew == null ? 14.2 : 15.5,
         minZoom: 3.0,
         maxZoom: 19.0,
         interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
@@ -579,35 +579,17 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
     required String adminId,
     required String adminName,
   }) {
-    final adminState = ref.read(adminReportsViewModelProvider);
-    final viewModel = ref.read(adminReportsViewModelProvider.notifier);
-
     AdminAssignCrewModal.show(
       context: context,
       report: report,
-      crews: adminState.crews,
-      onConfirm: ({required crew, required priority, instructions}) async {
-        final success = await viewModel.assignReport(
-          reportId: report.id,
-          crew: crew,
-          adminId: adminId,
-          adminName: adminName,
-          priority: priority,
-          instructions: instructions,
-        );
-
-        if (success && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${report.reportNumber} despachado a ${crew.name}.'),
-              backgroundColor: const Color(0xFF047857),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-        return success;
-      },
-    );
+      adminId: adminId,
+      adminName: adminName,
+    ).then((success) {
+      if (success != true || !mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${report.reportNumber} asignado correctamente.')),
+      );
+    });
   }
 }
 

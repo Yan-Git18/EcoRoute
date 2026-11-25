@@ -1,23 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../../core/router/route_names.dart';
 import '../../domain/entities/municipal_crew_entity.dart';
-import '../viewmodels/admin_reports_state.dart';
 import '../viewmodels/admin_reports_viewmodel.dart';
+import '../widgets/admin_back_button.dart';
 import '../widgets/admin_bottom_nav_bar.dart';
-import '../widgets/admin_load_notice.dart';
 import '../widgets/admin_crew_card.dart';
-import '../widgets/admin_crew_create_modal.dart';
-import '../widgets/admin_crew_edit_modal.dart';
+import 'admin_crew_editor_screen.dart';
+import '../widgets/admin_load_notice.dart';
+import 'admin_crew_detail_screen.dart';
 
-/// Pantalla de Gestión de Cuadrillas y Flota Municipal (Admin Fase 3).
-///
-/// Permite al Administrador supervisar el estado operativo de los camiones de recolección,
-/// dotaciones de personal, reasignar zonas de cobertura y despachar unidades.
-///
-/// Ubicación: `lib/features/admin/presentation/views/admin_crews_screen.dart`
-/// Capa: Presentation (Administrador)
 class AdminCrewsScreen extends ConsumerStatefulWidget {
   const AdminCrewsScreen({super.key});
 
@@ -26,524 +20,165 @@ class AdminCrewsScreen extends ConsumerStatefulWidget {
 }
 
 class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
-  final TextEditingController _searchController = TextEditingController();
-  String _selectedFilter = 'all'; // 'all', 'onRoute', 'available', 'maintenance'
+  final _search = TextEditingController();
+  MunicipalCrewStatus? _status;
 
   @override
   void dispose() {
-    _searchController.dispose();
+    _search.dispose();
     super.dispose();
-  }
-
-  List<MunicipalCrewEntity> _filterCrews(List<MunicipalCrewEntity> crews) {
-    final query = _searchController.text.trim().toLowerCase();
-
-    return crews.where((crew) {
-      // 1. Filtro por estado
-      if (_selectedFilter == 'onRoute' && crew.status != MunicipalCrewStatus.onRoute) {
-        return false;
-      }
-      if (_selectedFilter == 'available' && crew.status != MunicipalCrewStatus.available) {
-        return false;
-      }
-      if (_selectedFilter == 'maintenance' && crew.status != MunicipalCrewStatus.maintenance) {
-        return false;
-      }
-
-      // 2. Filtro por texto de búsqueda
-      if (query.isNotEmpty) {
-        final matchesName = crew.name.toLowerCase().contains(query);
-        final matchesPlate = crew.vehiclePlate.toLowerCase().contains(query);
-        final matchesCode = crew.vehicleCode.toLowerCase().contains(query);
-        final matchesLeader = crew.leadStaffName.toLowerCase().contains(query);
-        final matchesZone = crew.zone.toLowerCase().contains(query);
-        return matchesName || matchesPlate || matchesCode || matchesLeader || matchesZone;
-      }
-
-      return true;
-    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final adminReportsState = ref.watch(adminReportsViewModelProvider);
+    final state = ref.watch(adminReportsViewModelProvider);
     final viewModel = ref.read(adminReportsViewModelProvider.notifier);
-
-    final crews = adminReportsState.crews;
-    final filteredCrews = _filterCrews(crews);
-
-    final onRouteCount = crews.where((c) => c.status == MunicipalCrewStatus.onRoute).length;
-    final availableCount = crews.where((c) => c.status == MunicipalCrewStatus.available).length;
-    final maintenanceCount = crews.where((c) => c.status == MunicipalCrewStatus.maintenance).length;
+    final staff = ref.watch(adminTeamStaffProvider);
+    final query = _search.text.trim().toLowerCase();
+    final filteredCrews = state.teams.where((crew) {
+      return (_status == null || _status == crew.status) &&
+          [
+            crew.name,
+            crew.vehicleCode,
+            crew.vehiclePlate,
+            crew.zone,
+            crew.leadStaffName,
+          ].any((field) => field.toLowerCase().contains(query));
+    }).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go(RouteNames.adminDashboard);
-            }
-          },
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Cuadrillas Operativas',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF0F172A),
-                letterSpacing: -0.3,
-              ),
-            ),
-            if (adminReportsState.hasLoadedCrews)
-              Text(
-                '${crews.length} equipos registrados • $onRouteCount en servicio',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF047857),
-                ),
-              ),
-          ],
-        ),
+        leading: const AdminBackButton(),
+        title: const Text('Equipos'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_business_rounded, color: Color(0xFF0A5835)),
-            tooltip: 'Registrar Cuadrilla',
-            onPressed: () => _openCreateCrewModal(context, viewModel, adminReportsState),
-          ),
-          IconButton(
-            icon: const Icon(Icons.local_shipping_outlined, color: Color(0xFF0A5835)),
+            icon: const Icon(Icons.local_shipping_outlined),
             tooltip: 'Flota Vehicular',
             onPressed: () => context.push(RouteNames.adminFleet),
           ),
           IconButton(
-            icon: const Icon(Icons.badge_outlined, color: Color(0xFF0A5835)),
+            icon: const Icon(Icons.badge_outlined),
             tooltip: 'Gestión de Personal',
             onPressed: () => context.push(RouteNames.adminStaff),
           ),
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: Color(0xFF475569)),
-            tooltip: 'Actualizar cuadrillas',
-            onPressed: adminReportsState.isLoading ? null : viewModel.refresh,
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Actualizar equipos',
+            onPressed: state.isLoading
+                ? null
+                : () {
+                    ref.invalidate(adminTeamStaffProvider);
+                    viewModel.refresh();
+                  },
           ),
-          const SizedBox(width: 4),
         ],
       ),
       body: Column(
         children: [
-          AdminLoadNotice(state: adminReportsState, onRetry: viewModel.refresh, showReports: false),
-          // 1. Resumen de Métricas de Cuadrillas y Buscador
-          if (adminReportsState.hasLoadedCrews)
-            Container(
+          AdminLoadNotice(
+            state: state,
+            onRetry: viewModel.refresh,
+            showReports: false,
+          ),
+          if (state.hasLoadedCrews) ...[
+            ColoredBox(
               color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-              child: Column(
-                children: [
-                  // Fila de Métricas Rápidas
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _FleetStatPill(
-                          label: 'Total Equipos',
-                          count: '${crews.length}',
-                          color: const Color(0xFF0A5835),
-                          icon: Icons.groups_rounded,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _FleetStatPill(
-                          label: 'En Ruta',
-                          count: '$onRouteCount',
-                          color: const Color(0xFF2563EB),
-                          icon: Icons.navigation_rounded,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _FleetStatPill(
-                          label: 'Disponibles',
-                          count: '$availableCount',
-                          color: const Color(0xFF059669),
-                          icon: Icons.check_circle_outline_rounded,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _FleetStatPill(
-                          label: 'Incidencias',
-                          count: '${crews.fold(0, (acc, c) => acc + c.activeTasksCount)}',
-                          color: const Color(0xFFD97706),
-                          icon: Icons.assignment_turned_in_rounded,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Buscador
-                  TextField(
-                    controller: _searchController,
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      hintText: 'Buscar por cuadrilla, zona, responsable o unidad...',
-                      hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-                      prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF64748B)),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear_rounded, size: 18),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() {});
-                              },
-                            )
-                          : null,
-                      filled: true,
-                      fillColor: const Color(0xFFF1F5F9),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: _search,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        hintText: 'Buscar equipos',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _search.text.isEmpty
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.clear),
+                                tooltip: 'Limpiar búsqueda',
+                                onPressed: () => setState(_search.clear),
+                              ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Chips de Filtro
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    physics: const BouncingScrollPhysics(),
-                    child: Row(
-                      children: [
-                        _FilterChipItem(
-                          label: 'Todas',
-                          count: crews.length,
-                          isSelected: _selectedFilter == 'all',
-                          onTap: () => setState(() => _selectedFilter = 'all'),
-                        ),
-                        const SizedBox(width: 8),
-                        _FilterChipItem(
-                          label: 'En Ruta',
-                          count: onRouteCount,
-                          color: const Color(0xFF2563EB),
-                          isSelected: _selectedFilter == 'onRoute',
-                          onTap: () => setState(() => _selectedFilter = 'onRoute'),
-                        ),
-                        const SizedBox(width: 8),
-                        _FilterChipItem(
-                          label: 'Disponibles',
-                          count: availableCount,
-                          color: const Color(0xFF059669),
-                          isSelected: _selectedFilter == 'available',
-                          onTap: () => setState(() => _selectedFilter = 'available'),
-                        ),
-                        const SizedBox(width: 8),
-                        _FilterChipItem(
-                          label: 'En Mantenimiento',
-                          count: maintenanceCount,
-                          color: const Color(0xFFDC2626),
-                          isSelected: _selectedFilter == 'maintenance',
-                          onTap: () => setState(() => _selectedFilter = 'maintenance'),
-                        ),
-                      ],
+                    const SizedBox(height: 8),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (final status in [
+                            null,
+                            ...MunicipalCrewStatus.values,
+                          ])
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ChoiceChip(
+                                label: Text(status?.label ?? 'Todos'),
+                                selected: _status == status,
+                                onSelected: (_) =>
+                                    setState(() => _status = status),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          const Divider(height: 1, color: Color(0xFFE2E8F0)),
-
-          // 2. Lista de Personal
-          if (adminReportsState.hasLoadedCrews)
+            const Divider(height: 1),
+            if (staff.hasError)
+              TextButton.icon(
+                onPressed: () => ref.invalidate(adminTeamStaffProvider),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Volver a cargar integrantes'),
+              ),
             Expanded(
               child: filteredCrews.isEmpty
                   ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0A5835).withAlpha(15),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.groups_outlined,
-                                size: 48,
-                                color: Color(0xFF0A5835),
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-                            const Text(
-                              'No se encontraron cuadrillas',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF0F172A),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            const Text(
-                              'Intenta con otro término de búsqueda o registra una nueva cuadrilla.',
-                              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
+                      child: Text(
+                        state.teams.isEmpty
+                            ? 'Aún no hay equipos registrados.'
+                            : 'No se encontraron equipos.',
                       ),
                     )
                   : ListView.separated(
-                      padding: const EdgeInsets.all(16),
-                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
                       itemCount: filteredCrews.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 14),
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
                       itemBuilder: (context, index) {
                         final crew = filteredCrews[index];
                         return AdminCrewCard(
                           crew: crew,
-                          onViewOnMap: () => context.push(RouteNames.adminLiveMap),
-                          onEdit: () {
-                            AdminCrewEditModal.show(
-                              context: context,
-                              crew: crew,
-                              onConfirm:
-                                  ({
-                                    required status,
-                                    required zone,
-                                    required isAvailable,
-                                    leadStaffName,
-                                    vehicleCode,
-                                    vehiclePlate,
-                                  }) async {
-                                    final messenger = ScaffoldMessenger.of(context);
-                                    final success = await viewModel.updateCrew(
-                                      crewId: crew.id,
-                                      status: status,
-                                      zone: zone,
-                                      isAvailable: isAvailable,
-                                      leadStaffName: leadStaffName,
-                                      vehicleCode: vehicleCode,
-                                      vehiclePlate: vehiclePlate,
-                                    );
-                                    if (mounted) {
-                                      if (success) {
-                                        messenger.showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              'Unidad ${crew.vehicleCode} actualizada correctamente.',
-                                            ),
-                                            backgroundColor: const Color(0xFF047857),
-                                            behavior: SnackBarBehavior.floating,
-                                          ),
-                                        );
-                                      } else {
-                                        messenger.showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              adminReportsState.errorMessage ??
-                                                  'Error al actualizar cuadrilla.',
-                                            ),
-                                            backgroundColor: const Color(0xFFDC2626),
-                                            behavior: SnackBarBehavior.floating,
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  },
-                              onDelete: () async {
-                                final messenger = ScaffoldMessenger.of(context);
-                                final success = await viewModel.deleteCrew(crew.id);
-                                if (mounted) {
-                                  if (success) {
-                                    messenger.showSnackBar(
-                                      SnackBar(
-                                        content: Text('Cuadrilla ${crew.name} eliminada correctamente.'),
-                                        backgroundColor: const Color(0xFF047857),
-                                        behavior: SnackBarBehavior.floating,
-                                      ),
-                                    );
-                                  } else {
-                                    messenger.showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          ref.read(adminReportsViewModelProvider).errorMessage ??
-                                              'Error al eliminar cuadrilla.',
-                                        ),
-                                        backgroundColor: const Color(0xFFDC2626),
-                                        behavior: SnackBarBehavior.floating,
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
-                            );
-                          },
+                          onTap: () => Navigator.of(context).push<void>(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  AdminCrewDetailScreen(crewId: crew.id),
+                            ),
+                          ),
                         );
                       },
                     ),
             ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openCreateCrewModal(context, viewModel, adminReportsState),
-        backgroundColor: const Color(0xFF0A5835),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Nueva Cuadrilla', style: TextStyle(fontWeight: FontWeight.w700)),
-      ),
-      bottomNavigationBar: const AdminBottomNavBar(currentIndex: 3),
-    );
-  }
-
-  void _openCreateCrewModal(
-    BuildContext context,
-    AdminReportsViewModel viewModel,
-    AdminReportsState adminReportsState,
-  ) {
-    AdminCrewCreateModal.show(
-      context: context,
-      onConfirm: (newCrew) async {
-        final messenger = ScaffoldMessenger.of(context);
-        final success = await viewModel.createCrew(newCrew);
-        if (mounted) {
-          if (success) {
-            messenger.showSnackBar(
-              SnackBar(
-                content: Text('Cuadrilla ${newCrew.name} registrada correctamente.'),
-                backgroundColor: const Color(0xFF047857),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          } else if (adminReportsState.errorMessage != null) {
-            messenger.showSnackBar(
-              SnackBar(
-                content: Text(adminReportsState.errorMessage!),
-                backgroundColor: const Color(0xFFDC2626),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          }
-        }
-        return success;
-      },
-    );
-  }
-}
-
-class _FleetStatPill extends StatelessWidget {
-  final String label;
-  final String count;
-  final Color color;
-  final IconData icon;
-
-  const _FleetStatPill({
-    required this.label,
-    required this.count,
-    required this.color,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-      decoration: BoxDecoration(
-        color: color.withAlpha(15),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withAlpha(40)),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(height: 2),
-          Text(
-            count,
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color, height: 1.1),
-          ),
-          Text(
-            label,
-            style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w600, color: color),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FilterChipItem extends StatelessWidget {
-  final String label;
-  final int count;
-  final bool isSelected;
-  final Color? color;
-  final VoidCallback onTap;
-
-  const _FilterChipItem({
-    required this.label,
-    required this.count,
-    required this.isSelected,
-    this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final activeColor = color ?? const Color(0xFF0A5835);
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? activeColor : const Color(0xFFF1F5F9),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isSelected ? activeColor : const Color(0xFFE2E8F0)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                color: isSelected ? Colors.white : const Color(0xFF475569),
-              ),
-            ),
-            const SizedBox(width: 5),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-              decoration: BoxDecoration(
-                color: isSelected ? Colors.white.withAlpha(50) : const Color(0xFFCBD5E1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                '$count',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  color: isSelected ? Colors.white : const Color(0xFF334155),
-                ),
-              ),
-            ),
           ],
-        ),
+        ],
       ),
+      floatingActionButton: state.hasLoadedCrews
+          ? FloatingActionButton.extended(
+              onPressed: staff.hasValue && !staff.isLoading
+                  ? () => openAdminCrewEditor(context, ref)
+                  : null,
+              backgroundColor: const Color(0xFF0A5835),
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add),
+              label: const Text('Nuevo equipo'),
+            )
+          : null,
+      bottomNavigationBar: const AdminBottomNavBar(currentIndex: 3),
     );
   }
 }

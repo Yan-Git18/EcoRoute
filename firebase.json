@@ -1,5 +1,5 @@
 {
-    "firestore": { "rules": "firebase/citizen.firestore.rules" },
+    "firestore": { "rules": "firebase/citizen.firestore.rules", "indexes": "firebase/push-worker/indexes.json" },
     "flutter": {
         "platforms": {
             "android": {

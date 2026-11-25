@@ -63,6 +63,17 @@ firebase emulators:exec --config firebase.emulator.json --only firestore,auth --
 node firebase/tests/push-worker.test.mjs
 ```
 
+### Separación de equipos y flota
+
+Firestore guarda los equipos en `crews` y los camiones en `vehicles`. El equipo referencia al camión con `vehicleId` y el camión asignado apunta al equipo con `assignedCrewId`.
+
+Para actualizar un proyecto existente, respalda Firestore y pausa las escrituras de Equipos y Flota mientras coordinas el cambio de reglas y la actualización de los clientes. Usa una cuenta con acceso a Firestore y el token temporal `ECOROUTE_MIGRATION_ACCESS_TOKEN`.
+
+1. Ejecuta `node firebase/migrate-report-operations.mjs --project <id-del-proyecto> --vehicles-only` para revisar el traslado. Si detecta referencias o placas ambiguas, corrige los registros indicados antes de aplicar.
+2. Publica las reglas con `firebase deploy --only firestore:rules --project <id-del-proyecto>`.
+3. Repite la migración con `--vehicles-only --apply`. Los camiones independientes conservan su ID. Los camiones que antes estaban integrados en un equipo reciben un documento propio y conservan la asignación.
+4. Actualiza los clientes de administración antes de reanudar las escrituras. Las versiones anteriores leen y escriben los camiones en `crews`.
+
 ### Carga de reportes
 
 - **Municipio.** La bandeja y el mapa cargan 30 reportes por página, ordenados del más reciente al más antiguo. Firestore devuelve como máximo 31 documentos por solicitud para comprobar si hay otra página. El buscador y los filtros se aplican a los reportes cargados. Los totales municipales se consultan por separado con agregaciones de Firestore.
@@ -77,8 +88,8 @@ La prueba local de Firestore compara las consultas con y sin límites sobre 180 
 Para actualizar una base con reportes existentes, prepara las nuevas versiones de Android y web y coordina una ventana de mantenimiento.
 
 1. Crea un respaldo de Firestore. Configura `ECOROUTE_MIGRATION_ACCESS_TOKEN` con un token OAuth temporal de una cuenta con permisos para leer y escribir documentos. Ejecuta `node firebase/migrate-report-operations.mjs --project <id-del-proyecto>` para revisar cuántos reportes y cuadrillas se migrarán.
-2. Publica las reglas con `firebase deploy --only firestore:rules --project <id-del-proyecto>`. Durante la ventana, mantén pausados los despachos y las actualizaciones de reportes en los clientes. Las versiones anteriores son incompatibles con las nuevas reglas de escritura.
-3. Ejecuta `node firebase/migrate-report-operations.mjs --project <id-del-proyecto> --apply`. El script crea las copias comunitarias, reconstruye los conteos de cuadrillas y registra las tareas que ya están en curso. También normaliza las referencias antiguas de fotos y retira los vínculos operativos a cuadrillas que ya no existen. La migración se puede repetir mientras las escrituras de los clientes sigan pausadas.
+2. Publica las reglas y los índices de asignaciones con `firebase deploy --only firestore:rules,firestore:indexes --project <id-del-proyecto>`. Durante la ventana, mantén pausados los despachos y las actualizaciones de reportes y equipos en los clientes. Las versiones anteriores son incompatibles con las nuevas reglas de escritura.
+3. Ejecuta `node firebase/migrate-report-operations.mjs --project <id-del-proyecto> --apply`. El script crea las copias comunitarias, reconstruye los conteos de cuadrillas, registra las tareas en curso y conserva las dotaciones existentes de hasta cinco personas para que sus asignaciones puedan liberarse al eliminar el equipo. Los equipos nuevos admiten entre 2 y 5 integrantes. La migración también normaliza las referencias antiguas de fotos y retira los vínculos operativos a cuadrillas que ya no existen. Se puede repetir mientras las escrituras de los clientes sigan pausadas.
 4. Revisa los IDs de `unattendedActiveReports` que devuelve el script. Son reportes en curso sin un trabajador activo que pueda cerrarlos. Publica las versiones actualizadas para iniciar la prueba manual.
 
 ### Despacho a personal de limpieza

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/route_names.dart';
 import '../../domain/entities/municipal_crew_entity.dart';
 import '../viewmodels/admin_reports_viewmodel.dart';
+import '../widgets/admin_back_button.dart';
 import '../widgets/admin_bottom_nav_bar.dart';
 import '../widgets/admin_load_notice.dart';
 
@@ -126,7 +127,7 @@ class _AdminFleetScreenState extends ConsumerState<AdminFleetScreen> {
                 const Text('Tipo de Vehículo', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
                 const SizedBox(height: 6),
                 DropdownButtonFormField<String>(
-                  initialValue: selectedType,
+                  initialValue: vehicleTypes.contains(selectedType) ? selectedType : null,
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: const Color(0xFFF8FAFC),
@@ -153,6 +154,7 @@ class _AdminFleetScreenState extends ConsumerState<AdminFleetScreen> {
                 final success = await viewModel.updateCrew(
                   crewId: crew.id,
                   vehicleCode: codeCtrl.text.trim().isNotEmpty ? codeCtrl.text.trim() : crew.vehicleCode,
+                  vehicleType: selectedType,
                   vehiclePlate: plateCtrl.text.trim().isNotEmpty ? plateCtrl.text.trim().toUpperCase() : crew.vehiclePlate,
                 );
                 if (mounted) {
@@ -180,7 +182,6 @@ class _AdminFleetScreenState extends ConsumerState<AdminFleetScreen> {
   void _showNewVehicleDialog(BuildContext context, AdminReportsViewModel viewModel) {
     final codeCtrl = TextEditingController();
     final plateCtrl = TextEditingController();
-    final crewNameCtrl = TextEditingController();
     final driverCtrl = TextEditingController();
     final zoneCtrl = TextEditingController();
     String selectedType = 'Camión Compactador 15m³';
@@ -259,19 +260,6 @@ class _AdminFleetScreenState extends ConsumerState<AdminFleetScreen> {
                   },
                 ),
                 const SizedBox(height: 12),
-                const Text('Cuadrilla Asignada', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: crewNameCtrl,
-                  decoration: InputDecoration(
-                    hintText: 'Ej. Cuadrilla Zona Este',
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  ),
-                ),
-                const SizedBox(height: 12),
                 const Text('Conductor / Líder', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
                 const SizedBox(height: 6),
                 TextField(
@@ -314,7 +302,8 @@ class _AdminFleetScreenState extends ConsumerState<AdminFleetScreen> {
 
                 final newEntity = MunicipalCrewEntity(
                   id: '',
-                  name: crewNameCtrl.text.trim().isNotEmpty ? crewNameCtrl.text.trim() : 'Cuadrilla ${codeCtrl.text.trim()}',
+                  name: 'Unidad ${codeCtrl.text.trim()}',
+                  vehicleOnly: true,
                   zone: zoneCtrl.text.trim().isNotEmpty ? zoneCtrl.text.trim() : 'Sector General',
                   leadStaffName: driverCtrl.text.trim().isNotEmpty ? driverCtrl.text.trim() : 'Conductor Asignado',
                   vehicleCode: codeCtrl.text.trim(),
@@ -351,7 +340,7 @@ class _AdminFleetScreenState extends ConsumerState<AdminFleetScreen> {
     final adminReportsState = ref.watch(adminReportsViewModelProvider);
     final viewModel = ref.read(adminReportsViewModelProvider.notifier);
 
-    final crews = adminReportsState.crews;
+    final crews = adminReportsState.fleet;
     final filteredVehicles = _filterVehicles(crews);
 
     final onRouteCount = crews.where((c) => c.status == MunicipalCrewStatus.onRoute).length;
@@ -364,16 +353,7 @@ class _AdminFleetScreenState extends ConsumerState<AdminFleetScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go(RouteNames.adminDashboard);
-            }
-          },
-        ),
+        leading: const AdminBackButton(),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -400,8 +380,8 @@ class _AdminFleetScreenState extends ConsumerState<AdminFleetScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.groups_outlined, color: Color(0xFF0A5835)),
-            tooltip: 'Ver Cuadrillas',
-            onPressed: () => context.push(RouteNames.adminTeams),
+            tooltip: 'Ver equipos',
+            onPressed: () => context.go(RouteNames.adminTeams),
           ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Color(0xFF475569)),
@@ -581,6 +561,9 @@ class _AdminFleetScreenState extends ConsumerState<AdminFleetScreen> {
                       separatorBuilder: (_, __) => const SizedBox(height: 14),
                       itemBuilder: (context, index) {
                         final vehicle = filteredVehicles[index];
+                        final assignedCrew = adminReportsState.teams
+                            .where((team) => team.id == vehicle.assignedCrewId)
+                            .firstOrNull;
                         final isInMaintenance = vehicle.status == MunicipalCrewStatus.maintenance;
 
                         return Container(
@@ -680,7 +663,7 @@ class _AdminFleetScreenState extends ConsumerState<AdminFleetScreen> {
                                     const SizedBox(width: 8),
                                     Expanded(
                                       child: Text(
-                                        'Conductor: ${vehicle.leadStaffName} • ${vehicle.name}',
+                                        'Conductor: ${vehicle.leadStaffName} • ${assignedCrew?.name ?? (vehicle.vehicleOnly ? 'Sin equipo' : vehicle.name)}',
                                         style: const TextStyle(
                                           fontSize: 12,
                                           color: Color(0xFF334155),
@@ -790,7 +773,7 @@ class _AdminFleetScreenState extends ConsumerState<AdminFleetScreen> {
         icon: const Icon(Icons.add_rounded),
         label: const Text('Nuevo Camión', style: TextStyle(fontWeight: FontWeight.w700)),
       ),
-      bottomNavigationBar: const AdminBottomNavBar(currentIndex: 3),
+      bottomNavigationBar: const AdminBottomNavBar(),
     );
   }
 }

@@ -1,9 +1,11 @@
+import '../../../../core/widgets/media_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../staff/domain/entities/staff_operations.dart';
 import '../../../staff/presentation/viewmodels/staff_operations_providers.dart';
 import '../viewmodels/admin_staff_viewmodel.dart';
+import '../widgets/admin_back_button.dart';
 
 /// Pantalla de Gestión Segura de Personal Municipal.
 ///
@@ -37,75 +39,11 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
     ref.read(adminStaffViewModelProvider.notifier).searchExactEmail(query);
   }
 
-  Future<void> _selectCrew(UserEntity user) async {
-    final staffState = ref.read(adminStaffViewModelProvider);
-    final crews = [...staffState.crews]..sort((a, b) => a.name.compareTo(b.name));
-    String? selectedCrewId = crews.any((crew) => crew.id == user.teamId)
-        ? user.teamId
-        : null;
-
-    final teamId = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          scrollable: true,
-          icon: const Icon(Icons.groups_outlined, color: Color(0xFF0A5835)),
-          title: Text(user.isStaff ? 'Asignar cuadrilla' : 'Asignar a Personal'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(user.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-              Text(user.email),
-              const SizedBox(height: 16),
-              if (crews.isEmpty)
-                const Text('Registra una cuadrilla para asignarla a este trabajador.')
-              else
-                DropdownButtonFormField<String>(
-                  initialValue: selectedCrewId,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Cuadrilla',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: [
-                    for (final crew in crews)
-                      DropdownMenuItem(
-                        value: crew.id,
-                        child: Text(crew.name, overflow: TextOverflow.ellipsis),
-                      ),
-                  ],
-                  onChanged: (value) => setDialogState(() => selectedCrewId = value),
-                ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: selectedCrewId == null ||
-                      (user.isStaff && selectedCrewId == user.teamId)
-                  ? null
-                  : () => Navigator.pop(dialogContext, selectedCrewId),
-              child: const Text('Guardar'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (!mounted || teamId == null) return;
-    final success = await ref
-        .read(adminStaffViewModelProvider.notifier)
-        .assignToCrew(user, teamId);
-    if (!mounted) return;
-    final message = success
-        ? 'Cuadrilla actualizada para ${user.name}.'
-        : ref.read(adminStaffViewModelProvider).errorMessage;
-    if (message == null) return;
+  Future<void> _promote(UserEntity user) async {
+    final success = await ref.read(adminStaffViewModelProvider.notifier).promoteToStaff(user);
+    if (!mounted || !success) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(content: Text('${user.name} ahora es personal de limpieza.')),
     );
   }
 
@@ -166,17 +104,6 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
       for (final staff in state.staffMembers)
         staff.id: ref.watch(staffShiftProvider(staff.id)),
     };
-    final onDutyByTeam = <String, int>{};
-    final teamsWithUnknownStatus = <String>{};
-    for (final staff in state.staffMembers) {
-      final teamId = staff.teamId;
-      if (teamId == null) continue;
-      final shift = shifts[staff.id];
-      if (shift is! AsyncData) teamsWithUnknownStatus.add(teamId);
-      if (shift?.asData?.value?.status == StaffShiftStatus.onDuty) {
-        onDutyByTeam.update(teamId, (count) => count + 1, ifAbsent: () => 1);
-      }
-    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -184,10 +111,7 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        leading: const AdminBackButton(),
         title: const Text(
           'Gestión de Personal',
           style: TextStyle(
@@ -416,14 +340,9 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final staff = state.staffMembers[index];
-                    final crew = state.crews.where((crew) => crew.id == staff.teamId).firstOrNull;
                     return _buildStaffItemCard(
                       staff,
-                      crewName: crew?.name,
                       shift: shifts[staff.id]!,
-                      onDutyInCrew: crew == null || teamsWithUnknownStatus.contains(crew.id)
-                          ? null
-                          : (onDutyByTeam[crew.id] ?? 0),
                       canEdit: !state.isUpdating,
                     );
                   },
@@ -541,7 +460,7 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: canEdit ? () => _selectCrew(user) : null,
+                onPressed: canEdit ? () => _promote(user) : null,
                 icon: const Icon(Icons.badge_rounded, size: 18),
                 label: const Text('Asignar como Personal de Limpieza'),
                 style: ElevatedButton.styleFrom(
@@ -556,11 +475,6 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
             Wrap(
               spacing: 8,
               children: [
-                TextButton.icon(
-                  onPressed: canEdit ? () => _selectCrew(user) : null,
-                  icon: const Icon(Icons.groups_outlined),
-                  label: const Text('Asignar cuadrilla'),
-                ),
                 TextButton(
                   onPressed: canEdit ? () => _confirmDemote(user) : null,
                   style: TextButton.styleFrom(foregroundColor: const Color(0xFFE11D48)),
@@ -580,11 +494,15 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
 
   Widget _buildStaffItemCard(
     UserEntity staff, {
-    required String? crewName,
     required AsyncValue<StaffShift?> shift,
-    required int? onDutyInCrew,
     required bool canEdit,
   }) {
+    final shiftStatus = shift.value?.status;
+    final (badgeBackground, badgeForeground) = switch (shiftStatus) {
+      StaffShiftStatus.onDuty => (const Color(0xFFDCFCE7), const Color(0xFF166534)),
+      StaffShiftStatus.onBreak => (const Color(0xFFFEF3C7), const Color(0xFF92400E)),
+      _ => (const Color(0xFFF1F5F9), const Color(0xFF475569)),
+    };
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -608,7 +526,12 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
               color: const Color(0xFF0A5835).withAlpha(15),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.engineering_rounded, color: Color(0xFF0A5835), size: 22),
+            child: ClipOval(
+              child: MediaImage(
+                location: staff.photoUrl,
+                placeholder: const Icon(Icons.engineering_rounded, color: Color(0xFF0A5835), size: 22),
+              ),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -625,19 +548,22 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
                   style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  crewName == null
-                      ? 'Sin cuadrilla asignada'
-                      : (onDutyInCrew == null ? crewName : '$crewName • $onDutyInCrew en turno'),
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF0A5835)),
-                ),
-                Text(
-                  switch (shift) {
-                    AsyncData(:final value) => value?.status.label ?? 'Sin turno registrado',
-                    AsyncError() => 'Turno no disponible',
-                    _ => 'Cargando turno…',
-                  },
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: badgeBackground,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Text(
+                      switch (shift) {
+                        AsyncData(:final value) => value?.status.label ?? 'Sin turno registrado',
+                        AsyncError() => 'Turno no disponible',
+                        _ => 'Cargando turno…',
+                      },
+                      style: TextStyle(fontSize: 12, color: badgeForeground, fontWeight: FontWeight.w600),
+                    ),
+                  ),
                 ),
                 if (staff.phoneNumber != null && staff.phoneNumber!.isNotEmpty) ...[
                   const SizedBox(height: 2),
@@ -651,11 +577,6 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
                 ],
               ],
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.groups_outlined, color: Color(0xFF0A5835)),
-            tooltip: crewName == null ? 'Asignar cuadrilla' : 'Cambiar cuadrilla',
-            onPressed: canEdit ? () => _selectCrew(staff) : null,
           ),
           IconButton(
             icon: const Icon(Icons.remove_circle_outline_rounded, color: Color(0xFFE11D48), size: 20),

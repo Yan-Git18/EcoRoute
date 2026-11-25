@@ -17,35 +17,50 @@ class CreateCrewUseCase {
     // 1. Validación de reglas de negocio
     if (crew.name.trim().length < 3) {
       return const FailureResult(
-        ValidationFailure(message: 'El nombre de la cuadrilla debe tener al menos 3 caracteres.'),
+        ValidationFailure(
+          message:
+              'El nombre de la cuadrilla debe tener al menos 3 caracteres.',
+        ),
       );
     }
 
     if (crew.zone.trim().isEmpty) {
       return const FailureResult(
-        ValidationFailure(message: 'Debe asignar una zona o sector de cobertura.'),
+        ValidationFailure(
+          message: 'Debe asignar una zona o sector de cobertura.',
+        ),
       );
     }
 
     if (crew.leadStaffName.trim().isEmpty) {
       return const FailureResult(
-        ValidationFailure(message: 'Debe especificar el nombre del responsable o líder.'),
+        ValidationFailure(
+          message: 'Debe especificar el nombre del responsable o líder.',
+        ),
       );
     }
 
     if (crew.vehiclePlate.trim().length < 3) {
       return const FailureResult(
-        ValidationFailure(message: 'Ingrese una placa vehicular válida (ej. ECR-123).'),
+        ValidationFailure(
+          message: 'Ingrese una placa vehicular válida (ej. ECR-123).',
+        ),
       );
     }
 
-    if (crew.crewMembersCount < 1) {
+    final members = crew.memberIds;
+    if (!crew.vehicleOnly &&
+        (!MunicipalCrewEntity.isValidMemberCount(crew.crewMembersCount) ||
+            (members != null &&
+                (members.length != crew.crewMembersCount ||
+                    members.toSet().length != members.length)))) {
       return const FailureResult(
-        ValidationFailure(message: 'La cuadrilla debe contar con al menos 1 integrante.'),
+        ValidationFailure(
+          message: 'El equipo debe tener entre 2 y 5 integrantes.',
+        ),
       );
     }
 
     return _repository.createCrew(crew);
   }
 }
-

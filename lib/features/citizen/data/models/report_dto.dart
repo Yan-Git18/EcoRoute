@@ -92,6 +92,7 @@ class ReportDto {
   final String? assignedToTeamId;
   final String? assignedToTeamName;
   final String? assignedStaffName;
+  final List<String> assignedStaffIds;
   final String? assignedVehicle;
   final String? evidenceImageUrl;
   final List<String> evidenceImageUrls;
@@ -120,6 +121,7 @@ class ReportDto {
     this.assignedToTeamId,
     this.assignedToTeamName,
     this.assignedStaffName,
+    this.assignedStaffIds = const [],
     this.assignedVehicle,
     this.evidenceImageUrl,
     this.evidenceImageUrls = const [],
@@ -173,6 +175,8 @@ class ReportDto {
       createdAt: parseDate(map['createdAt']),
       updatedAt: map['updatedAt'] != null ? parseDate(map['updatedAt']) : null,
       assignedToTeamId: map['assignedToTeamId'] as String?,
+      assignedStaffIds: (map['assignedStaffIds'] as List?)?.whereType<String>().toList() ??
+          [if (map['assignedStaffId'] case final String id) id],
       assignedToTeamName: map['assignedToTeamName'] as String?,
       assignedStaffName: map['assignedStaffName'] as String? ?? (map['assignedToTeamName'] as String?),
       assignedVehicle: map['assignedVehicle'] as String?,
@@ -219,6 +223,7 @@ class ReportDto {
       if (assignedToTeamId != null) 'assignedToTeamId': assignedToTeamId,
       if (assignedToTeamName != null) 'assignedToTeamName': assignedToTeamName,
       if (assignedStaffName != null) 'assignedStaffName': assignedStaffName,
+      if (assignedStaffIds.isNotEmpty) 'assignedStaffIds': assignedStaffIds,
       if (assignedVehicle != null) 'assignedVehicle': assignedVehicle,
       if (evidencePaths.isNotEmpty) 'evidenceImagePath': evidencePaths.first,
       if (evidencePaths.length > 1) 'evidenceImagePaths': evidencePaths,
@@ -251,6 +256,7 @@ class ReportDto {
       assignedToTeamId: assignedToTeamId,
       assignedToTeamName: assignedToTeamName,
       assignedStaffName: assignedStaffName,
+      assignedStaffIds: assignedStaffIds,
       assignedVehicle: assignedVehicle,
       evidenceImageUrl: evidenceImageUrl,
       evidenceImageUrls: evidenceImageUrls,
@@ -282,6 +288,7 @@ class ReportDto {
       assignedToTeamId: entity.assignedToTeamId,
       assignedToTeamName: entity.assignedToTeamName,
       assignedStaffName: entity.assignedStaffName,
+      assignedStaffIds: entity.assignedStaffIds,
       assignedVehicle: entity.assignedVehicle,
       evidenceImageUrl: entity.evidenceImageUrl,
       evidenceImageUrls: entity.evidenceImageUrls,

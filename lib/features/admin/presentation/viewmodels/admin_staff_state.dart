@@ -1,5 +1,4 @@
 import '../../../auth/domain/entities/user_entity.dart';
-import '../../domain/entities/municipal_crew_entity.dart';
 
 /// Estado inmutable para la gestión de personal municipal (Admin).
 ///
@@ -10,7 +9,6 @@ class AdminStaffState {
   final bool isSearching;
   final bool isUpdating;
   final List<UserEntity> staffMembers;
-  final List<MunicipalCrewEntity> crews;
   final UserEntity? searchedUser;
   final bool hasSearched;
   final String? searchedEmail;
@@ -22,7 +20,6 @@ class AdminStaffState {
     this.isSearching = false,
     this.isUpdating = false,
     this.staffMembers = const [],
-    this.crews = const [],
     this.searchedUser,
     this.hasSearched = false,
     this.searchedEmail,
@@ -35,7 +32,6 @@ class AdminStaffState {
     bool? isSearching,
     bool? isUpdating,
     List<UserEntity>? staffMembers,
-    List<MunicipalCrewEntity>? crews,
     UserEntity? searchedUser,
     bool clearSearchedUser = false,
     bool? hasSearched,
@@ -50,7 +46,6 @@ class AdminStaffState {
       isSearching: isSearching ?? this.isSearching,
       isUpdating: isUpdating ?? this.isUpdating,
       staffMembers: staffMembers ?? this.staffMembers,
-      crews: crews ?? this.crews,
       searchedUser: clearSearchedUser ? null : (searchedUser ?? this.searchedUser),
       hasSearched: hasSearched ?? this.hasSearched,
       searchedEmail: searchedEmail ??

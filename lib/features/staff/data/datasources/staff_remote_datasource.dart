@@ -65,15 +65,20 @@ class FirebaseStaffRemoteDataSourceImpl implements StaffRemoteDataSource {
         Filter('assignedStaffId', isEqualTo: staffId),
         Filter('status', whereIn: _personalStatuses),
       );
+      final individualRoster = Filter.and(
+        Filter('assignedStaffIds', arrayContains: staffId),
+        Filter('status', whereIn: _assignedStatuses),
+      );
       final visible = teamId is String && teamId.isNotEmpty
           ? Filter.or(
               personal,
+              individualRoster,
               Filter.and(
                 Filter('assignedToTeamId', isEqualTo: teamId),
                 Filter('status', whereIn: _assignedStatuses),
               ),
             )
-          : personal;
+          : Filter.or(personal, individualRoster);
       final snapshot = await _firestore
           .collection('reports')
           .where(visible)

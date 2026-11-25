@@ -17,6 +17,7 @@ abstract class AdminRepository {
 
   /// Obtiene la lista de cuadrillas municipales registradas y su disponibilidad.
   Future<Result<List<MunicipalCrewEntity>>> getAvailableCrews();
+  Future<Result<List<ReportEntity>>> getCrewActiveReports(String crewId);
 
   /// Registra una nueva cuadrilla municipal y su vehículo en Cloud Firestore.
   Future<Result<MunicipalCrewEntity>> createCrew(MunicipalCrewEntity crew);
@@ -28,6 +29,16 @@ abstract class AdminRepository {
   Future<Result<void>> deleteCrew(String crewId);
 
   /// Asigna un reporte ciudadano a una cuadrilla y unidad vehicular determinada.
+  Future<Result<ReportEntity>> assignReportToStaff({
+    required String reportId,
+    required List<String> staffIds,
+    required String adminId,
+    required String adminName,
+    ReportPriority? priority,
+    String? instructions,
+  });
+  Future<Result<Set<String>>> getBusyStaffIds();
+
   Future<Result<ReportEntity>> assignReportToCrew({
     required String reportId,
     required MunicipalCrewEntity crew,
@@ -53,7 +64,6 @@ abstract class AdminRepository {
   Future<Result<void>> updateUserRole({
     required String userId,
     required UserRole newRole,
-    String? teamId,
   });
 }
 

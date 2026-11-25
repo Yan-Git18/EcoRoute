@@ -35,6 +35,12 @@ Future<Map<String, dynamic>> writeReportStatus({
   required DocumentReference<Map<String, dynamic>> report,
   required Map<String, dynamic> changes,
   ReportAudit? audit,
+  Future<Map<String, dynamic>> Function(
+    Transaction transaction,
+    Map<String, dynamic> current,
+  )?
+  prepare,
+
   List<Uint8List> evidencePhotos = const [],
 }) async {
   final firestore = report.firestore;
@@ -54,7 +60,12 @@ Future<Map<String, dynamic>> writeReportStatus({
         throw const ServerException(message: 'El reporte no existe.');
       }
       final previousStatus = _status(current['status']);
-      final updates = {...changes, 'updatedAt': FieldValue.serverTimestamp()};
+      final prepared = await prepare?.call(transaction, current);
+      final updates = {
+        ...changes,
+        ...?prepared,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
 
       if (nextStatus == previousStatus &&
           (nextStatus == 'cancelled' ||
@@ -62,6 +73,14 @@ Future<Map<String, dynamic>> writeReportStatus({
                   current['assignedStaffId'] == audit?.userId))) {
         return current;
       }
+
+      final previousCrew = _openCrew(current);
+      final nextCrew = _openCrew({...current, ...updates});
+      final crews = firestore.collection('crews');
+      final releasedCrew =
+          audit != null && previousCrew != null && previousCrew != nextCrew
+          ? (await transaction.get(crews.doc(previousCrew))).data()
+          : null;
 
       if (audit != null &&
           (nextStatus == 'in_progress' || nextStatus == 'resolved')) {
@@ -125,14 +144,20 @@ Future<Map<String, dynamic>> writeReportStatus({
           report.collection('history').doc(eventId),
           audit.event(previousStatus, nextStatus),
         );
-        final previousCrew = _openCrew(current);
-        final nextCrew = _openCrew({...current, ...updates});
         if (previousCrew != nextCrew) {
           for (final (crewId, delta) in [(previousCrew, -1), (nextCrew, 1)]) {
             if (crewId == null) continue;
-            transaction.update(firestore.collection('crews').doc(crewId), {
+            final returnsToAvailable =
+                delta < 0 &&
+                releasedCrew?['openReportCount'] == 1 &&
+                const ['onRoute', 'on_route'].contains(releasedCrew?['status']);
+            transaction.update(crews.doc(crewId), {
               'openReportCount': FieldValue.increment(delta),
               'reportActivity': {'reportId': report.id, 'eventId': eventId},
+              if (delta > 0) 'status': 'onRoute',
+              if (returnsToAvailable) 'status': 'available',
+              if (delta > 0 || returnsToAvailable)
+                'updatedAt': FieldValue.serverTimestamp(),
             });
           }
         }
