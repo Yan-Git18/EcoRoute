@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/geo/cajamarca_urban_zones.dart';
 import '../../../../core/utils/result.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
@@ -12,6 +13,7 @@ import '../../domain/repositories/admin_repository.dart';
 import '../../domain/usecases/create_crew_use_case.dart';
 import '../../domain/usecases/delete_crew_use_case.dart';
 import '../../domain/usecases/get_crews_use_case.dart';
+import '../../domain/usecases/get_urban_reports_use_case.dart';
 import '../../domain/usecases/update_crew_use_case.dart';
 import 'admin_reports_state.dart';
 
@@ -25,6 +27,11 @@ final adminRepositoryProvider = Provider<AdminRepository>((ref) {
   final dataSource = ref.watch(adminRemoteDataSourceProvider);
   return AdminRepositoryImpl(remoteDataSource: dataSource);
 });
+
+final urbanReportsProvider =
+    FutureProvider.autoDispose<Map<CajamarcaZone, List<ReportEntity>>>((ref) {
+      return GetUrbanReportsUseCase(ref.watch(adminRepositoryProvider))();
+    });
 
 final adminTeamStaffProvider = FutureProvider.autoDispose<List<UserEntity>>((ref) async {
   final result = await ref.watch(adminRepositoryProvider).getStaffMembers();
@@ -189,6 +196,7 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
     switch (result) {
       case Success(data: final updatedReport):
         _dataRevision++;
+        ref.invalidate(urbanReportsProvider);
         final updatedReports = state.reports.map((r) {
           return r.id == updatedReport.id ? updatedReport : r;
         }).toList();
@@ -240,6 +248,7 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
 
     if (result is Success<ReportEntity>) {
       _dataRevision++;
+      ref.invalidate(urbanReportsProvider);
       final updatedReport = result.data;
       final updatedReports = state.reports.map((r) {
         return r.id == updatedReport.id ? updatedReport : r;

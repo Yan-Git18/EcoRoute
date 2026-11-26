@@ -27,6 +27,7 @@ import '../../features/staff/presentation/views/staff_home_screen.dart';
 import '../../features/staff/presentation/views/staff_profile_screen.dart';
 import '../../features/staff/presentation/views/staff_route_map_screen.dart';
 import '../../features/staff/presentation/views/staff_tasks_screen.dart';
+import '../geo/cajamarca_urban_zones.dart';
 import 'route_names.dart';
 
 /// Notificador reactivo para GoRouter que escucha cambios de autenticación
@@ -66,6 +67,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isPublicRoute = currentPath == RouteNames.welcome ||
           currentPath == RouteNames.login ||
           currentPath == RouteNames.register;
+
+      if (!authState.isInitialized &&
+          currentPath == RouteNames.adminReports &&
+          CajamarcaZone.fromId(
+            state.uri.queryParameters[RouteNames.adminReportZoneParameter],
+          ) != null) {
+        return null;
+      }
 
       // 1. Si no está autenticado y no está en ruta pública, redirigir a Bienvenida
       if (!isAuthenticated) {
@@ -158,7 +167,23 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: RouteNames.adminReports,
-        builder: (context, state) => const AdminReportsScreen(),
+        builder: (context, state) {
+          final zone = CajamarcaZone.fromId(
+            state.uri.queryParameters[RouteNames.adminReportZoneParameter],
+          );
+          if (zone == null) return const AdminReportsScreen();
+          return Consumer(
+            builder: (context, ref, child) {
+              final auth = ref.watch(authViewModelProvider);
+              if (!auth.isInitialized || auth.user?.isAdmin != true) {
+                return const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                );
+              }
+              return AdminReportsScreen(key: ValueKey(zone), zone: zone);
+            },
+          );
+        },
       ),
       GoRoute(
         path: RouteNames.adminReportDetail,

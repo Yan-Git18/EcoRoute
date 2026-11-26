@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/geo/cajamarca_urban_zones.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../citizen/domain/entities/report_entity.dart';
+import '../../domain/entities/admin_report_page.dart';
 import 'admin_report_detail_screen.dart';
 import '../viewmodels/admin_reports_state.dart';
 import '../viewmodels/admin_reports_viewmodel.dart';
@@ -14,7 +17,9 @@ import '../widgets/admin_load_notice.dart';
 import '../widgets/admin_report_card.dart';
 
 class AdminReportsScreen extends ConsumerStatefulWidget {
-  const AdminReportsScreen({super.key});
+  const AdminReportsScreen({super.key, this.zone});
+
+  final CajamarcaZone? zone;
 
   @override
   ConsumerState<AdminReportsScreen> createState() => _AdminReportsScreenState();
@@ -22,13 +27,16 @@ class AdminReportsScreen extends ConsumerStatefulWidget {
 
 class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
   final TextEditingController _searchController = TextEditingController();
+  AdminReportFilter _zoneFilter = AdminReportFilter.all;
 
   @override
   void initState() {
     super.initState();
-    _searchController.text = ref
-        .read(adminReportsViewModelProvider)
-        .searchQuery;
+    if (widget.zone == null) {
+      _searchController.text = ref
+          .read(adminReportsViewModelProvider)
+          .searchQuery;
+    }
   }
 
   @override
@@ -39,17 +47,58 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(adminReportsViewModelProvider);
-    final viewModel = ref.read(adminReportsViewModelProvider.notifier);
+    final zone = widget.zone;
+    final zoned = zone == null ? null : ref.watch(urbanReportsProvider);
+    final zoneReports = zoned?.value?[zone] ?? const <ReportEntity>[];
+    final state = zone == null
+        ? ref.watch(adminReportsViewModelProvider)
+        : AdminReportsState(
+            isLoading: zoned!.isLoading,
+            hasLoadedReports: zoned.hasValue,
+            reportsLoadFailed: zoned.hasError,
+            reports: zoneReports,
+            totals: zoned.hasValue ? _zoneTotals(zoneReports) : null,
+            selectedFilter: _zoneFilter,
+            searchQuery: _searchController.text,
+          );
+    final viewModel = zone == null
+        ? ref.read(adminReportsViewModelProvider.notifier)
+        : null;
     final reports = state.filteredReports;
     final hasQuery = state.searchQuery.trim().isNotEmpty;
     final hasFilters =
         hasQuery || state.selectedFilter != AdminReportFilter.all;
     final textTheme = Theme.of(context).textTheme;
 
+    Future<void> refresh() async {
+      if (viewModel != null) return viewModel.refresh();
+      try {
+        ref.invalidate(urbanReportsProvider);
+        await ref.read(urbanReportsProvider.future);
+      } catch (_) {
+        // El proveedor conserva el error para mostrar el aviso y el reintento.
+      }
+    }
+
+    void setSearch(String query) {
+      if (viewModel != null) {
+        viewModel.setSearchQuery(query);
+      } else {
+        setState(() {});
+      }
+    }
+
     void clearSearch() {
       _searchController.clear();
-      viewModel.setSearchQuery('');
+      setSearch('');
+    }
+
+    void setFilter(AdminReportFilter filter) {
+      if (viewModel != null) {
+        viewModel.setFilter(filter);
+      } else {
+        setState(() => _zoneFilter = filter);
+      }
     }
 
     return Scaffold(
@@ -59,13 +108,19 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        leading: const AdminBackButton(),
-        title: const Text('Gestión de Reportes'),
+        leading: AdminBackButton(
+          fallbackRoute: zone == null
+              ? RouteNames.adminDashboard
+              : RouteNames.adminLiveMap,
+        ),
+        title: Text(
+          zone == null ? 'Gestión de Reportes' : 'Reportes: ${zone.name}',
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
             tooltip: 'Actualizar reportes',
-            onPressed: state.isLoading ? null : viewModel.refresh,
+            onPressed: state.isLoading ? null : refresh,
           ),
           const SizedBox(width: 4),
         ],
@@ -78,17 +133,14 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
             constraints: const BoxConstraints(maxWidth: 856),
             child: RefreshIndicator(
               color: AppColors.primaryDark,
-              onRefresh: viewModel.refresh,
+              onRefresh: refresh,
               child: CustomScrollView(
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.onDrag,
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
                   SliverToBoxAdapter(
-                    child: AdminLoadNotice(
-                      state: state,
-                      onRetry: viewModel.refresh,
-                    ),
+                    child: AdminLoadNotice(state: state, onRetry: refresh),
                   ),
                   if (state.hasLoadedReports) ...[
                     SliverPadding(
@@ -99,9 +151,11 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
                           children: [
                             TextField(
                               controller: _searchController,
-                              onChanged: viewModel.setSearchQuery,
+                              onChanged: setSearch,
                               decoration: InputDecoration(
-                                hintText: 'Buscar en reportes cargados',
+                                hintText: zone == null
+                                    ? 'Buscar en reportes cargados'
+                                    : 'Buscar en esta zona',
                                 prefixIcon: const Icon(Icons.search_rounded),
                                 suffixIcon: state.searchQuery.isEmpty
                                     ? null
@@ -121,10 +175,7 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
                               ),
                             ),
                             const SizedBox(height: 6),
-                            _ReportFilters(
-                              state: state,
-                              onSelected: viewModel.setFilter,
-                            ),
+                            _ReportFilters(state: state, onSelected: setFilter),
                             const SizedBox(height: 10),
                             Semantics(
                               liveRegion: true,
@@ -149,7 +200,7 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
                           hasFilters: hasFilters,
                           onReset: () {
                             clearSearch();
-                            viewModel.setFilter(AdminReportFilter.all);
+                            setFilter(AdminReportFilter.all);
                           },
                         ),
                       )
@@ -200,7 +251,7 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
                                 onPressed:
                                     state.isLoading || state.isLoadingMore
                                     ? null
-                                    : viewModel.loadMoreReports,
+                                    : viewModel?.loadMoreReports,
                                 icon: const Icon(Icons.expand_more_rounded),
                                 label: Text(
                                   state.isLoadingMore
@@ -223,6 +274,20 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
       bottomNavigationBar: const AdminBottomNavBar(currentIndex: 1),
     );
   }
+}
+
+AdminReportTotals _zoneTotals(List<ReportEntity> reports) {
+  final counts = <ReportStatus, int>{};
+  for (final report in reports) {
+    counts.update(report.status, (count) => count + 1, ifAbsent: () => 1);
+  }
+  return (
+    total: reports.length,
+    pending: counts[ReportStatus.pending] ?? 0,
+    assigned: counts[ReportStatus.assigned] ?? 0,
+    inProgress: counts[ReportStatus.inProgress] ?? 0,
+    resolved: counts[ReportStatus.resolved] ?? 0,
+  );
 }
 
 class _ReportFilters extends StatelessWidget {

@@ -358,20 +358,20 @@ void main() {
       expect(repository.savedReport, isNull);
 
       final gpsRequest = viewModel.getCurrentLocation();
-      await viewModel.updateCoordinates(-7.140, -78.500);
+      await viewModel.updateCoordinates(-7.151, -78.527);
       gps.complete(location.gpsResult);
 
       expect(await gpsRequest, isFalse);
       expect(
         container.read(createReportViewModelProvider).reportPoint?.latitude,
-        -7.140,
+        -7.151,
       );
       expect(
         container.read(createReportViewModelProvider).canAdvanceFromStep3,
         isTrue,
       );
 
-      await viewModel.updateCoordinates(-12.046, -77.042);
+      await viewModel.updateCoordinates(-7.165, -78.529);
       expect(
         container.read(createReportViewModelProvider).canAdvanceFromStep3,
         isFalse,

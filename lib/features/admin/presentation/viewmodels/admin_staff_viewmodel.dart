@@ -7,9 +7,9 @@ import 'admin_staff_state.dart';
 
 /// Provider para el ViewModel de gestión de personal municipal (Admin).
 final adminStaffViewModelProvider =
-    NotifierProvider<AdminStaffViewModel, AdminStaffState>(() {
-  return AdminStaffViewModel();
-});
+    NotifierProvider.autoDispose<AdminStaffViewModel, AdminStaffState>(
+      AdminStaffViewModel.new,
+    );
 
 /// ViewModel que encapsula la lógica de negocio para la gestión segura de trabajadores.
 ///
@@ -17,12 +17,17 @@ final adminStaffViewModelProvider =
 /// - Solo consulta y expone usuarios con rol 'staff'.
 /// - La búsqueda requiere coincidencia exacta de correo, protegiendo las identidades ciudadanas.
 class AdminStaffViewModel extends Notifier<AdminStaffState> {
-  late final AdminRepository _repository;
+  late AdminRepository _repository;
+  int _searchVersion = 0;
 
   @override
   AdminStaffState build() {
     _repository = ref.watch(adminRepositoryProvider);
-    Future.microtask(() => loadInitialData());
+    _searchVersion++;
+    final routeRef = ref;
+    Future.microtask(() {
+      if (routeRef.mounted) loadInitialData();
+    });
     return const AdminStaffState(isLoading: true);
   }
 
@@ -42,9 +47,12 @@ class AdminStaffViewModel extends Notifier<AdminStaffState> {
 
   /// Búsqueda privada por coincidencia exacta de correo electrónico.
   Future<void> searchExactEmail(String email) async {
+    final searchVersion = ++_searchVersion;
+    final routeRef = ref;
     final trimmed = email.trim().toLowerCase();
     if (trimmed.isEmpty) {
       state = state.copyWith(
+        isSearching: false,
         clearSearchedUser: true,
         hasSearched: false,
         errorMessage: 'Por favor ingresa un correo electrónico.',
@@ -54,6 +62,7 @@ class AdminStaffViewModel extends Notifier<AdminStaffState> {
 
     if (!trimmed.contains('@') || !trimmed.contains('.')) {
       state = state.copyWith(
+        isSearching: false,
         clearSearchedUser: true,
         hasSearched: false,
         errorMessage: 'Ingresa un formato de correo válido (ej. usuario@gmail.com).',
@@ -61,9 +70,16 @@ class AdminStaffViewModel extends Notifier<AdminStaffState> {
       return;
     }
 
-    state = state.copyWith(isSearching: true, clearError: true, clearSuccess: true);
+    state = state.copyWith(
+      isSearching: true,
+      clearSearchedUser: true,
+      hasSearched: false,
+      clearError: true,
+      clearSuccess: true,
+    );
 
     final result = await _repository.searchUserByExactEmail(trimmed);
+    if (!routeRef.mounted || searchVersion != _searchVersion) return;
 
     switch (result) {
       case Success(data: final user):
@@ -87,7 +103,9 @@ class AdminStaffViewModel extends Notifier<AdminStaffState> {
 
   /// Limpia los resultados de búsqueda actual.
   void clearSearch() {
+    _searchVersion++;
     state = state.copyWith(
+      isSearching: false,
       clearSearchedUser: true,
       hasSearched: false,
       clearError: true,
@@ -128,6 +146,7 @@ class AdminStaffViewModel extends Notifier<AdminStaffState> {
       userId: user.id,
       newRole: UserRole.citizen,
     );
+    if (!ref.mounted) return false;
 
     switch (result) {
       case Success():

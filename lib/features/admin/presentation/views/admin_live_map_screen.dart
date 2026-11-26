@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 import '../../../../core/constants/geo_constants.dart';
+import '../../../../core/geo/cajamarca_urban_zones.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
@@ -17,6 +18,8 @@ import '../widgets/admin_bottom_nav_bar.dart';
 import '../widgets/admin_load_notice.dart';
 import '../widgets/admin_map_crew_preview_card.dart';
 import '../widgets/admin_map_report_preview_card.dart';
+import '../widgets/admin_map_zone_card.dart';
+import '../widgets/admin_map_zone_layer.dart';
 
 /// Filtros para la visualización de capas en el mapa macro urbano.
 enum AdminMapFilter {
@@ -52,6 +55,7 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
   AdminMapFilter _activeFilter = AdminMapFilter.all;
   String? _selectedReportId;
   String? _selectedCrewId;
+  CajamarcaZone? _selectedZone;
   bool _showLegend = false;
 
   @override
@@ -75,10 +79,17 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
     super.dispose();
   }
 
-  void _recenterMap([double lat = _cityCenterLat, double lng = _cityCenterLng]) {
-    try {
-      _mapController.move(LatLng(lat, lng), 14.5);
-    } catch (_) {}
+  static final _urbanCameraFit = CameraFit.bounds(
+    bounds: AppGeoConstants.cajamarcaBounds,
+    padding: const EdgeInsets.fromLTRB(24, 72, 24, 32),
+  );
+
+  void _selectZone(CajamarcaZone? zone) {
+    setState(() {
+      _selectedZone = zone;
+      _selectedReportId = null;
+      _selectedCrewId = null;
+    });
   }
 
   List<ReportEntity> _getFilteredReports(List<ReportEntity> allReports) {
@@ -111,13 +122,30 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
     final adminReportsState = ref.watch(adminReportsViewModelProvider);
     final viewModel = ref.read(adminReportsViewModelProvider.notifier);
 
-    final reports = adminReportsState.reports;
+    final reports = adminReportsState.reports
+        .where(
+          (report) => AppGeoConstants.isInsideCajamarca(
+            report.latitude,
+            report.longitude,
+          ),
+        )
+        .toList();
     final crews = adminReportsState.teams;
     final hasReports = adminReportsState.hasLoadedReports;
     final hasCrews = adminReportsState.hasLoadedCrews;
-    final selectedReport = reports.where((report) => report.id == _selectedReportId).firstOrNull;
-    final selectedCrew = crews.where((crew) => crew.id == _selectedCrewId && crew.hasLocation).firstOrNull;
-    final initialCrew = crews.where((crew) => crew.id == widget.initialCrewId && crew.hasLocation).firstOrNull;
+    final selectedReport = reports
+        .where((report) => report.id == _selectedReportId)
+        .firstOrNull;
+    final selectedCrew = crews
+        .where((crew) => crew.id == _selectedCrewId && crew.hasLocation)
+        .firstOrNull;
+    final initialCrew = crews
+        .where((crew) => crew.id == widget.initialCrewId && crew.hasLocation)
+        .firstOrNull;
+    final selectedZone = _selectedZone;
+    final urbanReports = selectedZone == null
+        ? null
+        : ref.watch(urbanReportsProvider);
 
     final visibleReports = _getFilteredReports(reports);
     final visibleCrews = _getFilteredCrews(crews);
@@ -181,7 +209,14 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Color(0xFF475569)),
             tooltip: 'Actualizar mapa',
-            onPressed: adminReportsState.isLoading ? null : viewModel.refresh,
+            onPressed: adminReportsState.isLoading
+                ? null
+                : () {
+                    if (_selectedZone != null) {
+                      ref.invalidate(urbanReportsProvider);
+                    }
+                    viewModel.refresh();
+                  },
           ),
           const SizedBox(width: 4),
         ],
@@ -190,16 +225,22 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
         children: [
           AdminLoadNotice(state: adminReportsState, onRetry: viewModel.refresh),
           if (adminReportsState.isLoadingMore)
-            const LinearProgressIndicator(semanticsLabel: 'Cargando más incidencias'),
-          if (hasReports || hasCrews)
+            const LinearProgressIndicator(
+              semanticsLabel: 'Cargando más incidencias',
+            ),
+          if (widget.initialCrewId == null ||
+              hasCrews ||
+              !adminReportsState.isLoading)
             Expanded(
               child: Stack(
                 children: [
-                  // 1. Capa de Mapa Real con OpenStreetMap o fallback de test
+                  // 1. Mapa base, sectores urbanos y marcadores operativos
                   Positioned.fill(
-                    child: _isFlutterTest
-                        ? _buildTestVectorMap(visibleReports, visibleCrews)
-                        : _buildOpenStreetMap(visibleReports, visibleCrews, initialCrew),
+                    child: _buildOpenStreetMap(
+                      visibleReports,
+                      visibleCrews,
+                      initialCrew,
+                    ),
                   ),
 
                   // 2. Barra Flotante de Filtros Rápidos (Chips)
@@ -252,6 +293,10 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
                       top: 60,
                       left: 16,
                       child: Container(
+                        constraints: const BoxConstraints(
+                          maxWidth: 220,
+                          maxHeight: 320,
+                        ),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: Colors.white.withAlpha(245),
@@ -261,34 +306,74 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
                           ],
                           border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
-                        child: const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Leyenda de Monitoreo',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                            ),
-                            SizedBox(height: 6),
-                            _LegendItem(color: Color(0xFFDC2626), label: 'Urgente / Alta'),
-                            _LegendItem(color: Color(0xFFD97706), label: 'Media Prioridad'),
-                            _LegendItem(color: Color(0xFF059669), label: 'Baja Prioridad'),
-                            _LegendItem(color: Color(0xFF0A5835), label: 'Personal Activo (Camión)'),
-                          ],
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text(
+                                'Leyenda de Monitoreo',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              const _LegendItem(
+                                color: Color(0xFFDC2626),
+                                label: 'Urgente / Alta',
+                              ),
+                              const _LegendItem(
+                                color: Color(0xFFD97706),
+                                label: 'Media Prioridad',
+                              ),
+                              const _LegendItem(
+                                color: Color(0xFF059669),
+                                label: 'Baja Prioridad',
+                              ),
+                              const _LegendItem(
+                                color: Color(0xFF0A5835),
+                                label: 'Personal Activo (Camión)',
+                              ),
+                              const Divider(),
+                              for (final zone in CajamarcaZone.values)
+                                TextButton(
+                                  style: TextButton.styleFrom(
+                                    minimumSize: const Size(0, 34),
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  onPressed: () {
+                                    _showLegend = false;
+                                    _selectZone(zone);
+                                  },
+                                  child: _LegendItem(
+                                    color: adminZoneColors[zone]!,
+                                    label: zone.name,
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
 
                   // 4. Botón flotante para recentrar mapa
                   Positioned(
-                    bottom: (selectedReport != null || selectedCrew != null) ? 260 : 20,
+                    bottom: selectedReport != null || selectedCrew != null
+                        ? 260
+                        : selectedZone != null
+                        ? 128
+                        : 20,
                     right: 16,
                     child: FloatingActionButton.small(
                       heroTag: 'recenter_admin_map',
                       backgroundColor: Colors.white,
                       foregroundColor: const Color(0xFF0A5835),
                       elevation: 4,
-                      onPressed: () => _recenterMap(),
+                      tooltip: 'Ver toda el área urbana',
+                      onPressed: () =>
+                          _mapController.fitCamera(_urbanCameraFit),
                       child: const Icon(Icons.my_location_rounded, size: 20),
                     ),
                   ),
@@ -324,6 +409,26 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
                         },
                       ),
                     ),
+                  if (selectedZone != null)
+                    Positioned(
+                      bottom: 16,
+                      left: 16,
+                      right: 16,
+                      child: AdminMapZoneCard(
+                        zone: selectedZone,
+                        count: urbanReports!.hasValue
+                            ? urbanReports.requireValue[selectedZone]?.length ??
+                                  0
+                            : null,
+                        isLoading: urbanReports.isLoading,
+                        hasError: urbanReports.hasError,
+                        onClose: () => _selectZone(null),
+                        onRetry: () => ref.invalidate(urbanReportsProvider),
+                        onViewReports: () => context.go(
+                          RouteNames.adminReportsByZone(selectedZone.id),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -342,25 +447,26 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
             ? const LatLng(_cityCenterLat, _cityCenterLng)
             : LatLng(initialCrew.latitude, initialCrew.longitude),
         initialZoom: initialCrew == null ? 14.2 : 15.5,
+        initialCameraFit: initialCrew == null ? _urbanCameraFit : null,
         minZoom: 3.0,
         maxZoom: 19.0,
-        interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
-        onTap: (_, __) {
-          if (_selectedReportId != null || _selectedCrewId != null) {
-            setState(() {
-              _selectedReportId = null;
-              _selectedCrewId = null;
-            });
-          }
-        },
+        interactionOptions: const InteractionOptions(
+          flags: InteractiveFlag.all,
+        ),
+        onTap: (_, point) => _selectZone(
+          CajamarcaUrbanZones.zoneAt(point.latitude, point.longitude),
+        ),
       ),
       children: [
         // 1. Teselas OpenStreetMap 100% libres
-        TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.example.ecoroute',
-          maxZoom: 19,
-        ),
+        if (!_isFlutterTest)
+          TileLayer(
+            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            userAgentPackageName: 'com.example.ecoroute',
+            maxZoom: 19,
+          ),
+
+        AdminMapZoneLayer(selectedZone: _selectedZone),
 
         // 2. Capa de Cuadrillas Municipales y Reportes
         MarkerLayer(
@@ -393,8 +499,9 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
           setState(() {
             _selectedCrewId = crew.id;
             _selectedReportId = null;
+            _selectedZone = null;
           });
-          _recenterMap(crew.latitude, crew.longitude);
+          _mapController.move(LatLng(crew.latitude, crew.longitude), 14.5);
         },
         child: AnimatedScale(
           scale: isSelected ? 1.15 : 1.0,
@@ -461,8 +568,9 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
           setState(() {
             _selectedReportId = report.id;
             _selectedCrewId = null;
+            _selectedZone = null;
           });
-          _recenterMap(report.latitude, report.longitude);
+          _mapController.move(LatLng(report.latitude, report.longitude), 14.5);
         },
         child: AnimatedScale(
           scale: isSelected ? 1.15 : 1.0,
@@ -529,49 +637,6 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
       case ReportPriority.low:
         return const Color(0xFF059669);
     }
-  }
-
-  // --- Fallback Vectorial para Entornos de Pruebas ---
-  Widget _buildTestVectorMap(List<ReportEntity> reports, List<MunicipalCrewEntity> crews) {
-    return Container(
-      color: const Color(0xFFF1F5F9),
-      child: Center(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.map_rounded, size: 48, color: Color(0xFF0A5835)),
-              const SizedBox(height: 8),
-              const Text(
-                'Simulación de Mapa Macro Urbano (Test)',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-              ),
-              const SizedBox(height: 6),
-              Text('${reports.length} reportes geolocalizados'),
-              Text('${crews.length} cuadrillas activas'),
-              const SizedBox(height: 12),
-              // Botón rápido para simular clic en reporte en tests
-              if (reports.isNotEmpty)
-                ElevatedButton(
-                  onPressed: () => setState(() {
-                    _selectedReportId = reports.first.id;
-                    _selectedCrewId = null;
-                  }),
-                  child: const Text('Simular Selección de Reporte'),
-                ),
-              if (crews.isNotEmpty)
-                ElevatedButton(
-                  onPressed: () => setState(() {
-                    _selectedCrewId = crews.first.id;
-                    _selectedReportId = null;
-                  }),
-                  child: const Text('Simular Selección de Cuadrilla'),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   void _openAssignModal({

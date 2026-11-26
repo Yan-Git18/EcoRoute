@@ -35,6 +35,7 @@ class RouteNames {
   // Administrador Municipal
   static const String adminDashboard = '/admin';
   static const String adminReports = '/admin/reports';
+  static const String adminReportZoneParameter = 'zona';
   static const String adminReportDetail = '/admin/report/:id';
   static const String adminAssignStaff = '/admin/assign/:id';
   static const String adminLiveMap = '/admin/live-map';
@@ -44,6 +45,11 @@ class RouteNames {
   static const String adminStaff = '/admin/staff';
   static const String adminFleet = '/admin/fleet';
   static const String adminProfile = '/admin/profile';
+
+  static String adminReportsByZone(String zoneId) => Uri(
+    path: adminReports,
+    queryParameters: {adminReportZoneParameter: zoneId},
+  ).toString();
 
   static String adminReportLocation(String id) =>
       adminReportDetail.replaceFirst(':id', Uri.encodeComponent(id));

@@ -4,7 +4,12 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/route_names.dart';
 
 class AdminBackButton extends StatelessWidget {
-  const AdminBackButton({super.key});
+  const AdminBackButton({
+    super.key,
+    this.fallbackRoute = RouteNames.adminDashboard,
+  });
+
+  final String fallbackRoute;
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +23,7 @@ class AdminBackButton extends StatelessWidget {
         } else if (router.canPop()) {
           router.pop();
         } else {
-          router.go(RouteNames.adminDashboard);
+          router.go(fallbackRoute);
         }
       },
     );
