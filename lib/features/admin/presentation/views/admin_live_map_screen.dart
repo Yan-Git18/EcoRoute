@@ -1,22 +1,29 @@
 import 'dart:io' show Platform;
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart' hide Path;
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../../../core/constants/geo_constants.dart';
 import '../../../../core/geo/cajamarca_urban_zones.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../domain/entities/municipal_crew_entity.dart';
+import '../models/admin_map_report_status.dart';
 import '../viewmodels/admin_reports_viewmodel.dart';
 import '../widgets/admin_assign_crew_modal.dart';
 import '../widgets/admin_back_button.dart';
 import '../widgets/admin_bottom_nav_bar.dart';
 import '../widgets/admin_load_notice.dart';
 import '../widgets/admin_map_crew_preview_card.dart';
+import '../widgets/admin_map_report_group_sheet.dart';
+import '../widgets/admin_map_report_layer.dart';
 import '../widgets/admin_map_report_preview_card.dart';
 import '../widgets/admin_map_zone_card.dart';
 import '../widgets/admin_map_zone_layer.dart';
@@ -26,6 +33,7 @@ enum AdminMapFilter {
   all('Todas'),
   urgent('Urgentes'),
   pending('Pendientes'),
+  assigned('Asignados'),
   crews('Personal');
 
   final String label;
@@ -68,6 +76,7 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
   // Centro urbano de referencia (Cajamarca / Municipalidad)
   static const double _cityCenterLat = AppGeoConstants.cajamarcaCenterLat;
   static const double _cityCenterLng = AppGeoConstants.cajamarcaCenterLng;
+  static const double _maxZoom = 19;
 
   bool get _isFlutterTest {
     return !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
@@ -87,9 +96,57 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
   void _selectZone(CajamarcaZone? zone) {
     setState(() {
       _selectedZone = zone;
+      if (zone != null && _activeFilter == AdminMapFilter.crews) {
+        _activeFilter = AdminMapFilter.all;
+      }
       _selectedReportId = null;
       _selectedCrewId = null;
     });
+  }
+
+  void _selectReport(ReportEntity report) {
+    setState(() {
+      _selectedReportId = report.id;
+      _selectedCrewId = null;
+    });
+  }
+
+  void _selectFilter(AdminMapFilter filter) {
+    setState(() {
+      _activeFilter = filter;
+      if (filter == AdminMapFilter.crews) _selectedZone = null;
+      _selectedReportId = null;
+      _selectedCrewId = null;
+    });
+  }
+
+  Future<void> _openReportGroup(List<ReportEntity> reports) async {
+    final coordinates = {
+      for (final report in reports) LatLng(report.latitude, report.longitude),
+    };
+    final currentZoom = _mapController.camera.zoom;
+    final targetZoom = math.min(currentZoom + 2, _maxZoom);
+    final canZoom = coordinates.length > 1 && targetZoom > currentZoom;
+    final selected = await showModalBottomSheet<ReportEntity>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => AdminMapReportGroupSheet(
+        reports: reports,
+        onZoom: canZoom
+            ? () {
+                _mapController.fitCamera(
+                  CameraFit.coordinates(
+                    coordinates: coordinates.toList(),
+                    padding: const EdgeInsets.fromLTRB(32, 72, 32, 32),
+                    maxZoom: targetZoom,
+                  ),
+                );
+              }
+            : null,
+      ),
+    );
+    if (mounted && selected != null) _selectReport(selected);
   }
 
   List<ReportEntity> _getFilteredReports(List<ReportEntity> allReports) {
@@ -99,14 +156,16 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
       case AdminMapFilter.urgent:
         return allReports.where((r) => r.priority == ReportPriority.high).toList();
       case AdminMapFilter.pending:
-        return allReports.where((r) => r.status == ReportStatus.pending).toList();
+        return allReports.where((report) => !report.isAssignedForOperations).toList();
+      case AdminMapFilter.assigned:
+        return allReports.where((report) => report.isAssignedForOperations).toList();
       case AdminMapFilter.crews:
         return [];
     }
   }
 
   List<MunicipalCrewEntity> _getFilteredCrews(List<MunicipalCrewEntity> allCrews) {
-    if (_activeFilter == AdminMapFilter.urgent || _activeFilter == AdminMapFilter.pending) {
+    if (_activeFilter != AdminMapFilter.all && _activeFilter != AdminMapFilter.crews) {
       return [];
     }
     return allCrews.where((crew) => crew.hasLocation).toList();
@@ -122,16 +181,15 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
     final adminReportsState = ref.watch(adminReportsViewModelProvider);
     final viewModel = ref.read(adminReportsViewModelProvider.notifier);
 
-    final reports = adminReportsState.reports
-        .where(
-          (report) => AppGeoConstants.isInsideCajamarca(
-            report.latitude,
-            report.longitude,
-          ),
-        )
-        .toList();
+    final urbanReports = ref.watch(urbanReportsProvider);
+    final zones = urbanReports.value;
+    final selectedZone = _selectedZone;
+    final zonedReports = selectedZone == null
+        ? [for (final group in zones?.values ?? const <List<ReportEntity>>[]) ...group]
+        : zones?[selectedZone] ?? const <ReportEntity>[];
+    final reports = zonedReports.where((report) => report.isOpenForOperations).toList();
     final crews = adminReportsState.teams;
-    final hasReports = adminReportsState.hasLoadedReports;
+    final hasReports = urbanReports.hasValue;
     final hasCrews = adminReportsState.hasLoadedCrews;
     final selectedReport = reports
         .where((report) => report.id == _selectedReportId)
@@ -142,16 +200,30 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
     final initialCrew = crews
         .where((crew) => crew.id == widget.initialCrewId && crew.hasLocation)
         .firstOrNull;
-    final selectedZone = _selectedZone;
-    final urbanReports = selectedZone == null
-        ? null
-        : ref.watch(urbanReportsProvider);
-
     final visibleReports = _getFilteredReports(reports);
     final visibleCrews = _getFilteredCrews(crews);
 
     final urgentCount = reports.where((r) => r.priority == ReportPriority.high).length;
-    final pendingCount = reports.where((r) => r.status == ReportStatus.pending).length;
+    final assignedCount = reports.where((report) => report.isAssignedForOperations).length;
+    final pendingCount = reports.length - assignedCount;
+
+    final totals = adminReportsState.totals;
+    final municipalTotal = switch (_activeFilter) {
+      AdminMapFilter.all when totals != null => totals.pending + totals.assigned + totals.inProgress,
+      _ => null,
+    };
+    final mapCount = visibleReports.length;
+    final subtitle = switch (_activeFilter) {
+      AdminMapFilter.crews => '${visibleCrews.length} equipos en el mapa',
+      _ when !hasReports => urbanReports.hasError ? 'Reportes no disponibles' : 'Cargando incidencias…',
+      _ when selectedZone == null && municipalTotal != null && municipalTotal > mapCount =>
+        '$mapCount de $municipalTotal en zona urbana',
+      _ => '$mapCount incidencias abiertas en el mapa',
+    };
+    void refresh() {
+      ref.invalidate(urbanReportsProvider);
+      viewModel.refresh();
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -173,7 +245,7 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
               ),
             ),
             Text(
-              '${hasReports ? reports.length : '—'} incidencias cargadas',
+              subtitle,
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
@@ -183,21 +255,6 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
           ],
         ),
         actions: [
-          if (adminReportsState.nextCursor != null)
-            IconButton(
-              icon: const Icon(Icons.expand_more),
-              tooltip: 'Cargar más incidencias en el mapa',
-              onPressed: adminReportsState.isLoading || adminReportsState.isLoadingMore
-                  ? null
-                  : () async {
-                      await viewModel.loadMoreReports();
-                      if (context.mounted && ref.read(adminReportsViewModelProvider).loadMoreFailed) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('No se pudo cargar la página siguiente.')),
-                        );
-                      }
-                    },
-            ),
           IconButton(
             icon: Icon(
               _showLegend ? Icons.info_rounded : Icons.info_outline_rounded,
@@ -209,25 +266,23 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Color(0xFF475569)),
             tooltip: 'Actualizar mapa',
-            onPressed: adminReportsState.isLoading
+            onPressed: urbanReports.isLoading || adminReportsState.isLoading
                 ? null
-                : () {
-                    if (_selectedZone != null) {
-                      ref.invalidate(urbanReportsProvider);
-                    }
-                    viewModel.refresh();
-                  },
+                : refresh,
           ),
           const SizedBox(width: 4),
         ],
       ),
       body: Column(
         children: [
-          AdminLoadNotice(state: adminReportsState, onRetry: viewModel.refresh),
-          if (adminReportsState.isLoadingMore)
-            const LinearProgressIndicator(
-              semanticsLabel: 'Cargando más incidencias',
+          AdminLoadNotice(
+            state: adminReportsState.copyWith(
+              reportsLoadFailed: urbanReports.hasError,
+              hasLoadedReports: hasReports,
+              isLoading: urbanReports.isLoading || adminReportsState.isLoading,
             ),
+            onRetry: refresh,
+          ),
           if (widget.initialCrewId == null ||
               hasCrews ||
               !adminReportsState.isLoading)
@@ -256,15 +311,7 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
                           _MapFilterChip(
                             label: 'Todos (${hasReports ? reports.length : '—'})',
                             isSelected: _activeFilter == AdminMapFilter.all,
-                            onTap: () => setState(() => _activeFilter = AdminMapFilter.all),
-                          ),
-                          const SizedBox(width: 8),
-                          _MapFilterChip(
-                            label: 'Urgentes (${hasReports ? urgentCount : '—'})',
-                            isSelected: _activeFilter == AdminMapFilter.urgent,
-                            color: const Color(0xFFDC2626),
-                            icon: Icons.priority_high_rounded,
-                            onTap: () => setState(() => _activeFilter = AdminMapFilter.urgent),
+                            onTap: () => _selectFilter(AdminMapFilter.all),
                           ),
                           const SizedBox(width: 8),
                           _MapFilterChip(
@@ -272,7 +319,23 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
                             isSelected: _activeFilter == AdminMapFilter.pending,
                             color: const Color(0xFFD97706),
                             icon: Icons.pending_actions_rounded,
-                            onTap: () => setState(() => _activeFilter = AdminMapFilter.pending),
+                            onTap: () => _selectFilter(AdminMapFilter.pending),
+                          ),
+                          const SizedBox(width: 8),
+                          _MapFilterChip(
+                            label: 'Asignados (${hasReports ? assignedCount : '—'})',
+                            isSelected: _activeFilter == AdminMapFilter.assigned,
+                            color: adminMapAssignedColor,
+                            icon: Icons.assignment_ind_rounded,
+                            onTap: () => _selectFilter(AdminMapFilter.assigned),
+                          ),
+                          const SizedBox(width: 8),
+                          _MapFilterChip(
+                            label: 'Urgentes (${hasReports ? urgentCount : '—'})',
+                            isSelected: _activeFilter == AdminMapFilter.urgent,
+                            color: const Color(0xFFDC2626),
+                            icon: Icons.priority_high_rounded,
+                            onTap: () => _selectFilter(AdminMapFilter.urgent),
                           ),
                           const SizedBox(width: 8),
                           _MapFilterChip(
@@ -280,7 +343,7 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
                             isSelected: _activeFilter == AdminMapFilter.crews,
                             color: const Color(0xFF047857),
                             icon: Icons.local_shipping_rounded,
-                            onTap: () => setState(() => _activeFilter = AdminMapFilter.crews),
+                            onTap: () => _selectFilter(AdminMapFilter.crews),
                           ),
                         ],
                       ),
@@ -294,7 +357,7 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
                       left: 16,
                       child: Container(
                         constraints: const BoxConstraints(
-                          maxWidth: 220,
+                          maxWidth: 280,
                           maxHeight: 320,
                         ),
                         padding: const EdgeInsets.all(12),
@@ -312,46 +375,54 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               const Text(
-                                'Leyenda de Monitoreo',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                                'Zonas urbanas',
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                               ),
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 4),
+                              Wrap(
+                                spacing: 4,
+                                children: [
+                                  for (final zone in CajamarcaZone.values)
+                                    TextButton(
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                                      ),
+                                      onPressed: () {
+                                        _showLegend = false;
+                                        _selectZone(zone);
+                                      },
+                                      child: _LegendItem(
+                                        color: adminZoneColors[zone]!,
+                                        label: zone.name,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const Divider(),
+                              const Text(
+                                'Marcadores',
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                              ),
                               const _LegendItem(
                                 color: Color(0xFFDC2626),
-                                label: 'Urgente / Alta',
+                                label: 'Pendiente urgente',
                               ),
                               const _LegendItem(
                                 color: Color(0xFFD97706),
-                                label: 'Media Prioridad',
+                                label: 'Pendiente · Prioridad media',
                               ),
                               const _LegendItem(
                                 color: Color(0xFF059669),
-                                label: 'Baja Prioridad',
+                                label: 'Pendiente · Prioridad baja',
+                              ),
+                              const _LegendItem(
+                                color: adminMapAssignedColor,
+                                label: 'Asignado o en atención',
                               ),
                               const _LegendItem(
                                 color: Color(0xFF0A5835),
                                 label: 'Personal Activo (Camión)',
                               ),
-                              const Divider(),
-                              for (final zone in CajamarcaZone.values)
-                                TextButton(
-                                  style: TextButton.styleFrom(
-                                    minimumSize: const Size(0, 34),
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                  onPressed: () {
-                                    _showLegend = false;
-                                    _selectZone(zone);
-                                  },
-                                  child: _LegendItem(
-                                    color: adminZoneColors[zone]!,
-                                    label: zone.name,
-                                  ),
-                                ),
                             ],
                           ),
                         ),
@@ -387,11 +458,14 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
                       child: AdminMapReportPreviewCard(
                         report: selectedReport,
                         onClose: () => setState(() => _selectedReportId = null),
-                        onAssignCrew: () => _openAssignModal(
-                          report: selectedReport,
-                          adminId: adminId,
-                          adminName: adminName,
-                        ),
+                        onAssignCrew: selectedReport.isReservedForRoute ||
+                                selectedReport.status == ReportStatus.inProgress
+                            ? null
+                            : () => _openAssignModal(
+                                report: selectedReport,
+                                adminId: adminId,
+                                adminName: adminName,
+                              ),
                       ),
                     ),
 
@@ -409,23 +483,23 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
                         },
                       ),
                     ),
-                  if (selectedZone != null)
+                  if (selectedZone != null && selectedReport == null)
                     Positioned(
                       bottom: 16,
                       left: 16,
                       right: 16,
                       child: AdminMapZoneCard(
                         zone: selectedZone,
-                        count: urbanReports!.hasValue
-                            ? urbanReports.requireValue[selectedZone]?.length ??
-                                  0
-                            : null,
+                        count: hasReports ? reports.length : null,
+                        filteredCount: _activeFilter == AdminMapFilter.all
+                            ? null
+                            : visibleReports.length,
                         isLoading: urbanReports.isLoading,
                         hasError: urbanReports.hasError,
                         onClose: () => _selectZone(null),
                         onRetry: () => ref.invalidate(urbanReportsProvider),
                         onViewReports: () => context.go(
-                          RouteNames.adminReportsByZone(selectedZone.id),
+                          RouteNames.adminReportsByZone(selectedZone.id, openOnly: true),
                         ),
                       ),
                     ),
@@ -449,7 +523,7 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
         initialZoom: initialCrew == null ? 14.2 : 15.5,
         initialCameraFit: initialCrew == null ? _urbanCameraFit : null,
         minZoom: 3.0,
-        maxZoom: 19.0,
+        maxZoom: _maxZoom,
         interactionOptions: const InteractionOptions(
           flags: InteractiveFlag.all,
         ),
@@ -468,17 +542,21 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
 
         AdminMapZoneLayer(selectedZone: _selectedZone),
 
-        // 2. Capa de Cuadrillas Municipales y Reportes
         MarkerLayer(
-          markers: [
-            // Marcadores de Cuadrillas
-            for (final crew in crews)
-              _buildCrewMarker(crew),
-
-            // Marcadores de Incidencias Ciudadanas
-            for (final report in reports)
-              _buildReportMarker(report),
-          ],
+          markers: [for (final crew in crews) _buildCrewMarker(crew)],
+        ),
+        AdminMapReportLayer(
+          reports: reports,
+          selectedReportId: _selectedReportId,
+          onReportTap: _selectReport,
+          onGroupTap: _openReportGroup,
+        ),
+        SimpleAttributionWidget(
+          alignment: Alignment.bottomLeft,
+          source: const Text('OpenStreetMap'),
+          onTap: () => launchUrl(
+            Uri.https('www.openstreetmap.org', '/copyright'),
+          ),
         ),
       ],
     );
@@ -550,93 +628,6 @@ class _AdminLiveMapScreenState extends ConsumerState<AdminLiveMapScreen> {
         ),
       ),
     );
-  }
-
-  // Marcador interactivo de Reporte Ciudadano
-  Marker _buildReportMarker(ReportEntity report) {
-    final isSelected = _selectedReportId == report.id;
-    final pinColor = _getReportPinColor(report);
-
-    return Marker(
-      point: LatLng(report.latitude, report.longitude),
-      width: isSelected ? 86 : 74,
-      height: isSelected ? 72 : 62,
-      alignment: Alignment.center,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          setState(() {
-            _selectedReportId = report.id;
-            _selectedCrewId = null;
-            _selectedZone = null;
-          });
-          _mapController.move(LatLng(report.latitude, report.longitude), 14.5);
-        },
-        child: AnimatedScale(
-          scale: isSelected ? 1.15 : 1.0,
-          duration: const Duration(milliseconds: 200),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isSelected ? const Color(0xFF0F172A) : pinColor,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: const [
-                    BoxShadow(color: Color(0x33000000), blurRadius: 4, offset: Offset(0, 2)),
-                  ],
-                ),
-                child: Text(
-                  report.reportNumber,
-                  maxLines: 1,
-                  softWrap: false,
-                  style: const TextStyle(
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: pinColor,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                  boxShadow: const [
-                    BoxShadow(color: Color(0x33000000), blurRadius: 5, offset: Offset(0, 2)),
-                  ],
-                ),
-                child: Icon(
-                  report.priority == ReportPriority.high
-                      ? Icons.warning_rounded
-                      : Icons.delete_outline_rounded,
-                  color: Colors.white,
-                  size: 15,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Color _getReportPinColor(ReportEntity report) {
-    if (report.status == ReportStatus.resolved) return const Color(0xFF0284C7);
-    switch (report.priority) {
-      case ReportPriority.high:
-        return const Color(0xFFDC2626);
-      case ReportPriority.medium:
-        return const Color(0xFFD97706);
-      case ReportPriority.low:
-        return const Color(0xFF059669);
-    }
   }
 
   void _openAssignModal({
@@ -732,7 +723,12 @@ class _LegendItem extends StatelessWidget {
             decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 6),
-          Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF475569))),
+          Flexible(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF475569)),
+            ),
+          ),
         ],
       ),
     );

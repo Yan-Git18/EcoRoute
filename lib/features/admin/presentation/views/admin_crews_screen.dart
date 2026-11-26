@@ -41,7 +41,6 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
             crew.name,
             crew.vehicleCode,
             crew.vehiclePlate,
-            crew.zone,
             crew.leadStaffName,
           ].any((field) => field.toLowerCase().contains(query));
     }).toList();
@@ -178,7 +177,7 @@ class _AdminCrewsScreenState extends ConsumerState<AdminCrewsScreen> {
               label: const Text('Nuevo equipo'),
             )
           : null,
-      bottomNavigationBar: const AdminBottomNavBar(currentIndex: 3),
+      bottomNavigationBar: const AdminBottomNavBar(currentIndex: 4),
     );
   }
 }

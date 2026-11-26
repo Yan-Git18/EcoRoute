@@ -90,6 +90,7 @@ class ReportDto {
   final DateTime createdAt;
   final DateTime? updatedAt;
   final String? assignedToTeamId;
+  final String? collectionRouteId;
   final String? assignedToTeamName;
   final String? assignedStaffName;
   final List<String> assignedStaffIds;
@@ -119,6 +120,7 @@ class ReportDto {
     required this.createdAt,
     this.updatedAt,
     this.assignedToTeamId,
+    this.collectionRouteId,
     this.assignedToTeamName,
     this.assignedStaffName,
     this.assignedStaffIds = const [],
@@ -175,6 +177,7 @@ class ReportDto {
       createdAt: parseDate(map['createdAt']),
       updatedAt: map['updatedAt'] != null ? parseDate(map['updatedAt']) : null,
       assignedToTeamId: map['assignedToTeamId'] as String?,
+      collectionRouteId: map['collectionRouteId'] as String?,
       assignedStaffIds: (map['assignedStaffIds'] as List?)?.whereType<String>().toList() ??
           [if (map['assignedStaffId'] case final String id) id],
       assignedToTeamName: map['assignedToTeamName'] as String?,
@@ -221,6 +224,7 @@ class ReportDto {
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': FieldValue.serverTimestamp(),
       if (assignedToTeamId != null) 'assignedToTeamId': assignedToTeamId,
+      if (collectionRouteId != null) 'collectionRouteId': collectionRouteId,
       if (assignedToTeamName != null) 'assignedToTeamName': assignedToTeamName,
       if (assignedStaffName != null) 'assignedStaffName': assignedStaffName,
       if (assignedStaffIds.isNotEmpty) 'assignedStaffIds': assignedStaffIds,
@@ -254,6 +258,7 @@ class ReportDto {
       createdAt: createdAt,
       updatedAt: updatedAt,
       assignedToTeamId: assignedToTeamId,
+      collectionRouteId: collectionRouteId,
       assignedToTeamName: assignedToTeamName,
       assignedStaffName: assignedStaffName,
       assignedStaffIds: assignedStaffIds,
@@ -286,6 +291,7 @@ class ReportDto {
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
       assignedToTeamId: entity.assignedToTeamId,
+      collectionRouteId: entity.collectionRouteId,
       assignedToTeamName: entity.assignedToTeamName,
       assignedStaffName: entity.assignedStaffName,
       assignedStaffIds: entity.assignedStaffIds,

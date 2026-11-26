@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
+import '../../../citizen/presentation/widgets/report_status_badge.dart';
+import '../models/admin_map_report_status.dart';
 
 /// Tarjeta flotante emergente para inspección y despacho de un reporte seleccionado en el mapa.
 ///
@@ -151,6 +153,12 @@ class AdminMapReportPreviewCard extends StatelessWidget {
                 ],
               ),
 
+              const SizedBox(height: 8),
+              if (report.isReservedForRoute)
+                const Text('Asignado a una ruta')
+              else
+                ReportStatusBadge(status: report.status, showIcon: true),
+
               // 3. Estado de Asignación si ya tiene cuadrilla
               if (report.assignedToTeamName != null || report.assignedStaffName != null) ...[
                 const SizedBox(height: 8),
@@ -167,7 +175,8 @@ class AdminMapReportPreviewCard extends StatelessWidget {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          'Asignado a: ${report.assignedToTeamName} (${report.assignedVehicle ?? ""})',
+                          'Asignado a: ${report.assignedToTeamName ?? report.assignedStaffName}'
+                          '${report.assignedVehicle?.isNotEmpty == true ? ' (${report.assignedVehicle})' : ''}',
                           style: const TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w700,
@@ -209,32 +218,34 @@ class AdminMapReportPreviewCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    flex: 1,
-                    child: ElevatedButton.icon(
-                      onPressed: onAssignCrew,
-                      icon: Icon(
-                        isPending ? Icons.send_rounded : Icons.swap_horiz_rounded,
-                        size: 15,
-                        color: Colors.white,
-                      ),
-                      label: Text(
-                        isPending ? 'Asignar' : 'Reasignar',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
+                  if (onAssignCrew != null) ...[
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 1,
+                      child: ElevatedButton.icon(
+                        onPressed: onAssignCrew,
+                        icon: Icon(
+                          isPending ? Icons.send_rounded : Icons.swap_horiz_rounded,
+                          size: 15,
                           color: Colors.white,
                         ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0A5835),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        elevation: 0,
+                        label: Text(
+                          isPending ? 'Asignar' : 'Reasignar',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0A5835),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          elevation: 0,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ],

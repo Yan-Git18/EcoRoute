@@ -8,6 +8,7 @@ const adminZoneColors = {
   CajamarcaZone.northwest: Color(0xFF805124),
   CajamarcaZone.northeast: Color(0xFF5B42A6),
   CajamarcaZone.southwest: Color(0xFF9C6700),
+  CajamarcaZone.east: Color(0xFF176E9A),
   CajamarcaZone.southeast: Color(0xFF087849),
 };
 

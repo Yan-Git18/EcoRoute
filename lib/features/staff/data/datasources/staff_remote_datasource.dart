@@ -5,6 +5,7 @@ import '../../../../core/errors/exceptions.dart';
 import '../../../../core/services/report_status_transaction.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
+import '../../../routes/data/route_stop_transaction.dart';
 import '../models/staff_task_dto.dart';
 
 /// Contrato abstracto para la fuente de datos remota de tareas del Personal de Limpieza.
@@ -127,6 +128,7 @@ class FirebaseStaffRemoteDataSourceImpl implements StaffRemoteDataSource {
 
     try {
       final docRef = _firestore.collection('reports').doc(taskId);
+      final routeStop = RouteStopTransaction(_firestore, taskId);
 
       final updateData = <String, dynamic>{
         'status': newStatus.toDbString(),
@@ -149,6 +151,10 @@ class FirebaseStaffRemoteDataSourceImpl implements StaffRemoteDataSource {
           role: 'staff',
           comment: notes ?? 'Estado actualizado por el personal de limpieza.',
         ),
+        prepare: newStatus == ReportStatus.inProgress ? routeStop.start : null,
+        stageRelatedWrites: newStatus == ReportStatus.resolved
+            ? routeStop.complete
+            : null,
         evidencePhotos: evidencePhotos,
       );
       return StaffTaskDto.fromFirestore(taskId, {

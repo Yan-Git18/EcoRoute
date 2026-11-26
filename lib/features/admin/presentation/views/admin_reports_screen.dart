@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +10,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../domain/entities/admin_report_page.dart';
 import 'admin_report_detail_screen.dart';
+import '../models/admin_map_report_status.dart';
 import '../viewmodels/admin_reports_state.dart';
 import '../viewmodels/admin_reports_viewmodel.dart';
 import '../widgets/admin_back_button.dart';
@@ -17,9 +20,10 @@ import '../widgets/admin_load_notice.dart';
 import '../widgets/admin_report_card.dart';
 
 class AdminReportsScreen extends ConsumerStatefulWidget {
-  const AdminReportsScreen({super.key, this.zone});
+  const AdminReportsScreen({super.key, this.zone, this.openOnly});
 
   final CajamarcaZone? zone;
+  final bool? openOnly;
 
   @override
   ConsumerState<AdminReportsScreen> createState() => _AdminReportsScreenState();
@@ -27,11 +31,15 @@ class AdminReportsScreen extends ConsumerStatefulWidget {
 
 class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final _scrollController = ScrollController();
   AdminReportFilter _zoneFilter = AdminReportFilter.all;
+  int _zoneLimit = AdminReportPage.pageSize;
+  bool _loadScheduled = false;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     if (widget.zone == null) {
       _searchController.text = ref
           .read(adminReportsViewModelProvider)
@@ -41,33 +49,90 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (_loadScheduled || !_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    if (!position.hasContentDimensions ||
+        position.pixels <= 0 ||
+        position.extentAfter > 320) {
+      return;
+    }
+    _loadScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadScheduled = false;
+      if (!mounted) return;
+      final zone = widget.zone;
+      if (zone != null) {
+        _loadMoreInZone(zone);
+      } else {
+        final state = ref.read(adminReportsViewModelProvider);
+        if (!state.loadMoreFailed) {
+          unawaited(
+            ref.read(adminReportsViewModelProvider.notifier).loadMoreReports(),
+          );
+        }
+      }
+    });
+  }
+
+  AdminReportsState _zoneState(
+    CajamarcaZone zone,
+    AsyncValue<Map<CajamarcaZone, List<ReportEntity>>> zoned,
+  ) {
+    final zoneReports = zoned.value?[zone] ?? const <ReportEntity>[];
+    final reports = widget.openOnly == true
+        ? zoneReports.where((report) => report.isOpenForOperations).toList()
+        : zoneReports;
+    return AdminReportsState(
+      isLoading: zoned.isLoading,
+      hasLoadedReports: zoned.hasValue,
+      reportsLoadFailed: zoned.hasError,
+      reports: reports,
+      totals: zoned.hasValue ? _zoneTotals(reports) : null,
+      selectedFilter: _zoneFilter,
+      searchQuery: _searchController.text,
+    );
+  }
+
+  void _loadMoreInZone(CajamarcaZone zone) {
+    final state = _zoneState(zone, ref.read(urbanReportsProvider));
+    if (!state.isLoading && state.filteredReports.length > _zoneLimit) {
+      setState(() => _zoneLimit += AdminReportPage.pageSize);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final zone = widget.zone;
-    final zoned = zone == null ? null : ref.watch(urbanReportsProvider);
-    final zoneReports = zoned?.value?[zone] ?? const <ReportEntity>[];
     final state = zone == null
         ? ref.watch(adminReportsViewModelProvider)
-        : AdminReportsState(
-            isLoading: zoned!.isLoading,
-            hasLoadedReports: zoned.hasValue,
-            reportsLoadFailed: zoned.hasError,
-            reports: zoneReports,
-            totals: zoned.hasValue ? _zoneTotals(zoneReports) : null,
-            selectedFilter: _zoneFilter,
-            searchQuery: _searchController.text,
-          );
+        : _zoneState(zone, ref.watch(urbanReportsProvider));
     final viewModel = zone == null
         ? ref.read(adminReportsViewModelProvider.notifier)
         : null;
-    final reports = state.filteredReports;
+    final matchingReports = state.filteredReports;
+    final reports = zone == null
+        ? matchingReports
+        : matchingReports.take(_zoneLimit).toList();
+    final hasMore = zone == null
+        ? state.nextCursor != null
+        : matchingReports.length > _zoneLimit;
     final hasQuery = state.searchQuery.trim().isNotEmpty;
     final hasFilters =
         hasQuery || state.selectedFilter != AdminReportFilter.all;
+    final totals = state.totals;
+    final total = switch (state.selectedFilter) {
+      AdminReportFilter.all => totals?.total,
+      AdminReportFilter.pending => totals?.pending,
+      AdminReportFilter.assigned => totals?.assigned,
+      AdminReportFilter.inProgress => totals?.inProgress,
+      AdminReportFilter.resolved => totals?.resolved,
+    };
     final textTheme = Theme.of(context).textTheme;
 
     Future<void> refresh() async {
@@ -84,7 +149,7 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
       if (viewModel != null) {
         viewModel.setSearchQuery(query);
       } else {
-        setState(() {});
+        setState(() => _zoneLimit = AdminReportPage.pageSize);
       }
     }
 
@@ -97,7 +162,10 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
       if (viewModel != null) {
         viewModel.setFilter(filter);
       } else {
-        setState(() => _zoneFilter = filter);
+        setState(() {
+          _zoneFilter = filter;
+          _zoneLimit = AdminReportPage.pageSize;
+        });
       }
     }
 
@@ -135,6 +203,7 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
               color: AppColors.primaryDark,
               onRefresh: refresh,
               child: CustomScrollView(
+                controller: _scrollController,
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.onDrag,
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -175,14 +244,24 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
                               ),
                             ),
                             const SizedBox(height: 6),
-                            _ReportFilters(state: state, onSelected: setFilter),
+                            _ReportFilters(
+                              state: state,
+                              onSelected: setFilter,
+                              openOnly: widget.openOnly,
+                            ),
                             const SizedBox(height: 10),
                             Semantics(
                               liveRegion: true,
                               child: Text(
-                                hasFilters
-                                    ? '${reports.length} de ${state.reports.length} reportes cargados'
-                                    : '${reports.length} incidencias cargadas',
+                                hasQuery
+                                    ? '${reports.length} coincidencias en los reportes cargados'
+                                    : hasMore && total != null && total > reports.length
+                                    ? '${reports.length} de $total ${switch (state.selectedFilter) {
+                                        AdminReportFilter.all => 'incidencias cargadas',
+                                        AdminReportFilter.pending => 'pendientes cargados',
+                                        _ => 'reportes con el filtro',
+                                      }}'
+                                    : '${reports.length} ${hasFilters ? 'reportes con el filtro' : 'incidencias cargadas'}',
                                 style: textTheme.bodySmall?.copyWith(
                                   color: AppColors.textSecondary,
                                   fontWeight: FontWeight.w600,
@@ -196,7 +275,7 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
                     if (reports.isEmpty)
                       SliverToBoxAdapter(
                         child: _EmptyAdminReportsView(
-                          hasMore: state.nextCursor != null,
+                          hasMore: zone == null && hasMore,
                           hasFilters: hasFilters,
                           onReset: () {
                             clearSearch();
@@ -237,7 +316,7 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
                           },
                         ),
                       ),
-                    if (state.nextCursor != null)
+                    if (hasMore)
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -251,7 +330,9 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
                                 onPressed:
                                     state.isLoading || state.isLoadingMore
                                     ? null
-                                    : viewModel?.loadMoreReports,
+                                    : zone == null
+                                    ? viewModel?.loadMoreReports
+                                    : () => _loadMoreInZone(zone),
                                 icon: const Icon(Icons.expand_more_rounded),
                                 label: Text(
                                   state.isLoadingMore
@@ -291,10 +372,15 @@ AdminReportTotals _zoneTotals(List<ReportEntity> reports) {
 }
 
 class _ReportFilters extends StatelessWidget {
-  const _ReportFilters({required this.state, required this.onSelected});
+  const _ReportFilters({
+    required this.state,
+    required this.onSelected,
+    this.openOnly,
+  });
 
   final AdminReportsState state;
   final ValueChanged<AdminReportFilter> onSelected;
+  final bool? openOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -303,42 +389,43 @@ class _ReportFilters extends StatelessWidget {
     return AdminFilterCarousel(
       children: [
         for (final filter in AdminReportFilter.values)
-          ChoiceChip(
-            selected: state.selectedFilter == filter,
-            onSelected: (selected) {
-              if (selected) onSelected(filter);
-            },
-            showCheckmark: false,
-            backgroundColor: AppColors.surface,
-            selectedColor: AppColors.primarySoft,
-            side: BorderSide(
-              color: state.selectedFilter == filter
-                  ? AppColors.primaryDark
-                  : AppColors.border,
+          if (openOnly != true || filter != AdminReportFilter.resolved)
+            ChoiceChip(
+              selected: state.selectedFilter == filter,
+              onSelected: (selected) {
+                if (selected) onSelected(filter);
+              },
+              showCheckmark: false,
+              backgroundColor: AppColors.surface,
+              selectedColor: AppColors.primarySoft,
+              side: BorderSide(
+                color: state.selectedFilter == filter
+                    ? AppColors.primaryDark
+                    : AppColors.border,
+              ),
+              labelStyle: labelStyle?.copyWith(
+                color: state.selectedFilter == filter
+                    ? AppColors.primaryDark
+                    : AppColors.textSecondary,
+                fontWeight: state.selectedFilter == filter
+                    ? FontWeight.w700
+                    : FontWeight.w500,
+              ),
+              label: Wrap(
+                spacing: 6,
+                children: [
+                  Text(filter.label),
+                  if (totals != null)
+                    Text(switch (filter) {
+                      AdminReportFilter.all => '${totals.total}',
+                      AdminReportFilter.pending => '${totals.pending}',
+                      AdminReportFilter.assigned => '${totals.assigned}',
+                      AdminReportFilter.inProgress => '${totals.inProgress}',
+                      AdminReportFilter.resolved => '${totals.resolved}',
+                    }),
+                ],
+              ),
             ),
-            labelStyle: labelStyle?.copyWith(
-              color: state.selectedFilter == filter
-                  ? AppColors.primaryDark
-                  : AppColors.textSecondary,
-              fontWeight: state.selectedFilter == filter
-                  ? FontWeight.w700
-                  : FontWeight.w500,
-            ),
-            label: Wrap(
-              spacing: 6,
-              children: [
-                Text(filter.label),
-                if (totals != null)
-                  Text(switch (filter) {
-                    AdminReportFilter.all => '${totals.total}',
-                    AdminReportFilter.pending => '${totals.pending}',
-                    AdminReportFilter.assigned => '${totals.assigned}',
-                    AdminReportFilter.inProgress => '${totals.inProgress}',
-                    AdminReportFilter.resolved => '${totals.resolved}',
-                  }),
-              ],
-            ),
-          ),
       ],
     );
   }

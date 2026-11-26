@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:ecoroute/core/router/route_names.dart';
+import 'package:ecoroute/core/errors/failures.dart';
 import 'package:ecoroute/core/utils/result.dart';
 import 'package:ecoroute/features/admin/domain/repositories/admin_repository.dart';
 import 'package:ecoroute/features/admin/presentation/viewmodels/admin_reports_viewmodel.dart';
@@ -13,6 +14,9 @@ import 'package:go_router/go_router.dart';
 
 class _StaffRepositoryFake implements AdminRepository {
   final crewIds = <String?>[];
+  final assignedIds = <String>[];
+  final otherUsers = <UserEntity>[];
+  final failedIds = <String>{};
   Completer<Result<UserEntity?>>? pendingSearch;
   final user = UserEntity(
     id: 'worker',
@@ -27,7 +31,13 @@ class _StaffRepositoryFake implements AdminRepository {
 
   @override
   Future<Result<UserEntity?>> searchUserByExactEmail(String email) async =>
-      pendingSearch?.future ?? Success(email == user.email ? user : null);
+      pendingSearch?.future ??
+      Success(
+        [
+          user,
+          ...otherUsers,
+        ].where((candidate) => candidate.email == email).firstOrNull,
+      );
 
   @override
   Future<Result<void>> updateUserRole({
@@ -35,8 +45,15 @@ class _StaffRepositoryFake implements AdminRepository {
     required UserRole newRole,
     String? teamId,
   }) async {
-    expect(userId, user.id);
+    expect(
+      [user, ...otherUsers].map((candidate) => candidate.id),
+      contains(userId),
+    );
     expect(newRole, UserRole.staff);
+    if (failedIds.contains(userId)) {
+      return const FailureResult(ServerFailure(message: 'No se pudo guardar'));
+    }
+    assignedIds.add(userId);
     crewIds.add(teamId);
     return const Success(null);
   }
@@ -46,6 +63,55 @@ class _StaffRepositoryFake implements AdminRepository {
 }
 
 void main() {
+  testWidgets(
+    'Asigna varios correos y permite reintentar solo el cambio fallido',
+    (tester) async {
+      final repository = _StaffRepositoryFake();
+      repository.otherUsers.addAll([
+        repository.user.copyWith(
+          id: 'second',
+          email: 'luis@example.com',
+          name: 'Luis Torres',
+        ),
+        repository.user.copyWith(
+          id: 'admin',
+          email: 'admin@example.com',
+          role: UserRole.admin,
+          name: 'Ana Reyes',
+        ),
+      ]);
+      repository.failedIds.add('second');
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [adminRepositoryProvider.overrideWithValue(repository)],
+          child: const MaterialApp(home: AdminStaffScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Asignar varios usuarios'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byType(TextField),
+        'ROSA@example.com, rosa@example.com\nluis@example.com; admin@example.com; nadie@example.com',
+      );
+      await tester.pump();
+      await tester.tap(find.text('Buscar y revisar'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CheckboxListTile), findsNWidgets(2));
+      expect(find.textContaining('Rol protegido'), findsOneWidget);
+      expect(find.text('Usuario no encontrado'), findsOneWidget);
+      await tester.tap(find.text('Asignar rol a 2'));
+      await tester.pumpAndSettle();
+      expect(repository.assignedIds, ['worker']);
+      expect(find.textContaining('No se pudo guardar'), findsOneWidget);
+      repository.failedIds.clear();
+      await tester.tap(find.text('Asignar rol a 1'));
+      await tester.pumpAndSettle();
+      expect(repository.assignedIds, ['worker', 'second']);
+    },
+  );
+
   testWidgets(
     'Conserva la búsqueda al volver de un detalle y la limpia al salir de Personal',
     (tester) async {

@@ -24,14 +24,6 @@ class CreateCrewUseCase {
       );
     }
 
-    if (!crew.vehicleOnly && crew.zone.trim().isEmpty) {
-      return const FailureResult(
-        ValidationFailure(
-          message: 'Debe asignar una zona o sector de cobertura.',
-        ),
-      );
-    }
-
     if (!crew.vehicleOnly && !crew.hasValidLeader) {
       return const FailureResult(
         ValidationFailure(message: 'Selecciona un líder del equipo.'),

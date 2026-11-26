@@ -1151,3 +1151,181 @@ test("la migración traslada camiones y conserva los vínculos de equipos", emul
   const retry = await migrateReportOperations({ ...params, apply: true });
   assert.equal(retry.movedVehicles + retry.extractedVehicles, 0);
 });
+
+test("las rutas reservan reportes y el líder atiende sus paradas en orden", emulator, async () => {
+  const [admin, owner, leader, member] = await Promise.all([
+    register("admin"), register(), register("staff"), register("staff"),
+  ]);
+  const crewId = await seedLegacyCrew();
+  const crewName = "Cuadrilla de prueba";
+  await commit("owner", 200, crewLeader(crewId, leader.id),
+    write(leader.profile, { teamId: string(crewId) }, { merge: true }),
+    write(member.profile, { teamId: string(crewId) }, { merge: true }));
+
+  const items = Array.from({ length: 5 }, () => report(owner));
+  const [first, second, pendingSkip, activeSkip, direct] = items;
+  const stops = [first, second, pendingSkip, activeSkip];
+  await Promise.all(items.map((item) => commit(owner.token, 200, ...creation(item, owner))));
+  const routeId = randomUUID();
+  const routePath = `collectionRoutes/${routeId}`;
+  const schedulePath = `crewRouteSchedules/${crewId}`;
+  const window = {
+    scheduledStart: { timestampValue: new Date(Date.now() - 60_000).toISOString() },
+    scheduledEnd: { timestampValue: new Date(Date.now() + 3_600_000).toISOString() },
+  };
+  const ids = array(stops.map((item) => string(item.id)));
+  const schedule = (active, windows = { [routeId]: map(window) }) =>
+    write(schedulePath, {
+      activeRouteId: nullable(active), transitionRouteId: string(routeId), windows: map(windows),
+    }, { timestamp: null });
+  const route = write(routePath, {
+    ...window, name: string("Ruta Central"), zoneId: string("central"), crewId: string(crewId),
+    crewName: string(crewName), vehicle: string("ECR-01"),
+    reportIds: ids, remainingReportIds: ids, status: string("planned"), geometry: array([]),
+    stops: array(stops.map((item) => map({ reportId: string(item.id) }))),
+  }, { timestamp: "createdAt" });
+  const reserve = (item) => write(item.path, { collectionRouteId: string(routeId) },
+    { merge: true, timestamp: null });
+  await commit(member.token, 403, route, schedule(null), ...stops.map(reserve));
+  await commit(admin.token, 200, route, schedule(null), ...stops.map(reserve));
+  assert.equal((await request(`/${routePath}`, member.token)).status, 200);
+  assert.equal((await request(`/${routePath}`, owner.token)).status, 403);
+  const crewRoutes = await request(":runQuery", member.token, { structuredQuery: {
+    from: [{ collectionId: "collectionRoutes" }],
+    where: { fieldFilter: { field: { fieldPath: "crewId" }, op: "EQUAL", value: string(crewId) } },
+  }});
+  assert.equal(crewRoutes.status, 200, crewRoutes.ok ? undefined : await crewRoutes.text());
+
+  async function rejectDispatch(item) {
+    const dispatch = statusChange(item, owner, admin, "assigned", { assignedToTeamId: string(crewId) });
+    await commit(admin.token, 403, dispatch.change, ...dispatch.related, dispatch.notice);
+  }
+  await rejectDispatch(first);
+  const citizenCancel = statusChange(first, owner, owner, "cancelled", { cancellationReason: string("Duplicado") });
+  await commit(owner.token, 403, citizenCancel.change, ...citizenCancel.related);
+
+  const startedRoute = write(routePath, { status: string("inProgress") },
+    { merge: true, timestamp: "startedAt" });
+  await commit(member.token, 403, startedRoute, schedule(routeId));
+  await commit(leader.token, 200, startedRoute, schedule(routeId));
+  assert.equal((await request(`/${first.path}`, leader.token)).status, 200);
+  assert.equal((await request(`/${first.path}`, member.token)).status, 403);
+  assert.equal((await request(`/${second.path}`, leader.token)).status, 403);
+  await rejectDispatch(direct);
+
+  const stopStart = (item) => {
+    const fields = {
+      assignedStaffId: string(leader.id), assignedStaffName: string("Líder"),
+      assignedToTeamId: string(crewId), assignedToTeamName: string(crewName),
+      assignedVehicle: string("ECR-01"),
+    };
+    const started = statusChange(item, owner, leader, "in_progress", fields);
+    return { fields, writes: [started.change, ...started.related, started.notice] };
+  };
+  await commit(leader.token, 403, ...stopStart(second).writes);
+
+  for (const [index, item] of [first, second].entries()) {
+    const { fields, writes } = stopStart(item);
+    await commit(leader.token, 200, ...writes);
+    Object.assign(item.data, { ...fields, status: string("in_progress") });
+    const last = index == 1;
+    const photos = Array.from({ length: last ? 4 : 1 }, (_, i) =>
+      `${item.path}/media/evidence${i == 0 ? "" : `_${i}`}`);
+    const resolution = statusChange(item, owner, leader, "resolved", {
+      assignedStaffId: string(leader.id), evidenceImagePath: string(photos[0]),
+      ...(last ? { evidenceImagePaths: array(photos.map(string)) } : {}),
+    });
+    const completion = [
+      resolution.change, ...resolution.related, ...photos.map((path) => write(path, media())), resolution.notice,
+    ];
+    await commit(leader.token, 403, ...completion);
+    const progress = write(routePath, {
+      remainingReportIds: array(stops.slice(index + 1).map((stop) => string(stop.id))),
+    }, { merge: true, timestamp: null });
+    await commit(leader.token, 200, ...completion, progress);
+    if (!last) await rejectDispatch(direct);
+  }
+  const reason = "Acceso cerrado";
+  function skip(item, previousSkips, remaining, active) {
+    const update = statusChange(item, owner, leader, "pending");
+    update.change.updateMask.fieldPaths.push("collectionRouteId", "assignedStaffId", "assignedStaffName",
+      "assignedToTeamId", "assignedToTeamName", "assignedVehicle");
+    const progress = write(routePath, {
+      remainingReportIds: array(remaining.map((stop) => string(stop.id))),
+      skippedStops: map({ ...previousSkips, [item.id]: string(reason) }),
+      ...(remaining.length ? {} : { status: string("completed") }),
+    }, { merge: true, timestamp: remaining.length ? null : "finishedAt" });
+    return [update.change, ...update.related, progress,
+      ...(active ? [write(`users/${leader.id}/operations/activeTask`, {
+        reportIds: array([]), reportId: string(item.id), eventId: update.change.update.fields.statusEventId,
+      })] : []),
+      ...(remaining.length ? [] : [schedule(null, {})])];
+  }
+
+  const pendingWrites = skip(pendingSkip, {}, [activeSkip], false);
+  await commit(member.token, 403, ...pendingWrites);
+  await commit(leader.token, 403, pendingWrites[0]);
+  await commit(leader.token, 200, ...pendingWrites);
+  const active = stopStart(activeSkip);
+  await commit(leader.token, 200, ...active.writes);
+  Object.assign(activeSkip.data, { ...active.fields, status: string("in_progress") });
+  await commit(leader.token, 200, ...skip(activeSkip, { [pendingSkip.id]: string(reason) }, [], true));
+  const released = (await (await request(`/${activeSkip.path}`, admin.token)).json()).fields;
+  assert.equal(released.status.stringValue, "pending");
+  assert.equal(released.collectionRouteId, undefined);
+  assert.equal(released.assignedToTeamId, undefined);
+  const completed = await request(`/${routePath}`, admin.token);
+  assert.equal((await completed.json()).fields.status.stringValue, "completed");
+  await dispatch(admin, direct, owner, crewId);
+});
+
+test("una ruta de diez paradas se puede confirmar y cancelar de forma atómica", emulator, async () => {
+  const [admin, owner, leader] = await Promise.all([register("admin"), register(), register("staff")]);
+  const crewId = await seedLegacyCrew();
+  await commit("owner", 200, crewLeader(crewId, leader.id),
+    write(leader.profile, { teamId: string(crewId) }, { merge: true }));
+  const items = Array.from({ length: 10 }, () => report(owner));
+  await Promise.all(items.map((item) => commit(owner.token, 200, ...creation(item, owner))));
+  const id = randomUUID();
+  const route = `collectionRoutes/${id}`;
+  const schedule = `crewRouteSchedules/${crewId}`;
+  const ids = array(items.map((item) => string(item.id)));
+  const window = {
+    scheduledStart: { timestampValue: new Date(Date.now() + 60_000).toISOString() },
+    scheduledEnd: { timestampValue: new Date(Date.now() + 3_600_000).toISOString() },
+  };
+  await commit(admin.token, 200,
+    write(route, {
+      ...window, name: string("Recorrido Central"), zoneId: string("central"), crewId: string(crewId),
+      crewName: string("Cuadrilla de prueba"), vehicle: string("ECR-01"),
+      reportIds: ids, remainingReportIds: ids, status: string("planned"), geometry: array([]),
+      stops: array(items.map((item) => map({ reportId: string(item.id) }))),
+    }, { timestamp: "createdAt" }),
+    write(schedule, { activeRouteId: nullable(null), transitionRouteId: string(id), windows: map({ [id]: map(window) }) },
+      { timestamp: null }),
+    ...items.map((item) => write(item.path, { collectionRouteId: string(id) }, { merge: true, timestamp: null })));
+  const replacementCrewId = await seedLegacyCrew();
+  await commit("owner", 200, crewLeader(replacementCrewId, leader.id),
+    write(leader.profile, { teamId: string(replacementCrewId) }, { merge: true }));
+  const replacementSchedule = `crewRouteSchedules/${replacementCrewId}`;
+  const transfer = write(route, { crewId: string(replacementCrewId) }, { merge: true, timestamp: null });
+  const reserveReplacement = write(replacementSchedule, {
+    activeRouteId: nullable(null), transitionRouteId: string(id), windows: map({ [id]: map(window) }),
+  }, { timestamp: null });
+  const releaseSchedule = (path) => write(path, {
+    activeRouteId: nullable(null), transitionRouteId: string(id), windows: map({}),
+  }, { timestamp: null });
+  await commit(admin.token, 403, transfer, reserveReplacement);
+  await commit(admin.token, 200, transfer, reserveReplacement, releaseSchedule(schedule));
+  const releases = items.map((item) => {
+    const release = write(item.path, {}, { merge: true, timestamp: null });
+    release.updateMask.fieldPaths = ["collectionRouteId"];
+    return release;
+  });
+  await commit(admin.token, 403, releases[0]);
+  await commit(admin.token, 200,
+    write(route, { status: string("cancelled") }, { merge: true, timestamp: "finishedAt" }),
+    releaseSchedule(replacementSchedule),
+    ...releases);
+  await dispatch(admin, items[0], owner, replacementCrewId);
+});

@@ -40,6 +40,11 @@ Future<Map<String, dynamic>> writeReportStatus({
     Map<String, dynamic> current,
   )?
   prepare,
+  Future<void Function(Transaction)?> Function(
+    Transaction transaction,
+    Map<String, dynamic> current,
+  )?
+  stageRelatedWrites,
 
   List<Uint8List> evidencePhotos = const [],
 }) async {
@@ -74,6 +79,7 @@ Future<Map<String, dynamic>> writeReportStatus({
         return current;
       }
 
+      final writeRelated = await stageRelatedWrites?.call(transaction, current);
       final previousCrew = _openCrew(current);
       final nextCrew = _openCrew({...current, ...updates});
       final crews = firestore.collection('crews');
@@ -82,10 +88,15 @@ Future<Map<String, dynamic>> writeReportStatus({
           ? (await transaction.get(crews.doc(previousCrew))).data()
           : null;
 
+      final releasesRouteTask = nextStatus == 'pending' &&
+          previousStatus == 'in_progress' &&
+          current['collectionRouteId'] != null &&
+          changes['collectionRouteId'] is FieldValue;
+
       if (audit != null &&
-          (nextStatus == 'in_progress' || nextStatus == 'resolved')) {
+          (releasesRouteTask || nextStatus == 'in_progress' || nextStatus == 'resolved')) {
         final resolvingCrewReport =
-            nextStatus == 'resolved' && previousCrew != null;
+            (nextStatus == 'resolved' || releasesRouteTask) && previousCrew != null;
         final assignee = current['assignedStaffId'];
         final activeOwner =
             resolvingCrewReport && assignee is String && assignee.isNotEmpty
@@ -196,6 +207,7 @@ Future<Map<String, dynamic>> writeReportStatus({
       }
 
       final after = {...current, ...updates};
+      writeRelated?.call(transaction);
       transaction.update(report, updates);
       transaction.set(
         communityReportRef(report),

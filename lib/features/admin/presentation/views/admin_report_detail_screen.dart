@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../core/router/route_names.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../../citizen/presentation/views/report_detail_screen.dart';
@@ -31,6 +33,16 @@ class AdminReportDetailScreen extends ConsumerWidget {
       initialReport: updated ?? initialReport,
       bottomAction: (report, refresh) {
         if (admin == null || !admin.isAdmin || !admin.isActive) return null;
+        if (report.collectionRouteId case final routeId?) {
+          return SafeArea(
+            minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.alt_route),
+              label: const Text('Ver ruta de recolección'),
+              onPressed: () => context.push(RouteNames.adminCollectionRouteLocation(routeId)),
+            ),
+          );
+        }
         final isAssigned = report.status == ReportStatus.assigned;
         if (!isAssigned && report.status != ReportStatus.pending) return null;
         return SafeArea(

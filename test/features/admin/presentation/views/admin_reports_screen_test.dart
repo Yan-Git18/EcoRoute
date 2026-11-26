@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ecoroute/core/errors/exceptions.dart';
 import 'package:ecoroute/core/errors/failures.dart';
+import 'package:ecoroute/core/geo/cajamarca_urban_zones.dart';
 import 'package:ecoroute/core/utils/result.dart';
 import 'package:ecoroute/features/admin/data/datasources/admin_remote_datasource.dart';
 import 'package:ecoroute/features/admin/data/models/municipal_crew_dto.dart';
@@ -259,6 +260,30 @@ final testCrews = [
 ];
 
 void main() {
+  test('Reinicia el proveedor mientras sigue abierta una consulta anterior', () async {
+    final repository = MockAdminRepository();
+    final container = ProviderContainer.test(
+      overrides: [adminRepositoryProvider.overrideWithValue(repository)],
+    );
+    container.listen(adminReportsViewModelProvider, (_, _) {});
+    final viewModel = container.read(adminReportsViewModelProvider.notifier);
+    await viewModel.refresh();
+
+    final oldPage = Completer<Result<AdminReportPage<ReportEntity>>>();
+    repository.nextReportLoad = oldPage;
+    final oldLoad = viewModel.refresh();
+    repository.reports = [testReports.last];
+    container.invalidate(adminReportsViewModelProvider);
+    final rebuilt = container.read(adminReportsViewModelProvider.notifier);
+    await rebuilt.refresh();
+
+    oldPage.complete(Success(AdminReportPage([testReports.first])));
+    await oldLoad;
+    final state = container.read(adminReportsViewModelProvider);
+    expect(state.reports, [testReports.last]);
+    expect(state.isLoading, isFalse);
+  });
+
   test('Un despacho guardado se conserva aunque termine una consulta anterior', () async {
     final repository = MockAdminRepository()
       ..reports = List.of(testReports)
@@ -567,5 +592,102 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('#REP-1024'), findsOneWidget);
     expect(find.text('#REP-2058'), findsOneWidget);
+  });
+
+  testWidgets('Carga la página siguiente al llegar al final de la bandeja', (tester) async {
+    final firstPage = List.generate(
+      AdminReportPage.pageSize,
+      (index) => testReports.first.copyWith(id: 'page-one-$index'),
+    );
+    final repository = MockAdminRepository()
+      ..reports = firstPage
+      ..nextReports = [testReports.last]
+      ..firstCursor = _TestReportCursor();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [adminRepositoryProvider.overrideWithValue(repository)],
+        child: const MaterialApp(home: AdminReportsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('30 de 31 incidencias cargadas'), findsOneWidget);
+    expect(repository.nextPageRequests, 0);
+
+    final scroll = tester.widget<CustomScrollView>(find.byType(CustomScrollView)).controller!;
+    scroll.jumpTo(scroll.position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    expect(repository.nextPageRequests, 1);
+    expect(find.text('Cargar más reportes'), findsNothing);
+  });
+
+  testWidgets('La vista de zona admite la opción de reportes abiertos ausente', (
+    tester,
+  ) async {
+    final pending = testReports.first.copyWith(
+      id: 'zone-pending',
+      reportNumber: '#ACTIVO',
+      status: ReportStatus.pending,
+    );
+    final resolved = pending.copyWith(
+      id: 'zone-resolved',
+      reportNumber: '#CERRADO',
+      status: ReportStatus.resolved,
+    );
+    final container = ProviderContainer.test(
+      overrides: [
+        urbanReportsProvider.overrideWith(
+          (_) async => {CajamarcaZone.central: [pending, resolved]},
+        ),
+      ],
+    );
+
+    Future<void> showZone(bool? openOnly) async {
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: AdminReportsScreen(
+              zone: CajamarcaZone.central,
+              openOnly: openOnly,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await showZone(true);
+    expect(find.text('#ACTIVO'), findsOneWidget);
+    expect(find.text('#CERRADO'), findsNothing);
+    expect(find.text('Resueltos'), findsNothing);
+
+    await showZone(null);
+    expect(find.text('#ACTIVO'), findsOneWidget);
+    expect(find.text('#CERRADO'), findsOneWidget);
+    expect(find.text('Resueltos'), findsOneWidget);
+  });
+
+  testWidgets('Muestra por páginas los resultados del filtro de zona', (tester) async {
+    final reports = List.generate(
+      35,
+      (index) => testReports.first.copyWith(id: 'central-$index'),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          adminRepositoryProvider.overrideWithValue(MockAdminRepository()),
+          urbanReportsProvider.overrideWith((_) async => {CajamarcaZone.central: reports}),
+        ],
+        child: const MaterialApp(home: AdminReportsScreen(zone: CajamarcaZone.central)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('30 de 35 incidencias cargadas'), findsOneWidget);
+    final scroll = tester.widget<CustomScrollView>(find.byType(CustomScrollView)).controller!;
+    scroll.jumpTo(scroll.position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    scroll.jumpTo(0);
+    await tester.pumpAndSettle();
+    expect(find.text('35 incidencias cargadas'), findsOneWidget);
   });
 }

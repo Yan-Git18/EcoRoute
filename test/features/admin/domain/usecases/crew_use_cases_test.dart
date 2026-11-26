@@ -151,13 +151,11 @@ void main() {
         expect(failure.message, contains('al menos 3 caracteres'));
       });
 
-      test('rechaza cuadrilla con sector o zona vacía', () async {
+      test('crea un equipo sin sector', () async {
         final useCase = CreateCrewUseCase(repository);
         final result = await useCase(testCrew.copyWith(zone: '   '));
 
-        expect(result, isA<FailureResult<MunicipalCrewEntity>>());
-        final failure = (result as FailureResult).failure;
-        expect(failure.message, contains('zona o sector'));
+        expect(result, isA<Success<MunicipalCrewEntity>>());
       });
 
       test('rechaza un líder que no integra el equipo', () async {
@@ -213,21 +211,22 @@ void main() {
         expect(result, isA<FailureResult<MunicipalCrewEntity>>());
       });
 
-      test('falla si la zona está vacía', () async {
+      test('actualiza un equipo sin sector', () async {
+        repository.crews = [testCrew];
         final useCase = UpdateCrewUseCase(repository);
         final result = await useCase(testCrew.copyWith(zone: ' '));
 
-        expect(result, isA<FailureResult<MunicipalCrewEntity>>());
+        expect(result, isA<Success<MunicipalCrewEntity>>());
       });
 
       test('actualiza cuadrilla válida exitosamente', () async {
         repository.crews = [testCrew];
         final useCase = UpdateCrewUseCase(repository);
-        final result = await useCase(testCrew.copyWith(zone: 'Nuevo Sector'));
+        final result = await useCase(testCrew.copyWith(name: 'Equipo Norte'));
 
         expect(repository.updateCrewCalled, isTrue);
         expect(result, isA<Success<MunicipalCrewEntity>>());
-        expect((result as Success).data.zone, 'Nuevo Sector');
+        expect((result as Success).data.name, 'Equipo Norte');
       });
     });
 

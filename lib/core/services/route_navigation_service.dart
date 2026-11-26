@@ -67,10 +67,19 @@ abstract class RouteNavigationService {
   });
 }
 
+abstract interface class WaypointRoutingService {
+  Future<RouteInfoResult?> routeThrough(List<LatLng> stops);
+}
+
+abstract interface class RoadTravelTimeService {
+  Future<List<List<double?>>?> travelTimes(List<LatLng> stops);
+}
+
 /// Implementación concreta de [RouteNavigationService] que consulta el motor
 /// de enrutamiento vial Open Source Routing Machine (OSRM) sobre OpenStreetMap,
 /// con respaldo geodésico automático para entornos sin conexión o pruebas.
-class OsrmRouteNavigationServiceImpl implements RouteNavigationService {
+class OsrmRouteNavigationServiceImpl
+    implements RouteNavigationService, WaypointRoutingService, RoadTravelTimeService {
   OsrmRouteNavigationServiceImpl({http.Client? client}) : _client = client;
 
   final http.Client? _client;
@@ -95,10 +104,7 @@ class OsrmRouteNavigationServiceImpl implements RouteNavigationService {
     final destination = LatLng(destLat, destLng);
 
     if (_client != null || !_isFlutterTest) {
-      final osrmRoute = await _fetchOsrmDrivingRoute(
-        origin: origin,
-        destination: destination,
-      );
+      final osrmRoute = await _fetchOsrmDrivingRoute([origin, destination]);
       if (osrmRoute != null) {
         return osrmRoute;
       }
@@ -112,26 +118,57 @@ class OsrmRouteNavigationServiceImpl implements RouteNavigationService {
 
   /// Consulta la ruta vial óptima en servidores OSRM (OpenStreetMap road network),
   /// devolviendo todos los vértices reales de las calles (GeoJSON).
-  Future<RouteInfoResult?> _fetchOsrmDrivingRoute({
-    required LatLng origin,
-    required LatLng destination,
+  @override
+  Future<RouteInfoResult?> routeThrough(List<LatLng> stops) async {
+    if (stops.length < 2 || (_client == null && _isFlutterTest)) return null;
+    return _fetchOsrmDrivingRoute(stops, overview: 'simplified');
+  }
+
+  @override
+  Future<List<List<double?>>?> travelTimes(List<LatLng> stops) async {
+    if (stops.length < 2 || (_client == null && _isFlutterTest)) return null;
+    final coordinates = stops.map((stop) => '${stop.longitude},${stop.latitude}').join(';');
+    final client = _client ?? http.Client();
+    try {
+      final response = await client.get(
+        Uri.https('router.project-osrm.org', '/table/v1/driving/$coordinates', {
+          'annotations': 'duration',
+        }),
+      ).timeout(const Duration(seconds: 5));
+      if (response.statusCode != 200) return null;
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (data['code'] != 'Ok') return null;
+      final rows = (data['durations'] as List).cast<List>();
+      if (rows.length != stops.length || rows.any((row) => row.length != stops.length)) {
+        return null;
+      }
+      return [
+        for (final row in rows)
+          [for (final value in row) (value as num?)?.toDouble()],
+      ];
+    } catch (_) {
+      return null;
+    } finally {
+      if (_client == null) client.close();
+    }
+  }
+
+  Future<RouteInfoResult?> _fetchOsrmDrivingRoute(
+    List<LatLng> stops, {
+    String overview = 'full',
   }) async {
+    final coordinates = stops.map((stop) => '${stop.longitude},${stop.latitude}').join(';');
+    final query = '$coordinates?overview=$overview&geometries=geojson&steps=false';
     final endpoints = <String>[
-      'https://router.project-osrm.org/route/v1/driving/'
-          '${origin.longitude},${origin.latitude};'
-          '${destination.longitude},${destination.latitude}'
-          '?overview=full&geometries=geojson&steps=false',
-      'https://routing.openstreetmap.de/routed-car/route/v1/driving/'
-          '${origin.longitude},${origin.latitude};'
-          '${destination.longitude},${destination.latitude}'
-          '?overview=full&geometries=geojson&steps=false',
+      'https://router.project-osrm.org/route/v1/driving/$query',
+      'https://routing.openstreetmap.de/routed-car/route/v1/driving/$query',
     ];
 
     for (final url in endpoints) {
       final result = await _queryOsrmEndpoint(
         url: url,
-        origin: origin,
-        destination: destination,
+        origin: stops.first,
+        destination: stops.last,
       );
       if (result != null) {
         return result;

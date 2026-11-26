@@ -10,6 +10,7 @@ import '../../../../core/widgets/eco_status_summary_card.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
 import '../../domain/entities/staff_task_entity.dart';
+import 'staff_collection_routes_screen.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
 import '../viewmodels/staff_operations_providers.dart';
 import '../widgets/staff_tasks_load_notice.dart';
@@ -31,7 +32,6 @@ class StaffHomeScreen extends ConsumerStatefulWidget {
 }
 
 class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
-  final int _currentNavIndex = 0; // 'Inicio' activo en la pantalla principal
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +42,7 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
     final staffState = ref.watch(staffHomeViewModelProvider);
     final crewState = ref.watch(staffCrewProvider);
     final crew = crewState.asData?.value;
+    final collectionRoute = ref.watch(staffCurrentCollectionRouteProvider);
     final viewModel = ref.read(staffHomeViewModelProvider.notifier);
 
     final allTasks = List<StaffTaskEntity>.of(staffState.tasks)
@@ -173,9 +174,15 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
               // 2. Información importante para el personal: Hero Card de Circuito Operativo en Cajamarca
               _buildOperationalCircuitCard(
                 context: context,
-                zone: crew?.zone,
-                vehicle: crew?.vehicleLabel,
-                pendingCount: pendingCount,
+                zone: collectionRoute?.zone.name ?? crew?.zone,
+                vehicle: collectionRoute?.vehicle ?? crew?.vehicleLabel,
+                routeName: collectionRoute?.name,
+                onOpenRoute: collectionRoute == null
+                    ? null
+                    : () => StaffCollectionRouteScreen.open(context, collectionRoute.id),
+                pendingCount: collectionRoute == null
+                    ? pendingCount
+                    : collectionRoute.stops.length - collectionRoute.completedStops,
                 resolvedToday: staffState.isLoading || staffState.loadErrorMessage != null
                     ? null
                     : staffState.resolvedOn(DateTime.now(), user?.id),
@@ -401,18 +408,8 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
         ),
       ),
       bottomNavigationBar: StaffBottomNavBar(
-        currentIndex: _currentNavIndex,
-        onTabSelected: (index) {
-          if (index == 0) {
-            viewModel.setFilter(ReportFilter.all);
-          } else if (index == 1) {
-            context.push(RouteNames.staffRouteMap);
-          } else if (index == 2) {
-            context.push(RouteNames.staffTasks);
-          } else if (index == 3) {
-            context.push(RouteNames.staffProfile);
-          }
-        },
+        currentIndex: 0,
+        onTabSelected: (_) => viewModel.setFilter(ReportFilter.all),
       ),
     );
   }
@@ -421,6 +418,8 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
   Widget _buildOperationalCircuitCard({
     required BuildContext context,
     required String? zone,
+    required String? routeName,
+    required VoidCallback? onOpenRoute,
     required String? vehicle,
     required int pendingCount,
     required int? resolvedToday,
@@ -470,7 +469,7 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            zone ?? 'Zona sin registrar',
+                            routeName ?? zone ?? 'Zona sin registrar',
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -541,7 +540,7 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
 
           // Botón directo para abrir el mapa de ruta en Cajamarca
           InkWell(
-            onTap: () => context.push(RouteNames.staffRouteMap),
+            onTap: onOpenRoute ?? () => context.push(RouteNames.staffRouteMap),
             borderRadius: BorderRadius.circular(12),
             child: Container(
               width: double.infinity,
@@ -557,21 +556,21 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
                   ),
                 ],
               ),
-              child: const Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.map_rounded, size: 16, color: Color(0xFF047857)),
-                  SizedBox(width: 8),
+                  const Icon(Icons.map_rounded, size: 16, color: Color(0xFF047857)),
+                  const SizedBox(width: 8),
                   Text(
-                    'Ver mapa de ruta',
-                    style: TextStyle(
+                    onOpenRoute == null ? 'Ver mapa de ruta' : 'Ver ruta asignada',
+                    style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
                       color: Color(0xFF047857),
                     ),
                   ),
-                  SizedBox(width: 4),
-                  Icon(Icons.arrow_forward_rounded, size: 16, color: Color(0xFF047857)),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.arrow_forward_rounded, size: 16, color: Color(0xFF047857)),
                 ],
               ),
             ),

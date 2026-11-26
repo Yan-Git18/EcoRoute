@@ -8,6 +8,7 @@ class AdminMapZoneCard extends StatelessWidget {
     super.key,
     required this.zone,
     required this.count,
+    this.filteredCount,
     required this.isLoading,
     required this.hasError,
     required this.onClose,
@@ -17,6 +18,7 @@ class AdminMapZoneCard extends StatelessWidget {
 
   final CajamarcaZone zone;
   final int? count;
+  final int? filteredCount;
   final bool isLoading;
   final bool hasError;
   final VoidCallback onClose;
@@ -29,6 +31,7 @@ class AdminMapZoneCard extends StatelessWidget {
     final summary = switch (reportCount) {
       null when isLoading => 'Contando reportes…',
       null => 'Conteo no disponible',
+      _ when filteredCount != null => '$filteredCount de $reportCount reportes con el filtro',
       1 => '1 reporte',
       _ => '$reportCount reportes',
     };

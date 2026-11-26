@@ -71,17 +71,21 @@ final adminReportsViewModelProvider =
 // --- Notifier / ViewModel ---
 
 class AdminReportsViewModel extends Notifier<AdminReportsState> {
-  late final AdminRepository _repository;
-  late final GetCrewsUseCase _getCrewsUseCase;
-  late final CreateCrewUseCase _createCrewUseCase;
-  late final UpdateCrewUseCase _updateCrewUseCase;
-  late final DeleteCrewUseCase _deleteCrewUseCase;
+  late AdminRepository _repository;
+  late GetCrewsUseCase _getCrewsUseCase;
+  late CreateCrewUseCase _createCrewUseCase;
+  late UpdateCrewUseCase _updateCrewUseCase;
+  late DeleteCrewUseCase _deleteCrewUseCase;
   Future<void>? _activeLoad;
+  int _buildGeneration = 0;
   int _dataRevision = 0;
   int _pageGeneration = 0;
 
   @override
   AdminReportsState build() {
+    final buildGeneration = ++_buildGeneration;
+    _pageGeneration++;
+    _activeLoad = null;
     _repository = ref.watch(adminRepositoryProvider);
     _getCrewsUseCase = ref.watch(getCrewsUseCaseProvider);
     _createCrewUseCase = ref.watch(createCrewUseCaseProvider);
@@ -90,13 +94,16 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
 
     // Carga inicial asíncrona
     Future.microtask(() async {
-      if (ref.mounted) await refresh();
+      if (_isCurrentBuild(buildGeneration)) await refresh();
     });
     return const AdminReportsState(isLoading: true);
   }
 
+  bool _isCurrentBuild(int generation) =>
+      generation == _buildGeneration && ref.mounted;
+
   Future<void> _loadReports() async {
-    _pageGeneration++;
+    final generation = ++_pageGeneration;
     state = state.copyWith(isLoading: true, isLoadingMore: false, loadMoreFailed: false);
 
     late Result<AdminReportPage<ReportEntity>> reportsResult;
@@ -111,7 +118,7 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
         _getCrewsUseCase(),
         _repository.getReportTotals(),
       ).wait;
-      if (!ref.mounted) return;
+      if (generation != _pageGeneration || !ref.mounted) return;
     } while (revision != _dataRevision);
 
     final page = reportsResult.dataOrNull;
@@ -136,8 +143,13 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
 
     final generation = _pageGeneration;
     state = state.copyWith(isLoadingMore: true, loadMoreFailed: false);
-    final result = await _repository.getReportsPage(after: cursor);
-    if (!ref.mounted || generation != _pageGeneration) return;
+    late Result<AdminReportPage<ReportEntity>> result;
+    int revision;
+    do {
+      revision = _dataRevision;
+      result = await _repository.getReportsPage(after: cursor);
+      if (generation != _pageGeneration || !ref.mounted) return;
+    } while (revision != _dataRevision);
 
     final page = result.dataOrNull;
     if (page == null) {
@@ -173,6 +185,7 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
   }) async {
     if (state.isAssigning || (crew == null) == staffIds.isEmpty) return false;
     state = state.copyWith(isAssigning: true, clearError: true);
+    final buildGeneration = _buildGeneration;
 
     final result = crew == null
         ? await _repository.assignReportToStaff(
@@ -191,7 +204,7 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
             priority: priority,
             instructions: instructions,
           );
-    if (!ref.mounted) return false;
+    if (!_isCurrentBuild(buildGeneration)) return false;
 
     switch (result) {
       case Success(data: final updatedReport):
@@ -243,8 +256,9 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
   }
 
   Future<void> updatePriority(String reportId, ReportPriority priority) async {
+    final buildGeneration = _buildGeneration;
     final result = await _repository.updateReportPriority(reportId: reportId, priority: priority);
-    if (!ref.mounted) return;
+    if (!_isCurrentBuild(buildGeneration)) return;
 
     if (result is Success<ReportEntity>) {
       _dataRevision++;
@@ -286,8 +300,9 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
   }
 
   Future<bool> saveCrew(MunicipalCrewEntity updated) async {
+    final buildGeneration = _buildGeneration;
     final result = await _updateCrewUseCase.call(updated);
-    if (!ref.mounted) return false;
+    if (!_isCurrentBuild(buildGeneration)) return false;
     switch (result) {
       case Success(data: final savedCrew):
         _dataRevision++;
@@ -306,8 +321,9 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
   }
 
   Future<bool> createCrew(MunicipalCrewEntity crew) async {
+    final buildGeneration = _buildGeneration;
     final result = await _createCrewUseCase.call(crew);
-    if (!ref.mounted) return false;
+    if (!_isCurrentBuild(buildGeneration)) return false;
     switch (result) {
       case Success(data: final created):
         _dataRevision++;
@@ -337,8 +353,9 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
     bool vehicleOnly,
     Future<Result<void>> deletion,
   ) async {
+    final buildGeneration = _buildGeneration;
     final result = await deletion;
-    if (!ref.mounted) return false;
+    if (!_isCurrentBuild(buildGeneration)) return false;
     switch (result) {
       case Success():
         _dataRevision++;
@@ -354,7 +371,12 @@ class AdminReportsViewModel extends Notifier<AdminReportsState> {
     }
   }
 
-  Future<void> refresh() => _activeLoad ??= _loadReports().whenComplete(() {
-    _activeLoad = null;
-  });
+  Future<void> refresh() {
+    if (_activeLoad case final pending?) return pending;
+    late final Future<void> load;
+    load = _loadReports().whenComplete(() {
+      if (identical(_activeLoad, load)) _activeLoad = null;
+    });
+    return _activeLoad = load;
+  }
 }

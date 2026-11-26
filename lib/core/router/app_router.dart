@@ -8,6 +8,8 @@ import '../../features/admin/presentation/views/admin_live_map_screen.dart';
 import '../../features/admin/presentation/views/admin_reports_screen.dart';
 import '../../features/admin/presentation/views/admin_report_detail_screen.dart';
 import '../../features/admin/presentation/views/admin_profile_screen.dart';
+import '../../features/admin/presentation/views/admin_route_planner_screen.dart';
+import '../../features/admin/presentation/views/admin_routes_screen.dart';
 import '../../features/admin/presentation/views/admin_staff_screen.dart';
 import '../../features/auth/domain/entities/user_entity.dart';
 import '../../features/auth/presentation/viewmodels/auth_state.dart';
@@ -24,6 +26,7 @@ import '../../features/citizen/presentation/views/create_report_wizard_screen.da
 import '../../features/citizen/presentation/views/my_reports_screen.dart';
 import '../../features/citizen/presentation/views/report_detail_screen.dart';
 import '../../features/staff/presentation/views/staff_home_screen.dart';
+import '../../features/staff/presentation/views/staff_collection_routes_screen.dart';
 import '../../features/staff/presentation/views/staff_profile_screen.dart';
 import '../../features/staff/presentation/views/staff_route_map_screen.dart';
 import '../../features/staff/presentation/views/staff_tasks_screen.dart';
@@ -156,6 +159,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const StaffTasksScreen(),
       ),
       GoRoute(
+        path: RouteNames.staffCollectionRoutes,
+        builder: (context, state) => const StaffCollectionRoutesScreen(),
+      ),
+      GoRoute(
         path: RouteNames.staffProfile,
         builder: (context, state) => const StaffProfileScreen(),
       ),
@@ -172,6 +179,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             state.uri.queryParameters[RouteNames.adminReportZoneParameter],
           );
           if (zone == null) return const AdminReportsScreen();
+          final openOnly = state.uri.queryParameters[RouteNames.adminReportOpenParameter] == '1';
           return Consumer(
             builder: (context, ref, child) {
               final auth = ref.watch(authViewModelProvider);
@@ -180,7 +188,11 @@ final routerProvider = Provider<GoRouter>((ref) {
                   body: Center(child: CircularProgressIndicator()),
                 );
               }
-              return AdminReportsScreen(key: ValueKey(zone), zone: zone);
+              return AdminReportsScreen(
+                key: ValueKey((zone, openOnly)),
+                zone: zone,
+                openOnly: openOnly,
+              );
             },
           );
         },
@@ -201,6 +213,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.adminTeams,
         builder: (context, state) => const AdminCrewsScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.adminRoutes,
+        builder: (context, state) => const AdminRoutesScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.adminRoutePlanner,
+        builder: (context, state) => const AdminRoutePlannerScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.adminCollectionRoute,
+        builder: (context, state) => AdminCollectionRouteScreen(
+          id: state.pathParameters['id']!,
+        ),
       ),
       GoRoute(
         path: RouteNames.adminStaff,

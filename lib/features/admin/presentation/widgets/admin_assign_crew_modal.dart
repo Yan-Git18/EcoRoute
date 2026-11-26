@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/widgets/media_image.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
+import '../../../routes/domain/collection_route.dart';
+import '../../../routes/presentation/collection_route_providers.dart';
 import '../../domain/entities/municipal_crew_entity.dart';
 import '../viewmodels/admin_reports_viewmodel.dart';
 
@@ -113,9 +115,17 @@ class _AdminAssignCrewModalState extends ConsumerState<AdminAssignCrewModal> {
     );
     bool isAvailable(UserEntity person) =>
         person.isActive && !busyIds.contains(person.id);
+    final activeRoutes = _showTeams
+        ? ref.watch(collectionRoutesProvider(null)).asData?.value
+        : null;
+    final activeCrewIds = {
+      for (final route in activeRoutes ?? const <CollectionRoute>[])
+        if (route.status == CollectionRouteStatus.inProgress) route.crewId,
+    };
     final teams = state.teams.where(
       (team) =>
           team.canDispatch &&
+          !activeCrewIds.contains(team.id) &&
           people.any(
             (person) =>
                 person.id == team.effectiveLeaderId &&

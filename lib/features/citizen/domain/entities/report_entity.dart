@@ -259,6 +259,7 @@ class ReportEntity {
   final DateTime createdAt;
   final DateTime? updatedAt;
   final String? assignedToTeamId;
+  final String? collectionRouteId;
   final String? assignedToTeamName;
   final String? assignedStaffName;
   final List<String> assignedStaffIds;
@@ -288,6 +289,7 @@ class ReportEntity {
     required this.createdAt,
     this.updatedAt,
     this.assignedToTeamId,
+    this.collectionRouteId,
     this.assignedToTeamName,
     this.assignedStaffName,
     this.assignedStaffIds = const [],
@@ -359,6 +361,7 @@ class ReportEntity {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       assignedToTeamId: assignedToTeamId ?? this.assignedToTeamId,
+      collectionRouteId: collectionRouteId,
       assignedToTeamName: assignedToTeamName ?? this.assignedToTeamName,
       assignedStaffName: assignedStaffName ?? this.assignedStaffName,
       assignedStaffIds: assignedStaffIds ?? this.assignedStaffIds,

@@ -159,7 +159,6 @@ class _AdminCrewDetailScreenState extends ConsumerState<AdminCrewDetailScreen> {
               title: 'Información del equipo',
               children: [
                 for (final (index, (label, value)) in [
-                  ('Sector', crew.zone),
                   ('Camión', crew.vehicleCode),
                   ('Tipo de vehículo', crew.vehicleType),
                   ('Placa', crew.vehiclePlate),

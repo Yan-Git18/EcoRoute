@@ -3,6 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:ecoroute/core/geo/cajamarca_urban_zones.dart';
+import 'package:ecoroute/features/routes/domain/collection_route.dart';
+import 'package:ecoroute/features/routes/presentation/collection_route_map.dart';
+import 'package:ecoroute/features/routes/presentation/collection_route_providers.dart';
 import 'package:ecoroute/core/services/location_service.dart';
 import 'package:ecoroute/core/utils/result.dart';
 import 'package:ecoroute/features/auth/domain/entities/user_entity.dart';
@@ -151,6 +156,71 @@ void main() {
     expect(find.text('Mapa'), findsOneWidget);
     expect(find.text('Tareas'), findsOneWidget);
     expect(find.text('Perfil'), findsOneWidget);
+  });
+
+  testWidgets('El mapa conserva todas las paradas al avanzar una ruta de equipo', (tester) async {
+    final updates = StreamController<List<CollectionRoute>>();
+    var externalLaunches = 0;
+    addTearDown(updates.close);
+    const stops = [
+      CollectionStop(
+        reportId: '1', number: '#1', address: 'Primera calle',
+        location: LatLng(-7.1644, -78.5105), priority: ReportPriority.high,
+      ),
+      CollectionStop(
+        reportId: '2', number: '#2', address: 'Segunda calle',
+        location: LatLng(-7.1634, -78.5115), priority: ReportPriority.medium,
+      ),
+    ];
+    CollectionRoute assigned(int progress) => CollectionRoute(
+      id: 'ruta', name: 'Ruta Central', zone: CajamarcaZone.central,
+      crewId: 'cuadrilla-2', crewName: 'Equipo 2', vehicle: 'Unidad 2',
+      window: RouteWindow(DateTime(2026, 1, 1), DateTime(2026, 1, 2)),
+      stops: stops, completedStops: progress, status: CollectionRouteStatus.inProgress,
+      geometry: [for (final stop in stops) stop.location],
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authViewModelProvider.overrideWith(() => MockStaffAuthViewModel(testStaff)),
+          staffRepositoryProvider.overrideWithValue(MockStaffRepository()),
+          locationServiceProvider.overrideWithValue(MockStaffLocationService()),
+          staffTeamIdProvider.overrideWith((ref) => Stream.value('cuadrilla-2')),
+          collectionRoutesProvider('cuadrilla-2').overrideWith((ref) => updates.stream),
+          collectionRouteProvider('ruta').overrideWith((ref) => Stream.value(assigned(1))),
+          staffNavigationLauncherProvider.overrideWithValue((_) async {
+            externalLaunches++;
+            return true;
+          }),
+        ],
+        child: const MaterialApp(home: StaffRouteMapScreen()),
+      ),
+    );
+    updates.add([assigned(0)]);
+    await tester.pumpAndSettle();
+    expect(find.text('Ruta Central'), findsOneWidget);
+    expect(find.text('Siguiente parada 1 · Primera calle'), findsOneWidget);
+    expect(find.text('Rutas'), findsOneWidget);
+
+    updates.add([assigned(1)]);
+    await tester.pumpAndSettle();
+    final map = tester.widget<CollectionRouteMap>(find.byType(CollectionRouteMap));
+    expect(map.stops, stops);
+    expect(map.nextStopIndex, 1);
+    expect(find.text('Siguiente parada 2 · Segunda calle'), findsOneWidget);
+    await tester.tap(find.byTooltip('Ir a la siguiente parada'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<CollectionRouteMap>(find.byType(CollectionRouteMap)).focus, stops[1].location);
+    await tester.tap(find.byTooltip('Ver recorrido completo'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<CollectionRouteMap>(find.byType(CollectionRouteMap)).focus, isNull);
+
+    await tester.tap(find.text('Continuar ruta'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ir a la siguiente parada'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<CollectionRouteMap>(find.byType(CollectionRouteMap)).focus, stops[1].location);
+    expect(externalLaunches, 0);
   });
 
   testWidgets('Marcador de parada en el mapa se renderiza sin overflow de pixeles',

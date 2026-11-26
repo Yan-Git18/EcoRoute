@@ -6,6 +6,7 @@ import '../../../auth/data/models/user_dto.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../citizen/data/models/report_dto.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
+import '../../../routes/data/collection_route_document.dart';
 import '../../domain/entities/admin_report_page.dart';
 import '../../domain/entities/municipal_crew_entity.dart';
 import '../models/municipal_crew_dto.dart';
@@ -278,8 +279,13 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
             previous['status'] != 'maintenance' &&
             assignee != null) {
           final team = (await transaction.get(_crews.doc(assignee))).data();
-          if (team != null && team['openReportCount'] != 0) {
-            throw const ServerException(message: 'Finaliza el reporte activo del equipo antes de enviar el vehículo al taller.');
+          final activeRoute = (await transaction.get(
+            routeScheduleRef(_firestore, assignee),
+          )).data()?['activeRouteId'];
+          if ((team != null && team['openReportCount'] != 0) || activeRoute != null) {
+            throw const ServerException(
+              message: 'Finaliza el trabajo activo del equipo antes de enviar el vehículo al taller.',
+            );
           }
         }
         transaction.update(ref, {
@@ -300,6 +306,7 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       return;
     }
     final fields = MunicipalCrewDto.fromDomain(crew).toMap()
+      ..remove('zone')
       ..remove('createdAt')
       ..remove('activeTasksCount')
       ..remove('assignedCrewId');
@@ -367,6 +374,9 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       final rosterChanged =
           before.length != roster.length || !before.every(roster.contains);
       final vehicleChanged = oldVehicle != vehicleId;
+      if (previous != null && (rosterChanged || vehicleChanged)) {
+        await _requireNoScheduledRoutes(transaction, ref.id);
+      }
       final validSize = MunicipalCrewEntity.isValidMemberCount(roster.length);
       if (!validSize && (creating || rosterChanged || vehicleChanged)) {
         throw const ServerException(
@@ -408,7 +418,6 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
         }
         final fields = {
           'name': crew.name,
-          'zone': crew.zone,
           if (leader != null) ...{
             'leaderId': leaderId,
             'leadStaffName': leader['name'] as String? ?? crew.leadStaffName,
@@ -479,6 +488,7 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       );
       if (creating) {
         final fields = dto.toMap()
+          ..remove('zone')
           ..remove('activeTasksCount')
           ..remove('location')
           ..remove('latitude')
@@ -491,7 +501,6 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       } else {
         transaction.update(ref, {
           'name': crew.name,
-          'zone': crew.zone,
           'updatedAt': FieldValue.serverTimestamp(),
           if (leaderId != null) ...{
             'leaderId': leaderId,
@@ -578,6 +587,7 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     await _firestore.runTransaction((transaction) async {
       final data = (await transaction.get(crew)).data();
       if (data == null) return;
+      await _requireNoScheduledRoutes(transaction, crewId);
       if (data['openReportCount'] == null || data['memberCount'] == null) {
         throw const ServerException(
           message: 'Actualiza los datos anteriores del equipo antes de eliminarlo.',
@@ -611,6 +621,20 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       _releaseVehicle(transaction, truck, data);
       transaction.delete(crew);
     });
+  }
+
+  Future<void> _requireNoScheduledRoutes(
+    Transaction transaction,
+    String crewId,
+  ) async {
+    final schedule = RouteSchedule(
+      (await transaction.get(routeScheduleRef(_firestore, crewId))).data(),
+    );
+    if (schedule.windows.isNotEmpty) {
+      throw const ServerException(
+        message: 'Reprograma o cancela las rutas del equipo antes de cambiar sus recursos.',
+      );
+    }
   }
 
   Future<void> _recordLegacyRoster(
@@ -718,6 +742,11 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
   }
 
   void _requireAssignableReport(Map<String, dynamic> current) {
+    if (current['collectionRouteId'] != null) {
+      throw const ServerException(
+        message: 'El reporte está reservado para una ruta de recolección.',
+      );
+    }
     if (!const [
       'pending',
       'pendiente',
@@ -832,6 +861,12 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       ),
       prepare: (transaction, current) async {
         _requireAssignableReport(current);
+        final schedule = (await transaction.get(
+          routeScheduleRef(_firestore, crew.id),
+        )).data();
+        if (schedule?['activeRouteId'] != null) {
+          throw const ServerException(message: 'El equipo está ejecutando una ruta.');
+        }
         final data = (await transaction.get(_crews.doc(crew.id))).data();
         if (data == null ||
             !MunicipalCrewDto.fromMap(data, crew.id).toDomain().canDispatch ||
@@ -978,6 +1013,13 @@ class FirebaseAdminRemoteDataSourceImpl implements AdminRemoteDataSource {
         final current = (await transaction.get(user)).data();
         if (current == null) {
           throw const ServerException(message: 'El usuario no existe.');
+        }
+        if (newRole == UserRole.staff) {
+          final role = current['role'];
+          if (role == 'staff' || role == 'personal') return;
+          if (role != 'citizen' && role != 'ciudadano') {
+            throw const ServerException(message: 'El rol de esta cuenta no se puede cambiar a Personal.');
+          }
         }
         if (newRole == UserRole.citizen) {
           if ((current['teamId'] as String?)?.isNotEmpty == true) {

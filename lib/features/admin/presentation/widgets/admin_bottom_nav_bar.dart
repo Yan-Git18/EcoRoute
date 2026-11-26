@@ -15,11 +15,12 @@ class AdminBottomNavBar extends ConsumerWidget {
     RouteNames.adminDashboard,
     RouteNames.adminReports,
     RouteNames.adminLiveMap,
+    RouteNames.adminRoutes,
     RouteNames.adminTeams,
   ];
 
   /// Índice del tab activo actual:
-  /// 0: Inicio, 1: Reportes, 2: Mapa, 3: Equipo, null: fuera del menú.
+  /// 0: Inicio, 1: Reportes, 2: Mapa, 3: Rutas, 4: Equipo, null: fuera del menú.
   final int? currentIndex;
   final ValueChanged<int>? onTabSelected;
 
@@ -64,10 +65,16 @@ class AdminBottomNavBar extends ConsumerWidget {
           onTap: () => _handleTap(context, 2),
         ),
         EcoBottomNavItem(
+          label: 'Rutas',
+          activeIcon: Icons.alt_route_rounded,
+          inactiveIcon: Icons.alt_route_outlined,
+          onTap: () => _handleTap(context, 3),
+        ),
+        EcoBottomNavItem(
           label: 'Equipo',
           activeIcon: Icons.groups_rounded,
           inactiveIcon: Icons.groups_outlined,
-          onTap: () => _handleTap(context, 3),
+          onTap: () => _handleTap(context, 4),
         ),
       ],
     );

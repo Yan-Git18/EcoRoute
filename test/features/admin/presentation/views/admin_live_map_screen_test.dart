@@ -13,6 +13,7 @@ import 'package:ecoroute/features/admin/presentation/viewmodels/admin_reports_vi
 import 'package:ecoroute/features/admin/presentation/views/admin_live_map_screen.dart';
 import 'package:ecoroute/features/admin/presentation/widgets/admin_bottom_nav_bar.dart';
 import 'package:ecoroute/features/admin/presentation/widgets/admin_map_crew_preview_card.dart';
+import 'package:ecoroute/features/admin/presentation/widgets/admin_map_report_layer.dart';
 import 'package:ecoroute/features/admin/presentation/widgets/admin_map_report_preview_card.dart';
 import 'package:ecoroute/features/auth/domain/entities/user_entity.dart';
 import 'package:ecoroute/features/auth/presentation/viewmodels/auth_state.dart';
@@ -56,7 +57,7 @@ class MockAdminMapRepository implements AdminRepository {
   );
 
   @override
-  Future<Result<AdminReportTotals>> getReportTotals() async => Success(totalsForReports(reports));
+  Future<Result<AdminReportTotals>> getReportTotals() async => Success(totalsForReports([...reports, ...nextPage]));
 
   @override
   Future<Result<List<MunicipalCrewEntity>>> getAvailableCrews() async => Success(crews);
@@ -227,6 +228,7 @@ void main() {
       expect(find.text('Todos (2)'), findsOneWidget);
       expect(find.text('Urgentes (1)'), findsOneWidget);
       expect(find.text('Pendientes (1)'), findsOneWidget);
+      expect(find.text('Asignados (1)'), findsOneWidget);
       expect(find.text('Personal (1)'), findsOneWidget);
 
       // 3. Menú inferior con tab activo
@@ -235,6 +237,23 @@ void main() {
       expect(find.text('Inicio'), findsOneWidget);
       expect(find.text('Reportes'), findsOneWidget);
       expect(find.text('Equipo'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Leyenda del mapa'));
+      await tester.pumpAndSettle();
+      for (final name in [
+        'Zona Central',
+        'Zona Noroeste',
+        'Zona Noreste',
+        'Zona Suroeste',
+        'Zona Este',
+        'Zona Sureste',
+      ]) {
+        expect(find.text(name).hitTestable(), findsOneWidget);
+      }
+      await tester.tap(find.text('Zona Este'));
+      await tester.pumpAndSettle();
+      expect(find.text('Zonas urbanas'), findsNothing);
+      expect(find.text('Zona Este'), findsOneWidget);
     },
   );
 
@@ -259,13 +278,14 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      final selectReportBtn = find.text('#REP-0101');
+      final selectReportBtn = find.byKey(const ValueKey('map-report-rep-m1'));
       expect(selectReportBtn, findsOneWidget);
       await tester.tap(selectReportBtn);
       await tester.pumpAndSettle();
 
       // Verificar que se abre la tarjeta de vista previa
       expect(find.byType(AdminMapReportPreviewCard), findsOneWidget);
+      expect(find.text('#REP-0101'), findsOneWidget);
       expect(find.text('Acumulación de basura'), findsOneWidget);
       expect(find.text('Jr. Carabaya 450'), findsOneWidget);
       expect(find.text('Asignar'), findsOneWidget);
@@ -330,6 +350,17 @@ void main() {
       final later = central.copyWith(
         id: 'central-2',
         reportNumber: '#CENTRAL-02',
+        status: ReportStatus.assigned,
+      );
+      final closed = central.copyWith(
+        id: 'closed',
+        reportNumber: '#RESUELTO',
+        status: ReportStatus.resolved,
+      );
+      final cancelled = central.copyWith(
+        id: 'cancelled',
+        reportNumber: '#CANCELADO',
+        status: ReportStatus.cancelled,
       );
       final outside = central.copyWith(
         id: 'outside',
@@ -339,7 +370,7 @@ void main() {
       );
       final repo = MockAdminMapRepository()
         ..reports = [central, testMapReports.first, outside]
-        ..nextPage = [later];
+        ..nextPage = [later, closed, cancelled];
       final container = ProviderContainer.test(
         overrides: [
           authViewModelProvider.overrideWith(
@@ -361,7 +392,14 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('#FUERA'), findsNothing);
+      expect(find.byKey(const ValueKey('map-report-outside')), findsNothing);
+      expect(find.text('3 de 4 en zona urbana'), findsOneWidget);
+      expect(find.text('Pendientes (2)'), findsOneWidget);
+      expect(
+        tester.widget<AdminMapReportLayer>(find.byType(AdminMapReportLayer))
+            .reports.map((report) => report.id),
+        unorderedEquals(['central-1', 'central-2', testMapReports.first.id]),
+      );
 
       final map = find.byType(FlutterMap);
       final controller = tester.widget<FlutterMap>(map).mapController!;
@@ -376,6 +414,38 @@ void main() {
 
       expect(find.text('Zona Central'), findsOneWidget);
       expect(find.text('2 reportes'), findsOneWidget);
+      final pending = find.text('Pendientes (1)');
+      expect(pending, findsOneWidget);
+      expect(
+        tester.widget<AdminMapReportLayer>(find.byType(AdminMapReportLayer))
+            .reports.map((report) => report.id),
+        unorderedEquals(['central-1', 'central-2']),
+      );
+      await tester.ensureVisible(pending);
+      await tester.tap(pending);
+      await tester.pumpAndSettle();
+      expect(find.text('1 de 2 reportes con el filtro'), findsOneWidget);
+      expect(
+        tester.widget<AdminMapReportLayer>(find.byType(AdminMapReportLayer))
+            .reports.map((report) => report.id),
+        ['central-1'],
+      );
+      final assigned = find.text('Asignados (1)');
+      await tester.ensureVisible(assigned);
+      await tester.tap(assigned);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<AdminMapReportLayer>(find.byType(AdminMapReportLayer))
+            .reports.map((report) => report.id),
+        ['central-2'],
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('map-report-central-2')),
+          matching: find.byIcon(Icons.assignment_ind_rounded),
+        ),
+        findsOneWidget,
+      );
       await tester.tap(find.text('Ver todos'));
       await tester.pumpAndSettle();
 
@@ -388,12 +458,81 @@ void main() {
       expect(find.text('#CENTRAL-02'), findsOneWidget);
       expect(find.text(testMapReports.first.reportNumber), findsNothing);
       expect(find.text('#FUERA'), findsNothing);
+      expect(find.text('#RESUELTO'), findsNothing);
+      expect(find.text('#CANCELADO'), findsNothing);
     },
   );
 
-  testWidgets('Conserva el enlace de zona al recuperar la sesión', (tester) async {
+  testWidgets('Los grupos respetan el filtro y dan acceso a reportes superpuestos', (
+    tester,
+  ) async {
+    final first = testMapReports.first.copyWith(
+      latitude: -7.158,
+      longitude: -78.518,
+    );
+    final samePosition = first.copyWith(id: 'same', reportNumber: '#MISMO-PUNTO');
+    final near = testMapReports.last.copyWith(
+      latitude: -7.158,
+      longitude: -78.515,
+    );
+    final repo = MockAdminMapRepository()..reports = [first, samePosition, near];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authViewModelProvider.overrideWith(
+            () => MockAdminAuthViewModel(testAdminUser),
+          ),
+          adminRepositoryProvider.overrideWithValue(repo),
+        ],
+        child: const MaterialApp(home: AdminLiveMapScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final group = find.byKey(const ValueKey('map-report-group-rep-m1'));
+    final nearbyMarker = find.byKey(const ValueKey('map-report-rep-m2'));
+    expect(find.descendant(of: group, matching: find.text('3')), findsOneWidget);
+    expect(nearbyMarker, findsNothing);
+
+    await tester.tap(find.text('Urgentes (2)'));
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: group, matching: find.text('2')), findsOneWidget);
+    await tester.tap(group);
+    await tester.pumpAndSettle();
+    expect(find.text('Reportes cercanos'), findsOneWidget);
+    expect(find.text(near.reportNumber), findsNothing);
+    expect(find.text('Acercar'), findsNothing);
+    await tester.tap(find.text(samePosition.reportNumber));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byType(AdminMapReportPreviewCard),
+        matching: find.text(samePosition.reportNumber),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Todos (3)'));
+    await tester.pumpAndSettle();
+    await tester.tap(group);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Acercar'));
+    await tester.pumpAndSettle();
+    expect(nearbyMarker, findsOneWidget);
+    expect(find.descendant(of: group, matching: find.text('2')), findsOneWidget);
+  });
+
+  testWidgets('Conserva el enlace de la Zona Este al recuperar la sesión', (tester) async {
     final auth = MockAdminAuthViewModel(testAdminUser, restoresSession: true);
-    final repo = MockAdminMapRepository();
+    final eastReport = testMapReports.first.copyWith(
+      latitude: -7.169,
+      longitude: -78.503,
+    );
+    final southeastReport = testMapReports.last.copyWith(
+      latitude: -7.178,
+      longitude: -78.505,
+    );
+    final repo = MockAdminMapRepository()..reports = [eastReport, southeastReport];
     final container = ProviderContainer.test(
       overrides: [
         authViewModelProvider.overrideWith(() => auth),
@@ -401,7 +540,7 @@ void main() {
       ],
     );
     final dispatcher = tester.binding.platformDispatcher;
-    dispatcher.defaultRouteNameTestValue = RouteNames.adminReportsByZone('noreste');
+    dispatcher.defaultRouteNameTestValue = RouteNames.adminReportsByZone('este');
     addTearDown(dispatcher.clearDefaultRouteNameTestValue);
     final router = container.read(routerProvider);
     addTearDown(router.dispose);
@@ -416,6 +555,8 @@ void main() {
 
     auth.restoreSession();
     await tester.pumpAndSettle();
-    expect(find.text('Reportes: Zona Noreste'), findsOneWidget);
+    expect(find.text('Reportes: Zona Este'), findsOneWidget);
+    expect(find.text(eastReport.reportNumber), findsOneWidget);
+    expect(find.text(southeastReport.reportNumber), findsNothing);
   });
 }

@@ -22,7 +22,7 @@ abstract class AdminRepository {
   /// Registra una nueva cuadrilla municipal y su vehículo en Cloud Firestore.
   Future<Result<MunicipalCrewEntity>> createCrew(MunicipalCrewEntity crew);
 
-  /// Actualiza los datos operativos, sector o estado de una cuadrilla municipal.
+  /// Actualiza los datos operativos de una cuadrilla municipal.
   Future<Result<MunicipalCrewEntity>> updateCrew(MunicipalCrewEntity crew);
 
   /// Elimina una cuadrilla municipal del registro del sistema.

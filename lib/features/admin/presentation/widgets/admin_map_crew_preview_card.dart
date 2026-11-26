@@ -89,22 +89,6 @@ class AdminMapCrewPreviewCard extends StatelessWidget {
               ),
               const SizedBox(height: 12),
 
-              // Detalles de Zona, Responsable y Carga
-              Row(
-                children: [
-                  const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF64748B)),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'Zona: ${crew.zone}',
-                      style: const TextStyle(fontSize: 12.5, color: Color(0xFF334155)),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
               Row(
                 children: [
                   const Icon(Icons.person_pin_circle_outlined, size: 14, color: Color(0xFF64748B)),

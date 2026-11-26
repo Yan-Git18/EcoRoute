@@ -332,7 +332,9 @@ class _ReportDetailBody extends StatelessWidget {
           const SizedBox(height: 20),
 
           // 5. Botón de Cancelar Reporte para el ciudadano (solo en estado pendiente)
-          if (report.status == ReportStatus.pending && onCancelReport != null) ...[
+          if (report.status == ReportStatus.pending &&
+              report.collectionRouteId == null &&
+              onCancelReport != null) ...[
             SizedBox(
               width: double.infinity,
               height: 50,
@@ -356,6 +358,10 @@ class _ReportDetailBody extends StatelessWidget {
                 ),
               ),
             ),
+          ] else if (report.status == ReportStatus.pending &&
+              report.collectionRouteId != null &&
+              onCancelReport != null) ...[
+            const Text('Tu reporte está incluido en una ruta de recolección.'),
           ] else if (report.status == ReportStatus.cancelled) ...[
             Container(
               width: double.infinity,

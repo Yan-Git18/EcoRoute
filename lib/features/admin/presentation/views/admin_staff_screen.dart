@@ -4,8 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../staff/domain/entities/staff_operations.dart';
 import '../../../staff/presentation/viewmodels/staff_operations_providers.dart';
+import '../../domain/usecases/assign_staff_roles.dart';
+import '../viewmodels/admin_reports_viewmodel.dart';
 import '../viewmodels/admin_staff_viewmodel.dart';
 import '../widgets/admin_back_button.dart';
+import 'admin_staff_batch_screen.dart';
 
 /// Pantalla de Gestión Segura de Personal Municipal.
 ///
@@ -44,6 +47,22 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
     if (!mounted || !success) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('${user.name} ahora es personal de limpieza.')),
+    );
+  }
+
+  void _openBatchAssignment() {
+    _searchFocusNode.unfocus();
+    final assignment = AssignStaffRoles(ref.read(adminRepositoryProvider));
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => AdminStaffBatchScreen(
+          assignStaffRoles: assignment,
+          onAssigned: (users) {
+            if (!mounted) return;
+            ref.read(adminStaffViewModelProvider.notifier).recordStaffPromotions(users);
+          },
+        ),
+      ),
     );
   }
 
@@ -259,6 +278,15 @@ class _AdminStaffScreenState extends ConsumerState<AdminStaffScreen> {
                               : const Text('Buscar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
                         ),
                       ],
+                    ),
+
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.group_add_outlined),
+                      label: const Text('Asignar varios usuarios'),
+                      onPressed: state.isLoading || state.isUpdating || state.isSearching
+                          ? null
+                          : _openBatchAssignment,
                     ),
 
                     if (state.errorMessage != null) ...[

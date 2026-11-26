@@ -2,6 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:latlong2/latlong.dart';
+
+import '../../../../core/services/route_navigation_service.dart';
+import '../../../routes/domain/collection_route.dart';
+import '../../../routes/presentation/collection_route_providers.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../data/repositories/firebase_staff_operations_repository.dart';
 import '../../domain/entities/staff_operations.dart';
@@ -52,7 +57,9 @@ final staffCanManageTaskProvider = Provider.autoDispose.family<bool, String?>((
 final staffTeamTaskChangesProvider = StreamProvider.autoDispose<int>((ref) {
   final teamId = ref.watch(staffTeamIdProvider).asData?.value;
   if (teamId == null) return const Stream.empty();
-  return ref.watch(staffOperationsRepositoryProvider).watchTeamTaskChanges(teamId);
+  return ref
+      .watch(staffOperationsRepositoryProvider)
+      .watchTeamTaskChanges(teamId);
 });
 
 final staffShiftProvider = StreamProvider.autoDispose
@@ -82,3 +89,43 @@ String staffCrewName(AsyncValue<StaffCrew?> crew) => switch (crew) {
   AsyncError() => 'Cuadrilla no disponible',
   _ => 'Cargando cuadrilla…',
 };
+
+final staffCollectionRoutesProvider =
+    Provider.autoDispose<AsyncValue<List<CollectionRoute>>>((ref) {
+      return ref
+          .watch(staffTeamIdProvider)
+          .when(
+            data: (id) => id == null
+                ? const AsyncData(<CollectionRoute>[])
+                : ref.watch(collectionRoutesProvider(id)),
+            error: AsyncError.new,
+            loading: () => const AsyncLoading(),
+          );
+    });
+
+final staffCurrentCollectionRouteProvider =
+    Provider.autoDispose<CollectionRoute?>((ref) {
+      final routes = ref.watch(staffCollectionRoutesProvider).asData?.value;
+      if (routes == null) return null;
+      return routes
+              .where(
+                (route) => route.status == CollectionRouteStatus.inProgress,
+              )
+              .firstOrNull ??
+          routes
+              .where((route) => route.status == CollectionRouteStatus.planned)
+              .firstOrNull;
+    });
+
+final staffCollectionLegProvider = FutureProvider.autoDispose
+    .family<RouteInfoResult, (LatLng, LatLng)>((ref, points) {
+      final (origin, destination) = points;
+      return ref
+          .watch(routeNavigationServiceProvider)
+          .calculateOptimalRoute(
+            originLat: origin.latitude,
+            originLng: origin.longitude,
+            destLat: destination.latitude,
+            destLng: destination.longitude,
+          );
+    });

@@ -7,6 +7,7 @@ enum CajamarcaZone {
   northwest('noroeste', 'Zona Noroeste'),
   northeast('noreste', 'Zona Noreste'),
   southwest('suroeste', 'Zona Suroeste'),
+  east('este', 'Zona Este'),
   southeast('sureste', 'Zona Sureste');
 
   const CajamarcaZone(this.id, this.name);

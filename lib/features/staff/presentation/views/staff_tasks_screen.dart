@@ -333,20 +333,7 @@ class _StaffTasksScreenState extends ConsumerState<StaffTasksScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: StaffBottomNavBar(
-        currentIndex: 2,
-        onTabSelected: (index) {
-          if (index == 0) {
-            context.go(RouteNames.staffHome);
-          } else if (index == 1) {
-            context.push(RouteNames.staffRouteMap);
-          } else if (index == 2) {
-            // Ya en tareas
-          } else if (index == 3) {
-            context.push(RouteNames.staffProfile);
-          }
-        },
-      ),
+      bottomNavigationBar: const StaffBottomNavBar(currentIndex: 2),
     );
   }
 

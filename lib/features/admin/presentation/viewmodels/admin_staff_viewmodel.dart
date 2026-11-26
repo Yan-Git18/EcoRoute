@@ -123,18 +123,29 @@ class AdminStaffViewModel extends Notifier<AdminStaffState> {
     if (!ref.mounted) return false;
     switch (result) {
       case Success():
-        final updated = user.copyWith(role: UserRole.staff);
-        state = state.copyWith(
-          isUpdating: false,
-          staffMembers: [if (updated.isActive) updated, ...state.staffMembers.where((staff) => staff.id != user.id)],
-          searchedUser: state.searchedUser?.id == user.id ? updated : null,
-          successMessage: '${user.name} ahora es personal de limpieza.',
-        );
+        recordStaffPromotions([user]);
+        state = state.copyWith(successMessage: '${user.name} ahora es personal de limpieza.');
         return true;
       case FailureResult(failure: final failure):
         state = state.copyWith(isUpdating: false, errorMessage: failure.message);
         return false;
     }
+  }
+
+  void recordStaffPromotions(List<UserEntity> users) {
+    final promoted = {
+      for (final user in users) user.id: user.copyWith(role: UserRole.staff),
+    };
+    state = state.copyWith(
+      isUpdating: false,
+      staffMembers: [
+        ...promoted.values.where((user) => user.isActive),
+        ...state.staffMembers.where((staff) => !promoted.containsKey(staff.id)),
+      ],
+      searchedUser: promoted[state.searchedUser?.id],
+    );
+    ref.invalidate(adminTeamStaffProvider);
+    ref.invalidate(adminBusyStaffProvider);
   }
 
   /// Revierte a un miembro del personal al rol 'citizen'.

@@ -29,6 +29,7 @@ class RouteNames {
   static const String staffTasks = '/staff/tasks';
   static const String staffTaskDetail = '/staff/task/:id';
   static const String staffRouteMap = '/staff/route';
+  static const String staffCollectionRoutes = '/staff/collection-routes';
   static const String staffEvidence = '/staff/evidence/:id';
   static const String staffProfile = '/staff/profile';
 
@@ -36,9 +37,12 @@ class RouteNames {
   static const String adminDashboard = '/admin';
   static const String adminReports = '/admin/reports';
   static const String adminReportZoneParameter = 'zona';
+  static const String adminReportOpenParameter = 'abiertos';
   static const String adminReportDetail = '/admin/report/:id';
   static const String adminAssignStaff = '/admin/assign/:id';
   static const String adminLiveMap = '/admin/live-map';
+  static const String adminRoutes = '/admin/routes';
+  static const String adminCollectionRoute = '/admin/routes/:id';
   static const String adminRoutePlanner = '/admin/route-planner';
   static const String adminMetrics = '/admin/metrics';
   static const String adminTeams = '/admin/teams';
@@ -46,11 +50,17 @@ class RouteNames {
   static const String adminFleet = '/admin/fleet';
   static const String adminProfile = '/admin/profile';
 
-  static String adminReportsByZone(String zoneId) => Uri(
+  static String adminReportsByZone(String zoneId, {bool openOnly = false}) => Uri(
     path: adminReports,
-    queryParameters: {adminReportZoneParameter: zoneId},
+    queryParameters: {
+      adminReportZoneParameter: zoneId,
+      if (openOnly) adminReportOpenParameter: '1',
+    },
   ).toString();
 
   static String adminReportLocation(String id) =>
       adminReportDetail.replaceFirst(':id', Uri.encodeComponent(id));
+
+  static String adminCollectionRouteLocation(String id) =>
+      adminCollectionRoute.replaceFirst(':id', Uri.encodeComponent(id));
 }

@@ -230,20 +230,7 @@ class _StaffProfileScreenState extends ConsumerState<StaffProfileScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: StaffBottomNavBar(
-        currentIndex: 3,
-        onTabSelected: (index) {
-          if (index == 0) {
-            context.go(RouteNames.staffHome);
-          } else if (index == 1) {
-            context.go(RouteNames.staffRouteMap);
-          } else if (index == 2) {
-            context.go(RouteNames.staffTasks);
-          } else if (index == 3) {
-            // Ya en perfil
-          }
-        },
-      ),
+      bottomNavigationBar: const StaffBottomNavBar(currentIndex: 4),
     );
   }
 

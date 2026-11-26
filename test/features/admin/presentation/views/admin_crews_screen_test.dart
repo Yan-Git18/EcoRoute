@@ -458,7 +458,7 @@ void main() {
       await tester.tap(find.text('Editar equipo'));
       await tester.pumpAndSettle();
       expect(find.byType(AdminCrewEditorScreen), findsOneWidget);
-      expect(find.text('Sector'), findsOneWidget);
+      expect(find.text('Sector'), findsNothing);
       expect(find.text('Integrantes (2)'), findsOneWidget);
       await tester.enterText(
         find.byType(TextFormField).first,
@@ -546,7 +546,7 @@ void main() {
 
       final fields = find.byType(TextFormField);
       await tester.enterText(fields.first, 'Equipo Surquillo');
-      await tester.enterText(fields.at(1), 'Sector Sur');
+      expect(find.text('Sector'), findsNothing);
       await tester.tap(find.text('Seleccionar camión'));
       await tester.pumpAndSettle();
       final truck = find.widgetWithText(ListTile, 'Camión libre');

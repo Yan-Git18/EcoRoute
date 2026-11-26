@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('Ubica un punto interior en cada sector urbano', () {
+    expect(CajamarcaZone.values, hasLength(6));
     expect(CajamarcaUrbanZones.zoneAt(-7.158, -78.518), CajamarcaZone.central);
     expect(
       CajamarcaUrbanZones.zoneAt(-7.151, -78.527),
@@ -16,6 +17,7 @@ void main() {
       CajamarcaUrbanZones.zoneAt(-7.168, -78.524),
       CajamarcaZone.southwest,
     );
+    expect(CajamarcaUrbanZones.zoneAt(-7.169, -78.503), CajamarcaZone.east);
     expect(
       CajamarcaUrbanZones.zoneAt(-7.178, -78.505),
       CajamarcaZone.southeast,
@@ -31,5 +33,9 @@ void main() {
 
   test('Asigna una sola zona a los puntos sobre un límite compartido', () {
     expect(CajamarcaUrbanZones.zoneAt(-7.158, -78.508), CajamarcaZone.central);
+    expect(
+      CajamarcaUrbanZones.zoneAt(-7.1782956, -78.4963841),
+      CajamarcaZone.east,
+    );
   });
 }

@@ -15,10 +15,6 @@ Future<void> openAdminCrewEditor(
   if (staff == null) return;
   final state = ref.read(adminReportsViewModelProvider);
   final viewModel = ref.read(adminReportsViewModelProvider.notifier);
-  final sectors = {
-    for (final team in state.teams)
-      if (team.zone.trim().isNotEmpty) team.zone.trim(),
-  }.toList()..sort();
   final vehicles = state.fleet
       .where(
         (truck) =>
@@ -34,7 +30,6 @@ Future<void> openAdminCrewEditor(
         crew: crew,
         staff: staff,
         vehicles: vehicles,
-        sectors: sectors,
         onSave: (updated) async {
           final saved = await (crew == null
               ? viewModel.createCrew(updated)
@@ -57,14 +52,12 @@ class AdminCrewEditorScreen extends ConsumerStatefulWidget {
     this.crew,
     required this.staff,
     required this.vehicles,
-    this.sectors = const [],
     required this.onSave,
   });
 
   final MunicipalCrewEntity? crew;
   final List<UserEntity> staff;
   final List<MunicipalCrewEntity> vehicles;
-  final List<String> sectors;
   final Future<String?> Function(MunicipalCrewEntity) onSave;
 
   @override
@@ -76,7 +69,6 @@ class _AdminCrewEditorScreenState extends ConsumerState<AdminCrewEditorScreen> {
   static const _embeddedTruck = '@legacy';
   final _form = GlobalKey<FormState>();
   late final _name = TextEditingController(text: widget.crew?.name);
-  late final _zone = TextEditingController(text: widget.crew?.zone);
   late final _people = {for (final person in widget.staff) person.id: person};
   late final _originalMembers = _initialMembers();
   late final _members = {..._originalMembers};
@@ -134,7 +126,6 @@ class _AdminCrewEditorScreenState extends ConsumerState<AdminCrewEditorScreen> {
   @override
   void dispose() {
     _name.dispose();
-    _zone.dispose();
     _search.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -175,7 +166,6 @@ class _AdminCrewEditorScreenState extends ConsumerState<AdminCrewEditorScreen> {
         );
     final updated = base.copyWith(
       name: _name.text.trim(),
-      zone: _zone.text.trim(),
       leaderId: _leaderId,
       leadStaffName: _people[_leaderId]?.name,
       vehicleId: truck?.id,
@@ -262,37 +252,6 @@ class _AdminCrewEditorScreenState extends ConsumerState<AdminCrewEditorScreen> {
                           textInputAction: TextInputAction.next,
                           validator: (value) => (value?.trim().length ?? 0) < 3
                               ? 'Escribe al menos 3 caracteres.'
-                              : null,
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _zone,
-                          enabled: !_saving,
-                          decoration: InputDecoration(
-                            labelText: 'Sector',
-                            suffixIcon: widget.sectors.isEmpty
-                                ? null
-                                : PopupMenuButton<String>(
-                                    tooltip: 'Seleccionar sector',
-                                    enabled: !_saving,
-                                    icon: const Icon(Icons.expand_more),
-                                    constraints: const BoxConstraints(
-                                      minWidth: 160,
-                                      maxWidth: 300,
-                                      maxHeight: 240,
-                                    ),
-                                    onSelected: (sector) => _zone.text = sector,
-                                    itemBuilder: (_) => [
-                                      for (final sector in widget.sectors)
-                                        PopupMenuItem(
-                                          value: sector,
-                                          child: Text(sector),
-                                        ),
-                                    ],
-                                  ),
-                          ),
-                          validator: (value) => value?.trim().isNotEmpty != true
-                              ? 'Escribe el sector del equipo.'
                               : null,
                         ),
                       ],

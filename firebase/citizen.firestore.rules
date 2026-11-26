@@ -350,7 +350,7 @@ service cloud.firestore {
     function activeTaskOwner(before, after) {
       let teamId = before.get('assignedToTeamId', null);
       let previousAssignee = before.get('assignedStaffId', null);
-      return after.status == 'resolved' && !(teamId in [null, '']) && previousAssignee is string
+      return after.status in ['resolved', 'pending'] && !(teamId in [null, '']) && previousAssignee is string
         && previousAssignee.size() > 0
         ? previousAssignee
         : request.auth.uid;
@@ -373,10 +373,14 @@ service cloud.firestore {
         && active.keys().hasOnly(['reportIds', 'reportId', 'eventId', 'updatedAt'])
         && active.updatedAt == request.time && after.updatedAt == request.time
         && active.eventId == after.statusEventId && active.eventId != before.get('statusEventId', '')
-        && after.assignedStaffId == request.auth.uid && (
-          (status(before.status) == 'assigned' && after.status == 'in_progress'
-            && previousIds.size() == 0 && active.reportIds == [active.reportId])
-          || (status(before.status) == 'in_progress' && after.status == 'resolved'
+        && (
+          (after.get('assignedStaffId', null) == request.auth.uid && ((status(before.status) == 'assigned'
+              || (status(before.status) == 'pending' && before.get('collectionRouteId', null) != null))
+            && after.status == 'in_progress'
+            && previousIds.size() == 0 && active.reportIds == [active.reportId]))
+          || (status(before.status) == 'in_progress'
+            && (after.status == 'resolved' && after.get('assignedStaffId', null) == request.auth.uid
+              || isRouteStopRelease(active.reportId, before, after))
             && (teamId in [null, ''] ? active.reportId in previousIds : isCrewLeader(teamId))
             && active.reportIds == previousIds.removeAll([active.reportId]))
         );
@@ -402,6 +406,10 @@ service cloud.firestore {
             && after.citizenId == request.auth.uid)
           || (nextStatus == 'assigned' && history.changedByUserRole == 'admin'
             && crewReportsRecorded(reportId, before, after))
+          || (nextStatus == 'pending' && history.changedByUserRole == 'staff'
+            && isRouteStopRelease(reportId, before, after)
+            && (status(before.status) == 'pending' || activeTaskRecorded(reportId, before, after))
+            && crewReportsRecorded(reportId, before, after))
           || (nextStatus in ['in_progress', 'resolved'] && history.changedByUserRole == 'staff'
             && activeTaskRecorded(reportId, before, after) && crewReportsRecorded(reportId, before, after))
         )
@@ -413,7 +421,8 @@ service cloud.firestore {
       let assignees = report.get('assignedStaffIds', []);
       return assignees is list && assignees.toSet().size() == assignees.size() && (
         (teamId == null && assignees.size() > 0 && report.get('assignedVehicle', null) == null)
-        || (assignees.size() == 0 && crewExists(teamId) && dispatchableCrew(teamId))
+        || (assignees.size() == 0 && crewExists(teamId) && dispatchableCrew(teamId)
+          && routeSchedule(teamId).get('activeRouteId', null) == null)
       );
     }
 
@@ -456,11 +465,18 @@ service cloud.firestore {
       let before = resource.data;
       let after = request.resource.data;
       let changed = after.diff(before).affectedKeys();
-      return request.auth != null && after.updatedAt == request.time && (
-        (changed.hasOnly(['priority', 'updatedAt']) && after.priority in ['low', 'medium', 'high']
+      return request.auth != null && (
+        (changed.hasOnly(['collectionRouteId']) && validRouteReservation(reportId, before, after))
+        || (after.updatedAt == request.time && validReportStatusUpdate(reportId, before, after, changed))
+      );
+    }
+
+    function validReportStatusUpdate(reportId, before, after, changed) {
+      let routeId = before.get('collectionRouteId', null);
+      return (changed.hasOnly(['priority', 'updatedAt']) && after.priority in ['low', 'medium', 'high']
           && isAdmin() && publicReportMatches(after, getAfter(publicReportPath(reportId)).data))
         || (historyWritten(reportId, before, after) && (
-          (isAdmin() && status(before.status) in ['pending', 'assigned'] && after.status == 'assigned'
+          (isAdmin() && routeId == null && status(before.status) in ['pending', 'assigned'] && after.status == 'assigned'
             && after.priority in ['low', 'medium', 'high']
             && validDispatch(after)
             && after.get('assignedStaffId', null) == null
@@ -472,13 +488,217 @@ service cloud.firestore {
             && canStartReport(before)
             && after.assignedStaffId == request.auth.uid
             && changed.hasOnly(['status', 'assignedStaffId', 'assignedStaffName', 'updatedAt', 'statusEventId']))
+          || (isStaff() && routeId is string && after.status == 'in_progress'
+            && status(before.status) == 'pending'
+            && validRouteStopStart(reportId, routeId, after)
+            && changed.hasOnly([
+              'status', 'assignedStaffId', 'assignedStaffName', 'assignedToTeamId',
+              'assignedToTeamName', 'assignedVehicle', 'updatedAt', 'statusEventId'
+            ]))
+          || (isRouteStopRelease(reportId, before, after)
+            && changed.hasOnly([
+              'status', 'collectionRouteId', 'assignedStaffId', 'assignedStaffName',
+              'assignedToTeamId', 'assignedToTeamName', 'assignedVehicle', 'updatedAt', 'statusEventId'
+            ]))
           || (after.status == 'resolved' && canResolveWithEvidence(reportId)
-            && validResolutionPhotos(reportId, after))
-          || (citizenOwnsDocument(before.citizenId) && status(before.status) == 'pending'
+            && validResolutionPhotos(reportId, after)
+            && (routeId == null || routeAdvanced(routeId, reportId)))
+          || (routeId == null && citizenOwnsDocument(before.citizenId) && status(before.status) == 'pending'
             && after.status == 'cancelled' && after.cancellationReason is string
             && changed.hasOnly(['status', 'cancellationReason', 'updatedAt', 'statusEventId']))
-        ))
+        ));
+    }
+
+    function collectionRoutePath(id) {
+      return /databases/$(database)/documents/collectionRoutes/$(id);
+    }
+
+    function routeSchedulePath(crewId) {
+      return /databases/$(database)/documents/crewRouteSchedules/$(crewId);
+    }
+
+    function routeSchedule(crewId) {
+      return stored(routeSchedulePath(crewId));
+    }
+
+    function validRouteReservation(reportId, before, after) {
+      let previous = before.get('collectionRouteId', null);
+      let next = after.get('collectionRouteId', null);
+      return isAdmin() && status(before.status) == 'pending' && previous != next && (
+        (previous == null && next is string
+          && before.get('assignedToTeamId', null) in [null, '']
+          && before.get('assignedStaffId', null) in [null, '']
+          && before.get('assignedStaffIds', []).size() == 0
+          && !exists(collectionRoutePath(next))
+          && plannedRouteContains(next, reportId))
+        || (next == null && previous is string && cancelledRouteContains(previous, reportId))
       );
+    }
+
+    function plannedRouteContains(id, reportId) {
+      let route = getAfter(collectionRoutePath(id)).data;
+      return route.status == 'planned' && reportId in route.reportIds;
+    }
+
+    function cancelledRouteContains(id, reportId) {
+      let route = getAfter(collectionRoutePath(id)).data;
+      return route.status == 'cancelled' && route.finishedAt == request.time
+        && reportId in route.remainingReportIds;
+    }
+
+    function validRouteStopStart(reportId, id, report) {
+      let route = get(collectionRoutePath(id)).data;
+      return route.status == 'inProgress' && route.remainingReportIds[0] == reportId
+        && isCrewLeader(route.crewId) && routeSchedule(route.crewId).activeRouteId == id
+        && report.assignedStaffId == request.auth.uid && report.assignedToTeamId == route.crewId
+        && report.assignedToTeamName == route.crewName && report.assignedVehicle == route.vehicle;
+    }
+
+    function canReadNextRouteStop(reportId, id) {
+      let route = stored(collectionRoutePath(id));
+      return route.get('status', null) == 'inProgress'
+        && route.remainingReportIds[0] == reportId && isCrewLeader(route.crewId);
+    }
+
+    function isRouteStopRelease(reportId, before, after) {
+      let id = before.get('collectionRouteId', null);
+      return isStaff() && id is string && after.status == 'pending'
+        && status(before.status) in ['pending', 'in_progress']
+        && !after.keys().hasAny([
+          'collectionRouteId', 'assignedStaffId', 'assignedStaffName',
+          'assignedToTeamId', 'assignedToTeamName', 'assignedVehicle'
+        ])
+        && canReadNextRouteStop(reportId, id) && routeAdvanced(id, reportId)
+        && reportId in getAfter(collectionRoutePath(id)).data.get('skippedStops', {});
+    }
+
+    function routeAdvanced(id, reportId) {
+      let before = get(collectionRoutePath(id)).data;
+      let after = getAfter(collectionRoutePath(id)).data;
+      return before.status == 'inProgress' && before.remainingReportIds[0] == reportId
+        && after.remainingReportIds == before.remainingReportIds.removeAll([reportId]);
+    }
+
+    function validRouteWindow(id, route) {
+      let schedule = getAfter(routeSchedulePath(route.crewId)).data;
+      let window = schedule.windows[id];
+      return route.scheduledStart is timestamp && route.scheduledEnd is timestamp
+        && route.scheduledStart < route.scheduledEnd && route.scheduledEnd > request.time
+        && window == {'scheduledStart': route.scheduledStart, 'scheduledEnd': route.scheduledEnd};
+    }
+
+    function validRouteReplan(id, before, after) {
+      return before.status == 'planned' && after.status == 'planned'
+        && after.diff(before).affectedKeys().hasOnly([
+          'crewId', 'crewName', 'vehicle', 'scheduledStart', 'scheduledEnd'
+        ])
+        && validRouteWindow(id, after) && validRouteCrew(after)
+        && (before.crewId == after.crewId
+          || !(id in getAfter(routeSchedulePath(before.crewId)).data.windows));
+    }
+
+    function validRouteCrew(route) {
+      let crew = get(/databases/$(database)/documents/crews/$(route.crewId)).data;
+      let truck = crew.get('vehicleId', null);
+      let leader = crewLeaderId(crew);
+      return crew.name == route.crewName && crew.get('vehicleOnly', false) == false
+        && leader is string && managedMember(route.crewId, leader) && crew.get('isAvailable', true)
+        && crew.get('status', 'available') != 'maintenance'
+        && (truck == null || dispatchableTruck(truck, route.crewId));
+    }
+
+    function validRouteCreation(id, route) {
+      return route.keys().hasOnly([
+          'name', 'zoneId', 'crewId', 'crewName', 'vehicle', 'reportIds', 'remainingReportIds',
+          'stops', 'geometry', 'distanceMeters', 'durationSeconds', 'status',
+          'createdAt', 'scheduledStart', 'scheduledEnd'
+        ])
+        && textField(route.name, 1, 80) && route.crewId is string
+        && route.zoneId in ['central', 'noroeste', 'noreste', 'suroeste', 'este', 'sureste']
+        && route.vehicle is string && route.reportIds is list
+        && route.reportIds.size() >= 1 && route.reportIds.size() <= 10
+        && route.reportIds.toSet().size() == route.reportIds.size()
+        && route.remainingReportIds == route.reportIds && route.stops is list
+        && route.stops.size() == route.reportIds.size() && route.geometry is list
+        && route.status == 'planned' && route.createdAt == request.time
+        && validRouteWindow(id, route) && validRouteCrew(route);
+    }
+
+    function canCancelRoute(id, before, after, changed) {
+      let schedule = getAfter(routeSchedulePath(before.crewId)).data;
+      return before.status in ['planned', 'inProgress'] && after.status == 'cancelled'
+        && changed.hasOnly(['status', 'finishedAt']) && after.finishedAt == request.time
+        && !(id in schedule.windows) && schedule.activeRouteId != id
+        && (before.status == 'planned'
+          || status(get(reportPath(before.remainingReportIds[0])).data.status) == 'pending');
+    }
+
+    function validRouteStart(id, before, after, changed) {
+      let schedule = getAfter(routeSchedulePath(before.crewId)).data;
+      let crew = get(/databases/$(database)/documents/crews/$(before.crewId)).data;
+      return before.status == 'planned' && after.status == 'inProgress'
+        && changed.hasOnly(['status', 'startedAt']) && after.startedAt == request.time
+        && before.scheduledStart <= request.time && schedule.activeRouteId == id
+        && crew.get('openReportCount', 0) == 0 && crew.get('status', 'available') == 'available'
+        && crew.get('isAvailable', true)
+        && (crew.get('vehicleId', null) == null || dispatchableTruck(crew.vehicleId, before.crewId));
+    }
+
+    function validRouteProgress(id, before, after, changed) {
+      let reportId = before.remainingReportIds[0];
+      let report = getAfter(reportPath(reportId)).data;
+      let oldSkips = before.get('skippedStops', {});
+      let newSkips = after.get('skippedStops', {});
+      return report.updatedAt == request.time && (
+          (report.get('collectionRouteId', null) == id && report.status == 'resolved'
+            && report.assignedToTeamId == before.crewId && newSkips == oldSkips)
+          || (isRouteStopRelease(reportId, get(reportPath(reportId)).data, report)
+            && get(reportPath(reportId)).data.collectionRouteId == id
+            && newSkips.diff(oldSkips).affectedKeys().hasOnly([reportId])
+            && !(reportId in oldSkips) && textField(newSkips[reportId], 1, 300))
+        )
+        && after.remainingReportIds == before.remainingReportIds.removeAll([reportId])
+        && (after.remainingReportIds.size() > 0
+          ? changed.hasOnly(['remainingReportIds', 'skippedStops'])
+          : (changed.hasOnly(['remainingReportIds', 'skippedStops', 'status', 'finishedAt'])
+            && after.status == 'completed' && after.finishedAt == request.time
+            && releasedRouteSchedule(id, before.crewId)));
+    }
+
+    function releasedRouteSchedule(id, crewId) {
+      let schedule = getAfter(routeSchedulePath(crewId)).data;
+      return schedule.activeRouteId == null && !(id in schedule.windows);
+    }
+
+    function validScheduleChange(crewId) {
+      let next = request.resource.data;
+      let previous = resource == null ? {} : resource.data;
+      let id = next.transitionRouteId;
+      let path = collectionRoutePath(id);
+      let route = getAfter(path).data;
+      let active = previous.get('activeRouteId', null);
+      return next.keys().hasOnly(['activeRouteId', 'transitionRouteId', 'windows'])
+        && next.windows.diff(previous.get('windows', {})).affectedKeys().hasOnly([id])
+        && (isAdmin() && validAdminSchedule(crewId, id, route, next, active, path)
+          || isStaff() && isCrewLeader(crewId) && route.crewId == crewId && (
+            (route.status == 'inProgress' && route.startedAt == request.time
+              && active == null && next.activeRouteId == id && id in next.windows
+              && next.windows == previous.windows)
+            || (route.status == 'completed' && route.finishedAt == request.time
+              && active == id && next.activeRouteId == null && !(id in next.windows))
+          ));
+    }
+
+    function validAdminSchedule(crewId, id, route, next, active, path) {
+      return (route.crewId == crewId && route.status == 'planned'
+          && next.activeRouteId == active && next.windows[id] == {
+            'scheduledStart': route.scheduledStart, 'scheduledEnd': route.scheduledEnd
+          })
+        || (route.crewId == crewId && route.status == 'cancelled'
+          && route.finishedAt == request.time && !(id in next.windows)
+          && next.activeRouteId == (active == id ? null : active))
+        || (route.crewId != crewId && route.status == 'planned' && get(path).data.crewId == crewId
+          && !(id in next.windows) && next.activeRouteId == active);
     }
 
     function validCommunityChange(reportId, uid) {
@@ -662,7 +882,8 @@ service cloud.firestore {
       return after.get('status', null) != 'maintenance'
         || before.get('status', null) == 'maintenance'
         || teamId == null
-        || afterWrite(/databases/$(database)/documents/crews/$(teamId)).get('openReportCount', 0) == 0;
+        || (afterWrite(/databases/$(database)/documents/crews/$(teamId)).get('openReportCount', 0) == 0
+          && routeSchedule(teamId).get('activeRouteId', null) == null);
     }
 
     function removedMemberWasReleased(teamId, ids, uid) {
@@ -766,6 +987,8 @@ service cloud.firestore {
 
     match /reports/{reportId} {
       allow get, list: if canReadReport(resource.data);
+      allow get: if isStaff() && resource.data.get('collectionRouteId', null) is string
+        && canReadNextRouteStop(reportId, resource.data.collectionRouteId);
       allow create: if validReportPhotoCreation(reportId);
       allow update: if validReportUpdate(reportId);
 
@@ -804,6 +1027,26 @@ service cloud.firestore {
         && publicReportMatches(getAfter(reportPath(reportId)).data, request.resource.data);
     }
 
+    match /collectionRoutes/{routeId} {
+      allow read: if isAdmin() || (isStaff() && isCrewMember(resource.data.crewId));
+      allow create: if isAdmin() && validRouteCreation(routeId, request.resource.data);
+      allow update: if (isAdmin() && (
+        validRouteReplan(routeId, resource.data, request.resource.data)
+        || canCancelRoute(routeId, resource.data, request.resource.data,
+          request.resource.data.diff(resource.data).affectedKeys())
+      )) || (isStaff() && isCrewLeader(resource.data.crewId) && (
+        validRouteStart(routeId, resource.data, request.resource.data,
+          request.resource.data.diff(resource.data).affectedKeys())
+        || (resource.data.status == 'inProgress' && validRouteProgress(routeId, resource.data,
+          request.resource.data, request.resource.data.diff(resource.data).affectedKeys()))
+      ));
+    }
+
+    match /crewRouteSchedules/{crewId} {
+      allow get: if isAdmin() || (isStaff() && isCrewMember(crewId));
+      allow create, update: if validScheduleChange(crewId);
+    }
+
     match /crews/{crewId} {
       allow read: if isAdmin();
       allow get: if isStaff() && isCrewMember(crewId);
@@ -835,8 +1078,12 @@ service cloud.firestore {
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'openReportCount', 'reportActivity', 'vehicleOnly', 'assignedCrewId'
         ])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'memberIds', 'vehicleId', 'status', 'isAvailable'
+          ]) || routeSchedule(crewId).get('windows', {}).size() == 0)
       )) || ((isAdmin() || isStaff()) && validCrewReportCounter(crewId));
       allow delete: if isAdmin() && resource.data.openReportCount == 0
+        && routeSchedule(crewId).get('windows', {}).size() == 0
         && resource.data.get('vehicleOnly', false) == false
         && resource.data.get('assignedCrewId', null) == null
         && previousTruckReleased(crewId, resource.data)

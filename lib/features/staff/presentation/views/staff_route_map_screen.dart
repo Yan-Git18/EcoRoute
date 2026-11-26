@@ -14,6 +14,10 @@ import '../../../../core/services/route_navigation_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/map/map_widgets.dart';
 import '../../../citizen/domain/entities/report_entity.dart';
+import '../../../routes/domain/collection_route.dart';
+import '../../../routes/presentation/collection_route_map.dart';
+import '../../../routes/presentation/collection_route_providers.dart';
+import 'staff_collection_routes_screen.dart';
 import '../../domain/entities/staff_task_entity.dart';
 import '../../domain/usecases/order_staff_stops.dart';
 import '../viewmodels/staff_home_viewmodel.dart';
@@ -39,7 +43,14 @@ import '../widgets/staff_task_detail_sheet.dart';
 /// Ubicación: `lib/features/staff/presentation/views/staff_route_map_screen.dart`
 /// Capa: Presentation (Personal)
 class StaffRouteMapScreen extends ConsumerStatefulWidget {
-  const StaffRouteMapScreen({super.key});
+  const StaffRouteMapScreen({super.key, this.collectionRouteId});
+
+  final String? collectionRouteId;
+
+  static Future<void> openNextStop(BuildContext context, String id) =>
+      Navigator.of(context).push<void>(
+        MaterialPageRoute(builder: (_) => StaffRouteMapScreen(collectionRouteId: id)),
+      );
 
   @override
   ConsumerState<StaffRouteMapScreen> createState() => _StaffRouteMapScreenState();
@@ -47,6 +58,8 @@ class StaffRouteMapScreen extends ConsumerStatefulWidget {
 
 class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
   final MapController _mapController = MapController();
+  final MapController _collectionMapController = MapController();
+  late bool _focusNextStop = widget.collectionRouteId != null;
   final TransformationController _desktopTransformController = TransformationController();
 
   double _userLat = AppGeoConstants.cajamarcaCenterLat;
@@ -117,6 +130,7 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
   @override
   void dispose() {
     _mapController.dispose();
+    _collectionMapController.dispose();
     _desktopTransformController.dispose();
     super.dispose();
   }
@@ -341,8 +355,8 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
     final viewModel = ref.read(staffHomeViewModelProvider.notifier);
 
     final hasUserPosition = staffState.workerLatitude != null || _hasUserPosition;
-    final workerLat = staffState.workerLatitude ?? _userLat;
-    final workerLng = staffState.workerLongitude ?? _userLng;
+    final workerLat = _hasUserPosition ? _userLat : staffState.workerLatitude ?? _userLat;
+    final workerLng = _hasUserPosition ? _userLng : staffState.workerLongitude ?? _userLng;
     final activeTasks = orderStaffStops(
       staffState.tasks,
       origin: hasUserPosition ? LatLng(workerLat, workerLng) : null,
@@ -354,6 +368,36 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
     final effectiveSelectedTask = activeNavTask != null
         ? (_isActiveCardDismissed ? null : activeNavTask)
         : activeTasks.where((task) => task.id == _selectedTask?.id).firstOrNull;
+
+    final routeId = widget.collectionRouteId;
+    if (routeId != null) {
+      final route = ref.watch(collectionRouteProvider(routeId));
+      final data = route.asData?.value;
+      if (data != null) {
+        return _buildCollectionMap(
+          data,
+          hasUserPosition ? LatLng(workerLat, workerLng) : null,
+        );
+      }
+      return Scaffold(
+        appBar: AppBar(title: const Text('Ruta asignada')),
+        body: Center(
+          child: route.isLoading
+              ? const CircularProgressIndicator()
+              : Text(route.hasError
+                  ? collectionRouteReadError(route.error!)
+                  : 'La ruta ya no está disponible.'),
+        ),
+      );
+    }
+    final collectionRoute = ref.watch(staffCurrentCollectionRouteProvider);
+    if (collectionRoute != null &&
+        (collectionRoute.status == CollectionRouteStatus.inProgress || activeTasks.isEmpty)) {
+      return _buildCollectionMap(
+        collectionRoute,
+        hasUserPosition ? LatLng(workerLat, workerLng) : null,
+      );
+    }
 
     final canEstimate = hasUserPosition && effectiveSelectedTask?.hasReportLocation == true;
 
@@ -552,20 +596,89 @@ class _StaffRouteMapScreenState extends ConsumerState<StaffRouteMapScreen> {
             ),
         ],
       ),
-      bottomNavigationBar: StaffBottomNavBar(
-        currentIndex: 1,
-        onTabSelected: (index) {
-          if (index == 0) {
-            context.go(RouteNames.staffHome);
-          } else if (index == 1) {
-            // Ya en mapa
-          } else if (index == 2) {
-            context.go(RouteNames.staffTasks);
-          } else if (index == 3) {
-            context.push(RouteNames.staffProfile);
-          }
-        },
+      bottomNavigationBar: const StaffBottomNavBar(currentIndex: 1),
+    );
+  }
+
+  Widget _buildCollectionMap(CollectionRoute route, LatLng? position) {
+    final active = route.status == CollectionRouteStatus.inProgress;
+    final stop = active ? route.nextStop : null;
+    final leg = position == null || stop == null
+        ? null
+        : ref.watch(staffCollectionLegProvider((position, stop.location))).asData?.value;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(route.name),
+        actions: [
+          if (_focusNextStop && stop != null)
+            IconButton(
+              tooltip: 'Ver recorrido completo',
+              onPressed: () => setState(() => _focusNextStop = false),
+              icon: const Icon(Icons.alt_route),
+            ),
+          IconButton(
+            tooltip: 'Actualizar ubicación',
+            onPressed: _isLocating ? null : _requestCurrentLocation,
+            icon: const Icon(Icons.my_location),
+          ),
+        ],
       ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ListTile(
+            title: Text('${route.status.label} · ${route.completedStops}/${route.stops.length} paradas'),
+            subtitle: stop == null ? null : Text(
+              'Siguiente parada ${route.completedStops + 1} · ${stop.address.isEmpty ? stop.number : stop.address}',
+            ),
+          ),
+          Expanded(
+            child: CollectionRouteMap(
+              key: ValueKey((route.id, _focusNextStop ? stop?.reportId : null)),
+              controller: _collectionMapController,
+              focus: _focusNextStop ? stop?.location : null,
+              height: null,
+              stops: route.stops,
+              geometry: route.geometry,
+              completedStops: route.completedStops,
+              skippedReportIds: route.skippedStops.keys.toSet(),
+              nextStopIndex: active ? route.completedStops : null,
+              workerPosition: position,
+              navigationLeg: leg,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    onPressed: widget.collectionRouteId == null
+                        ? () => StaffCollectionRouteScreen.open(context, route.id)
+                        : () => Navigator.of(context).pop(),
+                    child: Text(widget.collectionRouteId != null
+                        ? 'Volver a la ruta'
+                        : active ? 'Continuar ruta' : 'Ver ruta asignada'),
+                  ),
+                ),
+                if (stop != null)
+                  IconButton(
+                    tooltip: 'Ir a la siguiente parada',
+                    onPressed: () {
+                      if (_focusNextStop) {
+                        _collectionMapController.move(stop.location, 17);
+                      } else {
+                        setState(() => _focusNextStop = true);
+                      }
+                    },
+                    icon: const Icon(Icons.navigation_outlined),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: const StaffBottomNavBar(currentIndex: 1),
     );
   }
 
