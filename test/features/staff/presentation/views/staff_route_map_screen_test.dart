@@ -21,6 +21,7 @@ import 'package:ecoroute/features/staff/presentation/viewmodels/staff_home_viewm
 import 'package:ecoroute/features/staff/presentation/viewmodels/staff_navigation_link.dart';
 import 'package:ecoroute/features/staff/presentation/viewmodels/staff_operations_providers.dart';
 import 'package:ecoroute/features/staff/presentation/views/staff_route_map_screen.dart';
+import 'package:ecoroute/features/staff/presentation/widgets/staff_bottom_nav_bar.dart';
 
 class MockStaffAuthViewModel extends AuthViewModel {
   final UserEntity? testUser;
@@ -172,11 +173,15 @@ void main() {
         location: LatLng(-7.1634, -78.5115), priority: ReportPriority.medium,
       ),
     ];
-    CollectionRoute assigned(int progress) => CollectionRoute(
-      id: 'ruta', name: 'Ruta Central', zone: CajamarcaZone.central,
+    CollectionRoute assigned(
+      int progress, {
+      String id = 'ruta',
+      CollectionRouteStatus status = CollectionRouteStatus.inProgress,
+    }) => CollectionRoute(
+      id: id, name: 'Ruta Central', zone: CajamarcaZone.central,
       crewId: 'cuadrilla-2', crewName: 'Equipo 2', vehicle: 'Unidad 2',
       window: RouteWindow(DateTime(2026, 1, 1), DateTime(2026, 1, 2)),
-      stops: stops, completedStops: progress, status: CollectionRouteStatus.inProgress,
+      stops: stops, completedStops: progress, status: status,
       geometry: [for (final stop in stops) stop.location],
     );
     await tester.pumpWidget(
@@ -196,14 +201,23 @@ void main() {
         child: const MaterialApp(home: StaffRouteMapScreen()),
       ),
     );
-    updates.add([assigned(0)]);
+    final planned = assigned(0, id: 'planificada', status: CollectionRouteStatus.planned);
+    final completed = assigned(2, id: 'terminada', status: CollectionRouteStatus.completed);
+    final cancelled = assigned(0, id: 'cancelada', status: CollectionRouteStatus.cancelled);
+    updates.add([assigned(0), planned, completed, cancelled]);
     await tester.pumpAndSettle();
     expect(find.text('Ruta Central'), findsOneWidget);
     expect(find.text('Siguiente parada 1 · Primera calle'), findsOneWidget);
     expect(find.text('Rutas'), findsOneWidget);
+    Finder routeBadge(String value) => find.descendant(
+      of: find.byType(StaffBottomNavBar),
+      matching: find.text(value),
+    );
+    expect(routeBadge('2'), findsOneWidget);
 
     updates.add([assigned(1)]);
     await tester.pumpAndSettle();
+    expect(routeBadge('1'), findsOneWidget);
     final map = tester.widget<CollectionRouteMap>(find.byType(CollectionRouteMap));
     expect(map.stops, stops);
     expect(map.nextStopIndex, 1);
@@ -221,6 +235,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.widget<CollectionRouteMap>(find.byType(CollectionRouteMap)).focus, stops[1].location);
     expect(externalLaunches, 0);
+
+    updates.add([completed, cancelled]);
+    await tester.pumpAndSettle();
+    expect(routeBadge('1'), findsNothing);
   });
 
   testWidgets('Marcador de parada en el mapa se renderiza sin overflow de pixeles',

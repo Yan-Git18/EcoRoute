@@ -23,8 +23,15 @@ class CitizenHomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authViewModelProvider);
     final user = authState.user;
-    final hasUnread = user != null &&
-        ref.watch(citizenHasUnreadProvider(user.id)).value == true;
+    final unreadCount = user == null
+        ? 0
+        : ref
+                  .watch(citizenUnreadCountProvider((
+                    user.id,
+                    EcoNotificationButton.maxBadgeCount + 1,
+                  )))
+                  .value ??
+              0;
     final userName = user?.name.trim();
     final firstName = (userName != null && userName.isNotEmpty)
         ? userName.split(' ').first
@@ -87,7 +94,7 @@ class CitizenHomeScreen extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.only(right: 20),
             child: EcoNotificationButton(
-              hasUnread: hasUnread,
+              badgeCount: unreadCount,
               onTap: () => context.push(RouteNames.citizenNotifications),
             ),
           ),

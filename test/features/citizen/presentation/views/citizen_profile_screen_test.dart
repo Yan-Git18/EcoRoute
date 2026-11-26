@@ -37,7 +37,8 @@ class _NotificationRepository implements CitizenNotificationRepository {
   Stream<List<CitizenNotification>> watchInbox(String userId, int limit) => const Stream.empty();
 
   @override
-  Stream<bool> watchUnread(String userId) => const Stream.empty();
+  Stream<int> watchUnreadCount(String userId, {required int limit}) =>
+      const Stream.empty();
 
   @override
   Future<void> markRead(String userId, String notificationId) async {}

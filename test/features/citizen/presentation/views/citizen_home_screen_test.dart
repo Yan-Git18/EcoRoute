@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,6 +21,7 @@ import 'package:ecoroute/features/citizen/presentation/views/citizen_home_screen
 import 'package:ecoroute/features/citizen/presentation/views/citizen_notifications_screen.dart';
 
 class _InboxRepository implements CitizenNotificationRepository {
+  final unreadCounts = StreamController<int>();
   (String, String)? read;
 
   @override
@@ -34,11 +37,13 @@ class _InboxRepository implements CitizenNotificationRepository {
   ]);
 
   @override
-  Stream<bool> watchUnread(String userId) => Stream.value(true);
+  Stream<int> watchUnreadCount(String userId, {required int limit}) =>
+      unreadCounts.stream;
 
   @override
   Future<void> markRead(String userId, String notificationId) async {
     read = (userId, notificationId);
+    unreadCounts.add(0);
   }
 
   @override
@@ -114,6 +119,8 @@ final testCarlosUser = UserEntity(
 void main() {
   testWidgets('La campana abre la bandeja y un aviso abre su reporte y marca la lectura', (tester) async {
     final inbox = _InboxRepository();
+    addTearDown(inbox.unreadCounts.close);
+    inbox.unreadCounts.add(100);
     final router = GoRouter(
       initialLocation: RouteNames.citizenHome,
       routes: [
@@ -142,7 +149,12 @@ void main() {
     await tester.pumpAndSettle();
 
     final bell = find.byType(EcoNotificationButton);
-    expect(tester.widget<EcoNotificationButton>(bell).hasUnread, isTrue);
+    Finder badge(String label) =>
+        find.descendant(of: bell, matching: find.text(label));
+    expect(badge('99+'), findsOneWidget);
+    inbox.unreadCounts.add(1);
+    await tester.pumpAndSettle();
+    expect(badge('1'), findsOneWidget);
     await tester.tap(bell);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Reporte #0001'));
@@ -150,6 +162,13 @@ void main() {
 
     expect(inbox.read, (testCarlosUser.id, 'notice-1'));
     expect(find.text('Detalle rep-1'), findsOneWidget);
+    router.pop();
+    await tester.pumpAndSettle();
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(bell, findsOneWidget);
+    expect(badge('1'), findsNothing);
+    expect(badge('0'), findsNothing);
   });
 
   testWidgets('Renderiza CitizenHomeScreen con diseño de EcoRoute coincidente con el mockup',

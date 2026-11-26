@@ -7,6 +7,6 @@ abstract interface class CitizenNotificationRepository {
     CitizenNotificationPreferences preferences,
   );
   Stream<List<CitizenNotification>> watchInbox(String userId, int limit);
-  Stream<bool> watchUnread(String userId);
+  Stream<int> watchUnreadCount(String userId, {required int limit});
   Future<void> markRead(String userId, String notificationId);
 }

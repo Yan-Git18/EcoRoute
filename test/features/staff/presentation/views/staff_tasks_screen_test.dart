@@ -16,6 +16,7 @@ import 'package:ecoroute/features/staff/domain/repositories/staff_repository.dar
 import 'package:ecoroute/features/staff/presentation/viewmodels/staff_home_viewmodel.dart';
 import 'package:ecoroute/features/staff/presentation/viewmodels/staff_operations_providers.dart';
 import 'package:ecoroute/features/staff/presentation/views/staff_tasks_screen.dart';
+import 'package:ecoroute/features/staff/presentation/widgets/staff_bottom_nav_bar.dart';
 
 class MockTasksLocationService implements LocationService {
   int getCurrentPositionCalls = 0;
@@ -192,6 +193,11 @@ void main() {
     crew.add(otherLeader);
     await tester.pumpAndSettle();
     expect(find.text('Iniciar'), findsNothing);
+    final taskBadge = find.descendant(
+      of: find.byType(StaffBottomNavBar),
+      matching: find.text('1'),
+    );
+    expect(taskBadge, findsOneWidget);
 
     await tester.tap(find.text(task.reportNumber));
     await tester.pumpAndSettle();
@@ -222,6 +228,12 @@ void main() {
       isTrue,
     );
     expect(find.text('Completar y resolver incidencia'), findsNothing);
+    expect(taskBadge, findsOneWidget);
+
+    repository.tasks = [task.copyWith(status: ReportStatus.resolved)];
+    revisions.add(3);
+    await tester.pumpAndSettle();
+    expect(taskBadge, findsNothing);
   });
 
   testWidgets('Ignora una carga de otra sesión y permite reintentar un fallo', (

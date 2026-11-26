@@ -3,7 +3,7 @@ import '../../../../core/constants/geo_constants.dart';
 import '../../../../core/enums/report_filter.dart';
 import '../../domain/entities/report_entity.dart';
 
-/// Estado inmutable para la pantalla de Mapa y Reportes Cercanos del rol Ciudadano.
+/// Estado inmutable del mapa ciudadano.
 ///
 /// Ubicación: `lib/features/citizen/presentation/viewmodels/citizen_map_state.dart`
 /// Capa: Presentation (ViewModel State)
@@ -17,7 +17,6 @@ class CitizenMapState {
   final double userLatitude;
   final double userLongitude;
   final String userAddress;
-  final bool isListView;
   final String? errorMessage;
 
   const CitizenMapState({
@@ -30,13 +29,14 @@ class CitizenMapState {
     this.userLatitude = AppGeoConstants.cajamarcaCenterLat,
     this.userLongitude = AppGeoConstants.cajamarcaCenterLng,
     this.userAddress = 'Centro de Cajamarca',
-    this.isListView = false,
     this.errorMessage,
   });
 
   /// Lista de reportes filtrados por término de búsqueda y estado seleccionado.
-  List<ReportEntity> get filteredReports {
-    var list = allReports;
+  List<ReportEntity> get filteredReports => filterReports(allReports);
+
+  List<ReportEntity> filterReports(List<ReportEntity> reports) {
+    var list = reports;
 
     // Filtro por estado
     if (selectedFilter != ReportFilter.all) {
@@ -66,17 +66,6 @@ class CitizenMapState {
       }).toList();
     }
 
-    return list;
-  }
-
-  /// Lista de reportes ordenados por proximidad al usuario (para la Vista 10: Lista de cercanos).
-  List<ReportEntity> get nearbyReports {
-    final list = List<ReportEntity>.from(filteredReports);
-    list.sort((a, b) {
-      final distA = distanceToReport(a);
-      final distB = distanceToReport(b);
-      return distA.compareTo(distB);
-    });
     return list;
   }
 
@@ -116,7 +105,6 @@ class CitizenMapState {
     double? userLatitude,
     double? userLongitude,
     String? userAddress,
-    bool? isListView,
     String? errorMessage,
     bool clearError = false,
   }) {
@@ -126,11 +114,12 @@ class CitizenMapState {
       allReports: allReports ?? this.allReports,
       searchQuery: searchQuery ?? this.searchQuery,
       selectedFilter: selectedFilter ?? this.selectedFilter,
-      selectedReport: clearSelectedReport ? null : (selectedReport ?? this.selectedReport),
+      selectedReport: clearSelectedReport
+          ? null
+          : (selectedReport ?? this.selectedReport),
       userLatitude: userLatitude ?? this.userLatitude,
       userLongitude: userLongitude ?? this.userLongitude,
       userAddress: userAddress ?? this.userAddress,
-      isListView: isListView ?? this.isListView,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
   }

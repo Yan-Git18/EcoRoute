@@ -23,8 +23,9 @@ final citizenInboxProvider = StreamProvider.autoDispose
           .watchInbox(args.$1, args.$2),
     );
 
-final citizenHasUnreadProvider = StreamProvider.autoDispose
-    .family<bool, String>(
-      (ref, userId) =>
-          ref.watch(citizenNotificationRepositoryProvider).watchUnread(userId),
+final citizenUnreadCountProvider = StreamProvider.autoDispose
+    .family<int, (String, int)>(
+      (ref, args) => ref
+          .watch(citizenNotificationRepositoryProvider)
+          .watchUnreadCount(args.$1, limit: args.$2),
     );

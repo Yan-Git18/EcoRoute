@@ -224,19 +224,4 @@ void main() {
     state = container.read(citizenMapViewModelProvider);
     expect(state.selectedReport, isNull);
   });
-
-  test('alterna correctamente entre vista mapa (Vista 9) y lista de cercanos (Vista 10)', () {
-    final viewModel = container.read(citizenMapViewModelProvider.notifier);
-
-    // Inicialmente mapa
-    expect(container.read(citizenMapViewModelProvider).isListView, isFalse);
-
-    // Cambiar a lista
-    viewModel.toggleViewMode(true);
-    expect(container.read(citizenMapViewModelProvider).isListView, isTrue);
-
-    // Cambiar a mapa
-    viewModel.toggleViewMode(false);
-    expect(container.read(citizenMapViewModelProvider).isListView, isFalse);
-  });
 }

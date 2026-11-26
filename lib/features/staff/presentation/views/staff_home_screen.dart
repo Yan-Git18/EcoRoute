@@ -115,6 +115,7 @@ class _StaffHomeScreenState extends ConsumerState<StaffHomeScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 20),
             child: EcoNotificationButton(
+              badgeCount: pendingCount + inProgressCount,
               onTap: () => _showNotificationsModal(context, pendingCount, inProgressCount),
             ),
           ),

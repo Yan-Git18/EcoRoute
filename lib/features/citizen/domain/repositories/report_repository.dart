@@ -24,7 +24,7 @@ abstract class ReportRepository {
   /// Obtiene el detalle de un reporte por su ID.
   Future<Result<ReportEntity>> getReportById(String reportId);
 
-  /// Obtiene los reportes comunitarios recientes para el mapa y la lista de cercanos.
+  /// Obtiene los reportes comunitarios recientes para el mapa.
   Future<Result<List<ReportEntity>>> getAllReports();
 
   /// Cancela un reporte ciudadano que se encuentra en estado pendiente.

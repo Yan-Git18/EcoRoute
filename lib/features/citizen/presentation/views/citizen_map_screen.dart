@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/enums/report_filter.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
+import '../../domain/entities/report_entity.dart';
 import '../../domain/repositories/report_repository.dart';
 import '../viewmodels/citizen_map_state.dart';
 import '../viewmodels/citizen_map_viewmodel.dart';
@@ -12,15 +13,8 @@ import '../widgets/citizen_map_legend.dart';
 import '../widgets/citizen_map_preview_card.dart';
 import '../widgets/citizen_map_search_bar.dart';
 import '../widgets/citizen_map_view.dart';
-import '../widgets/nearby_report_card.dart';
 
-/// Pantalla unificada del Mapa Urbano y Reportes Cercanos (Vistas 9 y 10).
-///
-/// Permite alternar de manera fluida entre la vista de Mapa Interactivo con pines coloreados
-/// (Vista 9) y el listado clasificado de Reportes Cercanos con badges de distancia/prioridad (Vista 10).
-///
-/// Ubicación: `lib/features/citizen/presentation/views/citizen_map_screen.dart`
-/// Capa: Presentation (Views)
+/// Mapa interactivo de reportes comunitarios y del ciudadano.
 class CitizenMapScreen extends ConsumerStatefulWidget {
   const CitizenMapScreen({super.key});
 
@@ -29,7 +23,9 @@ class CitizenMapScreen extends ConsumerStatefulWidget {
 }
 
 class _CitizenMapScreenState extends ConsumerState<CitizenMapScreen> {
-  final GlobalKey<CitizenMapViewState> _mapKey = GlobalKey<CitizenMapViewState>();
+  final GlobalKey<CitizenMapViewState> _mapKey =
+      GlobalKey<CitizenMapViewState>();
+  bool _showOwnReports = false;
 
   @override
   void initState() {
@@ -39,8 +35,10 @@ class _CitizenMapScreenState extends ConsumerState<CitizenMapScreen> {
     });
   }
 
-  void _recenterMap(CitizenMapState state) {
-    ref.read(citizenMapViewModelProvider.notifier).requestUserLocation().then((_) {
+  void _recenterMap() {
+    ref.read(citizenMapViewModelProvider.notifier).requestUserLocation().then((
+      _,
+    ) {
       if (!mounted) return;
       final updatedState = ref.read(citizenMapViewModelProvider);
       _mapKey.currentState?.animateToLocation(
@@ -54,6 +52,32 @@ class _CitizenMapScreenState extends ConsumerState<CitizenMapScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(citizenMapViewModelProvider);
     final viewModel = ref.read(citizenMapViewModelProvider.notifier);
+    final citizenId = _showOwnReports
+        ? ref.watch(authViewModelProvider.select((auth) => auth.user?.id))
+        : null;
+    final ownReportsProvider = citizenId != null && citizenId.isNotEmpty
+        ? citizenMapOwnReportsProvider(citizenId)
+        : null;
+    final ownReports = ownReportsProvider == null
+        ? null
+        : ref.watch(ownReportsProvider);
+    final reports = _showOwnReports
+        ? ownReports?.value?.dataOrNull ?? const <ReportEntity>[]
+        : state.allReports;
+    final isLoading = _showOwnReports
+        ? ownReports?.isLoading ?? false
+        : state.isLoading;
+    final hasError = _showOwnReports
+        ? ownReports?.hasError == true || ownReports?.value?.isFailure == true
+        : state.errorMessage != null;
+
+    void refresh() {
+      if (_showOwnReports) {
+        if (ownReportsProvider != null) ref.invalidate(ownReportsProvider);
+      } else {
+        viewModel.refresh();
+      }
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -72,39 +96,52 @@ class _CitizenMapScreenState extends ConsumerState<CitizenMapScreen> {
           },
         ),
         centerTitle: true,
-        title: _ViewModeToggle(
-          isListView: state.isListView,
-          onToggle: viewModel.toggleViewMode,
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: _ViewModeToggle(
+            showOwnReports: _showOwnReports,
+            onToggle: (showOwnReports) {
+              if (showOwnReports == _showOwnReports) return;
+              viewModel.selectReport(null);
+              setState(() => _showOwnReports = showOwnReports);
+            },
+          ),
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Color(0xFF475569)),
             tooltip: 'Actualizar reportes',
-            onPressed: state.isLoading ? null : viewModel.refresh,
+            onPressed:
+                isLoading || (_showOwnReports && ownReportsProvider == null)
+                ? null
+                : refresh,
           ),
           const SizedBox(width: 4),
         ],
       ),
       body: Column(
         children: [
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: Text(
-              'Últimos ${ReportRepository.communityReportWindowDays} días · Hasta ${ReportRepository.communityReportLimit} reportes recientes',
-              textAlign: TextAlign.center,
+          if (!_showOwnReports)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: Text(
+                'Últimos ${ReportRepository.communityReportWindowDays} días · Hasta ${ReportRepository.communityReportLimit} reportes recientes',
+                textAlign: TextAlign.center,
+              ),
             ),
-          ),
-          if (state.errorMessage != null)
+          if (hasError && !isLoading)
             TextButton(
-              onPressed: viewModel.refresh,
+              onPressed: refresh,
               child: const Text('No se pudo actualizar el mapa. Reintentar'),
             ),
           Expanded(
-            child: state.isLoading
-                ? const _MapLoadingView()
-                : state.isListView
-                    ? _buildNearbyListView(state, viewModel)
-                    : _buildInteractiveMapView(state, viewModel),
+            child: _buildInteractiveMapView(
+              state,
+              viewModel,
+              reports: reports,
+              isLoading: isLoading,
+              hasError: hasError,
+            ),
           ),
         ],
       ),
@@ -112,17 +149,25 @@ class _CitizenMapScreenState extends ConsumerState<CitizenMapScreen> {
     );
   }
 
-  // --- Vista 9: Mapa Interactivo Completo ---
+  Widget _buildInteractiveMapView(
+    CitizenMapState state,
+    CitizenMapViewModel viewModel, {
+    required List<ReportEntity> reports,
+    required bool isLoading,
+    required bool hasError,
+  }) {
+    final filteredReports = state.filterReports(reports);
+    final selectedReport = filteredReports
+        .where((report) => report.id == state.selectedReport?.id)
+        .firstOrNull;
 
-  Widget _buildInteractiveMapView(CitizenMapState state, CitizenMapViewModel viewModel) {
     return Stack(
       children: [
-        // 1. Capa base: Mapa interactivo (Google Maps en mobile/web o visor vectorial en desktop)
         Positioned.fill(
           child: CitizenMapView(
             key: _mapKey,
-            reports: state.filteredReports,
-            selectedReport: state.selectedReport,
+            reports: filteredReports,
+            selectedReport: selectedReport,
             userLatitude: state.userLatitude,
             userLongitude: state.userLongitude,
             onSelectReport: viewModel.selectReport,
@@ -149,14 +194,11 @@ class _CitizenMapScreenState extends ConsumerState<CitizenMapScreen> {
         const Positioned(
           top: 120,
           right: 16,
-          child: SafeArea(
-            bottom: false,
-            child: CitizenMapLegend(),
-          ),
+          child: SafeArea(bottom: false, child: CitizenMapLegend()),
         ),
 
         // 4. Banner informativo cuando aún no hay reportes en el área o para el filtro actual
-        if (state.filteredReports.isEmpty)
+        if (!isLoading && !hasError && filteredReports.isEmpty)
           Positioned(
             bottom: 24,
             left: 20,
@@ -192,9 +234,11 @@ class _CitizenMapScreenState extends ConsumerState<CitizenMapScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      state.allReports.isEmpty
-                          ? 'No hay incidencias en este período.'
-                          : 'Sin incidencias para el filtro seleccionado.',
+                      reports.isNotEmpty
+                          ? 'Sin incidencias para el filtro seleccionado.'
+                          : _showOwnReports
+                          ? 'Aún no tienes reportes.'
+                          : 'No hay incidencias en este período.',
                       style: const TextStyle(
                         fontSize: 12.5,
                         fontWeight: FontWeight.w600,
@@ -202,18 +246,25 @@ class _CitizenMapScreenState extends ConsumerState<CitizenMapScreen> {
                       ),
                     ),
                   ),
-                  if (state.allReports.isEmpty)
+                  if (reports.isEmpty)
                     TextButton(
-                      onPressed: () => context.push(RouteNames.citizenCreateReport),
+                      onPressed: () =>
+                          context.push(RouteNames.citizenCreateReport),
                       style: TextButton.styleFrom(
                         foregroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                       child: const Text(
                         'Reportar',
-                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                 ],
@@ -221,160 +272,52 @@ class _CitizenMapScreenState extends ConsumerState<CitizenMapScreen> {
             ),
           ),
 
-        // 5. Botón flotante de geolocalización / Recentrado en ubicación actual
         Positioned(
-          bottom: state.selectedReport != null ? 220 : 20,
-          right: 16,
-          child: _FloatingGpsButton(
-            isLocating: state.isLocating,
-            onPressed: () => _recenterMap(state),
-          ),
-        ),
-
-        // 5. Tarjeta flotante emergente de reporte seleccionado (al presionar un pin)
-        if (state.selectedReport != null)
-          Positioned(
-            bottom: 8,
-            left: 0,
-            right: 0,
-            child: AnimatedSlide(
-              duration: const Duration(milliseconds: 250),
-              offset: Offset.zero,
-              curve: Curves.easeOutCubic,
-              child: CitizenMapPreviewCard(
-                report: state.selectedReport!,
-                formattedDistance: state.formattedDistanceToReport(state.selectedReport!),
-                onClose: () => viewModel.selectReport(null),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  // --- Vista 10: Reportes Cercanos (Modo Lista) ---
-
-  Widget _buildNearbyListView(CitizenMapState state, CitizenMapViewModel viewModel) {
-    final nearbyReports = state.nearbyReports;
-
-    return Column(
-      children: [
-        // Barra de búsqueda y filtros
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: CitizenMapSearchBar(
-            currentQuery: state.searchQuery,
-            selectedFilter: state.selectedFilter,
-            onQueryChanged: viewModel.setSearchQuery,
-            onFilterChanged: viewModel.setFilter,
-          ),
-        ),
-
-        // Franja de resumen de cercanía
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-          decoration: const BoxDecoration(
-            color: Color(0xFFF1F5F9),
-            border: Border(
-              bottom: BorderSide(color: Color(0xFFE2E8F0)),
-            ),
-          ),
-          child: Row(
+          bottom: selectedReport == null ? 20 : 8,
+          left: 0,
+          right: 0,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              const Icon(
-                Icons.radar_rounded,
-                size: 16,
-                color: AppColors.primary,
+              Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: _FloatingGpsButton(
+                  isLocating: state.isLocating,
+                  onPressed: _recenterMap,
+                ),
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  '${nearbyReports.length} incidencias ordenadas por proximidad',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF334155),
+              if (selectedReport != null)
+                CitizenMapPreviewCard(
+                  report: selectedReport,
+                  formattedDistance: state.formattedDistanceToReport(
+                    selectedReport,
                   ),
+                  onClose: () => viewModel.selectReport(null),
                 ),
-              ),
-              const SizedBox(width: 8),
-              InkWell(
-                onTap: () => viewModel.requestUserLocation(),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.gps_fixed_rounded, size: 13, color: AppColors.primaryDark),
-                    SizedBox(width: 4),
-                    Text(
-                      'Mi GPS',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primaryDark,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
         ),
-
-        // Listado de reportes cercanos
-        Expanded(
-          child: nearbyReports.isEmpty
-              ? _EmptyNearbyReportsView(
-                  filter: state.selectedFilter,
-                  hasNoReportsAtAll: state.allReports.isEmpty,
-                  onCreateReport: () => context.push(RouteNames.citizenCreateReport),
-                  onClearFilters: () {
-                    viewModel.setSearchQuery('');
-                    viewModel.setFilter(ReportFilter.all);
-                  },
-                )
-              : RefreshIndicator(
-                  color: AppColors.primary,
-                  onRefresh: viewModel.refresh,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(16.0),
-                    itemCount: nearbyReports.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final report = nearbyReports[index];
-                      final distance = state.formattedDistanceToReport(report);
-
-                      return NearbyReportCard(
-                        report: report,
-                        formattedDistance: distance,
-                        onTap: () {
-                          context.push(
-                            RouteNames.citizenReportLocation(report.id),
-                            extra: report,
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-        ),
+        if (isLoading)
+          const Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: LinearProgressIndicator(
+              color: AppColors.primary,
+              semanticsLabel: 'Cargando reportes',
+            ),
+          ),
       ],
     );
   }
 }
 
-// --- Componente Selector de Modo de Vista (Mapa vs Lista) ---
-
 class _ViewModeToggle extends StatelessWidget {
-  final bool isListView;
+  final bool showOwnReports;
   final ValueChanged<bool> onToggle;
 
-  const _ViewModeToggle({
-    required this.isListView,
-    required this.onToggle,
-  });
+  const _ViewModeToggle({required this.showOwnReports, required this.onToggle});
 
   @override
   Widget build(BuildContext context) {
@@ -390,16 +333,16 @@ class _ViewModeToggle extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _ToggleButton(
-            label: 'Mapa',
+            label: 'Todos',
             icon: Icons.map_rounded,
-            isSelected: !isListView,
+            isSelected: !showOwnReports,
             onTap: () => onToggle(false),
           ),
           const SizedBox(width: 2),
           _ToggleButton(
-            label: 'Cercanos',
-            icon: Icons.format_list_bulleted_rounded,
-            isSelected: isListView,
+            label: 'Mis reportes',
+            icon: Icons.assignment_ind_rounded,
+            isSelected: showOwnReports,
             onTap: () => onToggle(true),
           ),
         ],
@@ -456,7 +399,9 @@ class _ToggleButton extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                color: isSelected ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                color: isSelected
+                    ? const Color(0xFF0F172A)
+                    : const Color(0xFF64748B),
               ),
             ),
           ],
@@ -472,10 +417,7 @@ class _FloatingGpsButton extends StatelessWidget {
   final bool isLocating;
   final VoidCallback onPressed;
 
-  const _FloatingGpsButton({
-    required this.isLocating,
-    required this.onPressed,
-  });
+  const _FloatingGpsButton({required this.isLocating, required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
@@ -514,131 +456,6 @@ class _FloatingGpsButton extends StatelessWidget {
                   ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-// --- Estado Vacío para la Vista de Cercanos ---
-
-class _EmptyNearbyReportsView extends StatelessWidget {
-  final ReportFilter filter;
-  final bool hasNoReportsAtAll;
-  final VoidCallback onCreateReport;
-  final VoidCallback onClearFilters;
-
-  const _EmptyNearbyReportsView({
-    required this.filter,
-    required this.hasNoReportsAtAll,
-    required this.onCreateReport,
-    required this.onClearFilters,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withAlpha(20),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.location_off_outlined,
-                size: 48,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              hasNoReportsAtAll
-                  ? 'No hay reportes recientes'
-                  : 'No se encontraron reportes cercanos',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF0F172A),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              hasNoReportsAtAll
-                  ? 'No se encontraron incidencias en Cajamarca en los últimos ${ReportRepository.communityReportWindowDays} días.'
-                  : (filter == ReportFilter.all
-                      ? 'No hay incidencias registradas en esta área geográfica o con los términos buscados.'
-                      : 'No hay reportes ${filter.label.toLowerCase()} en tu zona inmediata.'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF64748B),
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 20),
-            if (hasNoReportsAtAll)
-              ElevatedButton.icon(
-                onPressed: onCreateReport,
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('Reportar incidencia'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              )
-            else
-              ElevatedButton.icon(
-                onPressed: onClearFilters,
-                icon: const Icon(Icons.refresh_rounded, size: 16),
-                label: const Text('Restablecer filtros'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// --- Vista de Carga ---
-
-class _MapLoadingView extends StatelessWidget {
-  const _MapLoadingView();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircularProgressIndicator(
-            color: AppColors.primary,
-            strokeWidth: 3,
-          ),
-          SizedBox(height: 16),
-          Text(
-            'Cargando incidencias comunitarias...',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF64748B),
-            ),
-          ),
-        ],
       ),
     );
   }

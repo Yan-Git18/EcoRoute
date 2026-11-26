@@ -48,13 +48,14 @@ class FirebaseCitizenNotificationRepository
   }
 
   @override
-  Stream<bool> watchUnread(String userId) {
-    if (Firebase.apps.isEmpty) return Stream.value(false);
+  Stream<int> watchUnreadCount(String userId, {required int limit}) {
+    if (Firebase.apps.isEmpty) return Stream.value(0);
     return _inbox(userId)
         .where('readAt', isNull: true)
-        .limit(1)
+        .limit(limit)
         .snapshots()
-        .map((snapshot) => snapshot.docs.isNotEmpty);
+        .map((snapshot) => snapshot.size)
+        .distinct();
   }
 
   @override

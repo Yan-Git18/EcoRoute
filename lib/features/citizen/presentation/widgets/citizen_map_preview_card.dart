@@ -47,12 +47,45 @@ class CitizenMapPreviewCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Cabecera: Número de reporte, distancia, estado y botón cerrar
             Row(
               children: [
-                // Distancia estimada
+                Expanded(
+                  child: Text(
+                    report.reportNumber,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: onClose,
+                  tooltip: 'Cerrar vista previa',
+                  icon: const Icon(Icons.close_rounded, size: 16),
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    foregroundColor: const Color(0xFF64748B),
+                    minimumSize: const Size.square(32),
+                    padding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.primarySoft,
                     borderRadius: BorderRadius.circular(10),
@@ -77,41 +110,7 @@ class CitizenMapPreviewCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
-
-                // Número de reporte
-                Text(
-                  report.reportNumber,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F172A),
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                const Spacer(),
-
-                // Badge de estado
                 ReportStatusBadge(status: report.status),
-                const SizedBox(width: 6),
-
-                // Botón cerrar
-                InkWell(
-                  onTap: onClose,
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(
-                      Icons.close_rounded,
-                      size: 16,
-                      color: Color(0xFF64748B),
-                    ),
-                  ),
-                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -149,7 +148,8 @@ class CitizenMapPreviewCard extends StatelessWidget {
                           color: Color(0xFF64748B),
                         ),
                       ),
-                      if (report.reference != null && report.reference!.isNotEmpty) ...[
+                      if (report.reference != null &&
+                          report.reference!.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
                           'Ref: ${report.reference}',
@@ -173,7 +173,6 @@ class CitizenMapPreviewCard extends StatelessWidget {
             // Botón de acción principal: Ver detalle
             SizedBox(
               width: double.infinity,
-              height: 42,
               child: ElevatedButton(
                 onPressed: () {
                   context.push(
@@ -185,6 +184,11 @@ class CitizenMapPreviewCard extends StatelessWidget {
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   elevation: 0,
+                  minimumSize: const Size(0, 42),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -192,11 +196,14 @@ class CitizenMapPreviewCard extends StatelessWidget {
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      'Ver detalles del reporte',
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
+                    Flexible(
+                      child: Text(
+                        'Ver detalles del reporte',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     SizedBox(width: 6),

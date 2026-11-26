@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/enums/report_filter.dart';
 import '../../../../core/theme/app_colors.dart';
 
-/// Barra de búsqueda flotante con chips de filtro de estado para el mapa y lista de cercanos.
+/// Barra de búsqueda flotante con filtros de estado para el mapa.
 ///
 /// Principio SRP: Responsabilidad única de capturar texto de búsqueda y selección de filtro de estado.
 ///

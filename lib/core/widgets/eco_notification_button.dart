@@ -3,15 +3,17 @@ import 'package:flutter/material.dart';
 /// Botón de acceso a notificaciones unificado para EcoRoute.
 /// Capa: Core (Widgets)
 class EcoNotificationButton extends StatelessWidget {
+  static const maxBadgeCount = 99;
+
   final VoidCallback onTap;
-  final bool hasUnread;
+  final int badgeCount;
   final double size;
   final String tooltip;
 
   const EcoNotificationButton({
     super.key,
     required this.onTap,
-    this.hasUnread = true,
+    required this.badgeCount,
     this.size = 44,
     this.tooltip = 'Notificaciones',
   });
@@ -40,23 +42,28 @@ class EcoNotificationButton extends StatelessWidget {
           ),
           child: Stack(
             alignment: Alignment.center,
+            clipBehavior: Clip.none,
             children: [
               const Icon(
                 Icons.notifications_none_rounded,
                 color: Color(0xFF0F172A),
                 size: 22,
               ),
-              if (hasUnread)
-                Positioned(
-                  top: 10,
-                  right: 11,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 1.5),
+              if (badgeCount > 0)
+                PositionedDirectional(
+                  top: -2,
+                  end: -2,
+                  child: Badge(
+                    backgroundColor: const Color(0xFFDC2626),
+                    textColor: Colors.white,
+                    textStyle: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    label: Text(
+                      badgeCount > maxBadgeCount
+                          ? '$maxBadgeCount+'
+                          : '$badgeCount',
                     ),
                   ),
                 ),

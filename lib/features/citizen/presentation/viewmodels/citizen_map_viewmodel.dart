@@ -2,10 +2,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/geo_constants.dart';
 import '../../../../core/enums/report_filter.dart';
 import '../../../../core/services/location_service.dart';
+import '../../../../core/utils/result.dart';
 import '../../domain/entities/report_entity.dart';
 import '../../domain/usecases/get_all_reports_use_case.dart';
 import 'citizen_map_state.dart';
 import 'create_report_viewmodel.dart';
+import 'my_reports_viewmodel.dart';
 
 // --- Inyección de Dependencias con Riverpod ---
 
@@ -15,11 +17,18 @@ final getAllReportsUseCaseProvider = Provider<GetAllReportsUseCase>((ref) {
 });
 
 final citizenMapViewModelProvider =
-    NotifierProvider<CitizenMapViewModel, CitizenMapState>(CitizenMapViewModel.new);
+    NotifierProvider<CitizenMapViewModel, CitizenMapState>(
+      CitizenMapViewModel.new,
+    );
+
+final citizenMapOwnReportsProvider = FutureProvider.autoDispose
+    .family<Result<List<ReportEntity>>, String>(
+      (ref, citizenId) => ref.watch(getMyReportsUseCaseProvider)(citizenId),
+    );
 
 // --- ViewModel (MVVM) ---
 
-/// ViewModel para gestionar el mapa comunitario interactivo y la vista de reportes cercanos.
+/// ViewModel para gestionar el mapa ciudadano.
 ///
 /// Principios SOLID:
 /// - SRP: Responsabilidad única de coordinar el estado de mapa, filtros, geolocalización y selección.
@@ -56,7 +65,7 @@ class CitizenMapViewModel extends Notifier<CitizenMapState> {
     _activeLoad = null;
   });
 
-  /// Carga los reportes comunitarios recientes para el mapa y la lista de cercanos.
+  /// Carga los reportes comunitarios recientes para el mapa.
   Future<void> _loadReports() async {
     if (_isDisposed) return;
     state = state.copyWith(isLoading: true, clearError: true);
@@ -67,13 +76,7 @@ class CitizenMapViewModel extends Notifier<CitizenMapState> {
     result.fold(
       onSuccess: (reports) {
         if (!_isDisposed) {
-          final selected = reports.where((report) => report.id == state.selectedReport?.id).firstOrNull;
-          state = state.copyWith(
-            allReports: reports,
-            isLoading: false,
-            selectedReport: selected,
-            clearSelectedReport: selected == null,
-          );
+          state = state.copyWith(allReports: reports, isLoading: false);
         }
       },
       onFailure: (failure) {
@@ -95,10 +98,17 @@ class CitizenMapViewModel extends Notifier<CitizenMapState> {
     try {
       final loc = await _locationService.getCurrentPosition();
       if (_isDisposed) return;
-      final isInside = AppGeoConstants.isInsideCajamarca(loc.latitude, loc.longitude);
+      final isInside = AppGeoConstants.isInsideCajamarca(
+        loc.latitude,
+        loc.longitude,
+      );
       state = state.copyWith(
-        userLatitude: isInside ? loc.latitude : AppGeoConstants.cajamarcaCenterLat,
-        userLongitude: isInside ? loc.longitude : AppGeoConstants.cajamarcaCenterLng,
+        userLatitude: isInside
+            ? loc.latitude
+            : AppGeoConstants.cajamarcaCenterLat,
+        userLongitude: isInside
+            ? loc.longitude
+            : AppGeoConstants.cajamarcaCenterLng,
         userAddress: isInside
             ? (loc.address ?? state.userAddress)
             : AppGeoConstants.defaultAddress,
@@ -130,12 +140,7 @@ class CitizenMapViewModel extends Notifier<CitizenMapState> {
     }
   }
 
-  /// Alterna entre Vista Mapa (false - Vista 9) y Vista Lista Cercanos (true - Vista 10).
-  void toggleViewMode(bool isListView) {
-    state = state.copyWith(isListView: isListView);
-  }
-
-  /// Recarga manual de datos (Pull to refresh).
+  /// Recarga manual de los reportes comunitarios.
   Future<void> refresh() async {
     await loadReports();
   }

@@ -110,7 +110,7 @@ class AdminDashboardScreen extends ConsumerWidget {
             child: EcoNotificationButton(
               tooltip: 'Reportes pendientes',
               onTap: openPendingReports,
-              hasUnread: (totals?.pending ?? 0) > 0,
+              badgeCount: totals?.pending ?? 0,
             ),
           ),
         ],
